@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 from fastapi import APIRouter
 from loguru import logger
+from starlette.responses import JSONResponse
 
 # TODO: What can we refactor in the library from these imports and config?
 from app import config
@@ -20,12 +21,17 @@ from app.source import hashtagify
 from app.utils.url import check_url
 
 # TODO: MOVE the AP API currently fully implemented in the app.main file!!!
+# TODO: MOVE all that is core AP operations / not HTTP related to 'boxes'
 router = APIRouter()
 
 if TYPE_CHECKING:
     from activitypub.actor import Actor
 
 RawObject = dict[str, Any]
+
+class ActivityPubResponse(JSONResponse):
+    media_type = "application/activity+json"
+
 AS_CTX = "https://www.w3.org/ns/activitystreams"
 AS_PUBLIC = "https://www.w3.org/ns/activitystreams#Public"
 

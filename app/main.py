@@ -44,6 +44,7 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware  # type: ign
 
 import activitypub.models
 from activitypub import activitypub as ap, boxes
+from activitypub.activitypub import ActivityPubResponse
 from app import admin
 from app import config
 from app import httpsig
@@ -255,10 +256,6 @@ async def custom_http_exception_handler(
             finally:
                 await db_session.close()
     return await http_exception_handler(request, exc)
-
-
-class ActivityPubResponse(JSONResponse):
-    media_type = "application/activity+json"
 
 
 async def redirect_to_remote_instance(
@@ -598,26 +595,9 @@ async def outbox(
         request,
         db_session,
     )
-
-    # Default restrictions unless the request is authenticated with an access token
-    restricted_where = [
-        activitypub.models.OutboxObject.visibility == ap.VisibilityEnum.PUBLIC,
-        activitypub.models.OutboxObject.ap_type.in_(["Create", "Note", "Article", "Announce"]),
-    ]
-
-    # By design, we only show the last 20 public activities in the oubox
-    outbox_objects = (
-        await db_session.scalars(
-            select(activitypub.models.OutboxObject)
-            .where(
-                activitypub.models.OutboxObject.is_deleted.is_(False),
-                *([] if maybe_access_token_info else restricted_where),
-            )
-            .order_by(activitypub.models.OutboxObject.ap_published_at.desc())
-            .limit(20)
-        )
-    ).all()
-
+    post_types = ["Create", "Note", "Article", "Announce"]
+    public_only = False if maybe_access_token_info else True
+    outbox_objects = await boxes.fetch_outbox(db_session, post_types, public_only=public_only)
     return ActivityPubResponse(
         {
             "@context": ap.AS_EXTENDED_CTX,

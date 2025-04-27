@@ -123,7 +123,7 @@ def tests(ctx, k=None):
     if k:
         pytest_args += f" -k {k}"
     run(
-        f"MICROBLOGPUB_CONFIG_FILE=tests.toml pytest tests{pytest_args}",
+        f"MICROBLOGPUB_CONFIG_FILE=tests.toml pytest {pytest_args}",
         pty=True,
         echo=True,
     )

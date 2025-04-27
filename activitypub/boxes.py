@@ -19,6 +19,7 @@ from sqlalchemy.orm import joinedload
 
 import activitypub.models
 from activitypub import activitypub as ap
+from activitypub.activitypub import ActivityPubResponse
 
 # TODO: What can we refactor in the library from these imports and config?
 from app import config
@@ -74,6 +75,36 @@ def allocate_outbox_id() -> str:
 
 def outbox_object_id(outbox_id) -> str:
     return f"{BASE_URL}/o/{outbox_id}"
+
+
+async def fetch_outbox(
+        db_session: AsyncSession,
+        object_type = ["Note"], # TODO: convert to ENUM!!!
+        public_only = True,
+        posts_limit = 20
+) -> list[activitypub.models.OutboxObject]:
+    # Default restrictions unless the request is authenticated with an access token
+    # TODO Copied code from app.main... does it make sense to only restrict types when PUBLIC?
+    restricted_where = [
+        activitypub.models.OutboxObject.visibility == ap.VisibilityEnum.PUBLIC,
+        activitypub.models.OutboxObject.ap_type.in_(object_type),
+    ]
+
+    # By design, we only show the last 20 public activities in the oubox
+    stmt = select(activitypub.models.OutboxObject
+    ).where(
+        activitypub.models.OutboxObject.is_deleted.is_(False),
+        *([] if not public_only else restricted_where),
+    ).order_by(activitypub.models.OutboxObject.ap_published_at.desc()
+    ).limit(posts_limit)
+    result = await db_session.scalars(stmt)
+    outbox_objects = result.all()
+
+#    oo_list = []
+#    for oo in outbox_objects:
+#        oo_list.append(oo)
+
+    return outbox_objects
 
 
 async def save_outbox_object(
