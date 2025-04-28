@@ -78,10 +78,10 @@ def outbox_object_id(outbox_id) -> str:
 
 
 async def fetch_outbox(
-        db_session: AsyncSession,
-        object_type = ["Note"], # TODO: convert to ENUM!!!
-        public_only = True,
-        posts_limit = 20
+    db_session: AsyncSession,
+    object_type = ["Note"], # TODO: convert to ap_object.!!!
+    public_only = True,
+    posts_limit = 20
 ) -> list[activitypub.models.OutboxObject]:
     # Default restrictions unless the request is authenticated with an access token
     # TODO Copied code from app.main... does it make sense to only restrict types when PUBLIC?
@@ -99,10 +99,6 @@ async def fetch_outbox(
     ).limit(posts_limit)
     result = await db_session.scalars(stmt)
     outbox_objects = result.all()
-
-#    oo_list = []
-#    for oo in outbox_objects:
-#        oo_list.append(oo)
 
     return outbox_objects
 

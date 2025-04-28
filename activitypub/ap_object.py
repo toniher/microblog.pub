@@ -1,3 +1,4 @@
+import enum
 import hashlib
 import mimetypes
 from datetime import datetime
@@ -19,6 +20,18 @@ from app.media import proxied_media_url
 from app.utils.datetime import now
 from app.utils.datetime import parse_isoformat
 
+# TODO implement supported ap_types as an ENUMERATOR
+# to avoid all the "random" post_type/object_type strings around the code!
+class ObjectType(enum.Enum):
+    ANNOUNCE = "Announce"
+    ARTICLE = "Article"
+    CREATE = "Create"
+    FOLLOW = "Follow"
+    LIKE = "Like"
+    NOTE = "Note"
+    UNDO = "Undo"
+    UPDATE = "Update"
+
 
 class Object:
     @property
@@ -34,7 +47,7 @@ class Object:
         return False
 
     @cached_property
-    def ap_type(self) -> str:
+    def ap_type(self) -> str: # TODO: Covert to ObjectType
         return ap.as_list(self.ap_object["type"])[0]
 
     @property
