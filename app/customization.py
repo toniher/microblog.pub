@@ -11,7 +11,7 @@ from loguru import logger
 from starlette.responses import JSONResponse
 
 if TYPE_CHECKING:
-    from app.ap_object import RemoteObject
+    from activitypub.ap_object import RemoteObject
 
 
 _DATA_DIR = Path().parent.resolve() / "data"
@@ -76,8 +76,8 @@ class ActivityPubResponse(JSONResponse):
 
 
 def _custom_page_handler(path: str, html_page: HTMLPage) -> Any:
+    from activitypub.actor import LOCAL_ACTOR
     from app import templates
-    from app.actor import LOCAL_ACTOR
     from app.config import is_activitypub_requested
     from app.database import AsyncSession
     from app.database import get_db_session
@@ -111,7 +111,10 @@ def get_custom_router() -> APIRouter | None:
     for path, handler in _CUSTOM_ROUTES.items():
         if isinstance(handler, HTMLPage):
             router.add_api_route(
-                path, _custom_page_handler(path, handler), methods=["GET"]
+                path,
+                _custom_page_handler(path, handler),
+                methods=["GET"],
+                response_model=None,
             )
         else:
             router.add_api_route(path, handler.handler)

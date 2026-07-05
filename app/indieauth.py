@@ -84,7 +84,7 @@ async def oauth_registration_endpoint(
 
     return JSONResponse(
         content={
-            **register_client_request.dict(),
+            **register_client_request.model_dump(),
             "client_id_issued_at": int(client.created_at.timestamp()),  # type: ignore
             "grant_types": ["authorization_code", "refresh_token"],
             "client_secret_expires_at": 0,

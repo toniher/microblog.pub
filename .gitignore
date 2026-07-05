@@ -1,3 +1,5 @@
+.idea
+.venv/
 *.db
 *.log
 __pycache__/
@@ -5,5 +7,5 @@ __pycache__/
 .pytest_cache/
 docs/dist/
 requirements.txt
-app/_version.py
 app/static/favicon.ico
+misc/dev-supervisord.conf

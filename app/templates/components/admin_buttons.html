@@ -108,6 +108,13 @@
 </form>
 {% endmacro %}
 
+{% macro admin_edit_button(request, csrf_token, ap_object) %}
+<form action="{{ request.url_for("admin_edit_text", public_id=ap_object.public_id) }}" class="object-edit-form" method="GET">
+    {{ hidden_inputs.embed_csrf_token(csrf_token) }}
+    <input type="submit" value="edit">
+</form>
+{% endmacro %}
+
 {% macro admin_delete_button(request, csrf_token, ap_object) %}
 <form action="{{ request.url_for("admin_actions_delete") }}" class="object-delete-form" method="POST">
     {{ hidden_inputs.embed_csrf_token(csrf_token) }}

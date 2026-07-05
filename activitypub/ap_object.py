@@ -1,3 +1,4 @@
+import enum
 import hashlib
 import mimetypes
 from datetime import datetime
@@ -8,14 +9,29 @@ import pydantic
 from bs4 import BeautifulSoup  # type: ignore
 from mistletoe import markdown  # type: ignore
 
-from app import activitypub as ap
-from app.actor import LOCAL_ACTOR
-from app.actor import Actor
-from app.actor import RemoteActor
+from activitypub import activitypub as ap
+from activitypub.actor import LOCAL_ACTOR
+from activitypub.actor import Actor
+from activitypub.actor import RemoteActor
+
+# TODO: What can we refactor in the library from these imports and config?
 from app.config import ID
 from app.media import proxied_media_url
 from app.utils.datetime import now
 from app.utils.datetime import parse_isoformat
+
+
+# TODO implement supported ap_types as an ENUMERATOR
+# to avoid all the "random" post_type/object_type strings around the code!
+class ObjectType(enum.Enum):
+    ANNOUNCE = "Announce"
+    ARTICLE = "Article"
+    CREATE = "Create"
+    FOLLOW = "Follow"
+    LIKE = "Like"
+    NOTE = "Note"
+    UNDO = "Undo"
+    UPDATE = "Update"
 
 
 class Object:
@@ -32,7 +48,7 @@ class Object:
         return False
 
     @cached_property
-    def ap_type(self) -> str:
+    def ap_type(self) -> str:  # TODO: Covert to ObjectType
         return ap.as_list(self.ap_object["type"])[0]
 
     @property
@@ -102,7 +118,7 @@ class Object:
 
             if obj.get("type") == "Link":
                 attachments.append(
-                    Attachment.parse_obj(
+                    Attachment.model_validate(
                         {
                             "proxiedUrl": None,
                             "resizedUrl": None,
@@ -116,7 +132,7 @@ class Object:
 
             proxied_url = proxied_media_url(obj["url"])
             attachments.append(
-                Attachment.parse_obj(
+                Attachment.model_validate(
                     {
                         "proxiedUrl": proxied_url,
                         "resizedUrl": (
@@ -278,8 +294,7 @@ def _to_camel(string: str) -> str:
 
 
 class BaseModel(pydantic.BaseModel):
-    class Config:
-        alias_generator = _to_camel
+    model_config = pydantic.ConfigDict(alias_generator=_to_camel)
 
 
 class Attachment(BaseModel):

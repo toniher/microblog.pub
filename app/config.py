@@ -15,6 +15,7 @@ from itsdangerous import URLSafeTimedSerializer
 from loguru import logger
 from mistletoe import markdown  # type: ignore
 
+from app._version import VERSION
 from app.customization import _CUSTOM_ROUTES
 from app.customization import _StreamVisibilityCallback
 from app.customization import default_stream_visibility_callback
@@ -25,12 +26,13 @@ ROOT_DIR = Path().parent.resolve()
 
 _CONFIG_FILE = os.getenv("MICROBLOGPUB_CONFIG_FILE", "profile.toml")
 
-VERSION_COMMIT = "dev"
 
 try:
     from app._version import VERSION_COMMIT  # type: ignore
 except ImportError:
     VERSION_COMMIT = get_version_commit()
+
+VERSION += "+{}".format(VERSION_COMMIT)
 
 # Force reloading cache when the CSS is updated
 CSS_HASH = "none"
@@ -69,7 +71,6 @@ def set_moved_to(moved_to: str) -> None:
     MOVED_TO_FILE.write_text(moved_to)
 
 
-VERSION = f"2.0.0+{VERSION_COMMIT}"
 USER_AGENT = f"microblogpub/{VERSION}"
 AP_CONTENT_TYPE = "application/activity+json"
 
@@ -134,7 +135,7 @@ class Config(pydantic.BaseModel):
 
 def load_config() -> Config:
     try:
-        return Config.parse_obj(
+        return Config.model_validate(
             tomli.loads((ROOT_DIR / "data" / _CONFIG_FILE).read_text())
         )
     except FileNotFoundError:
@@ -197,6 +198,7 @@ CUSTOM_FOOTER = (
 BASE_URL = ID
 DEBUG = CONFIG.debug
 DB_PATH = CONFIG.sqlalchemy_database or ROOT_DIR / "data" / "microblogpub.db"
+print(f"=====> Using database at {DB_PATH}")
 SQLALCHEMY_DATABASE_URL = f"sqlite:///{DB_PATH}"
 KEY_PATH = (
     (ROOT_DIR / CONFIG.key_path) if CONFIG.key_path else ROOT_DIR / "data" / "key.pem"

@@ -1,4 +1,4 @@
-image: ubuntu/22.10
+image: ubuntu/24.04
 sources:
 - https://git.sr.ht/~tsileo/microblog.pub
 packages:
@@ -10,7 +10,7 @@ packages:
 - libjpeg-dev
 - zlib1g-dev
 - libffi-dev
-- python3.10-venv
+- python3-venv
 tasks:
  - setup: |
     curl -sSL https://install.python-poetry.org | python3 -

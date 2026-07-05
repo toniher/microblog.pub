@@ -6,13 +6,13 @@ import pytest
 import respx
 from fastapi.testclient import TestClient
 
-from app import activitypub as ap
+from activitypub import activitypub as ap
+from activitypub.tests import factories
 from app import httpsig
 from app.database import AsyncSession
 from app.httpsig import _KEY_CACHE
 from app.httpsig import HTTPSigInfo
 from app.key import Key
-from tests import factories
 
 _test_app = fastapi.FastAPI()
 
@@ -74,7 +74,9 @@ async def test_enforce_httpsig__with_valid_signature(
 
     _KEY_CACHE.clear()
 
-    async with httpx.AsyncClient(app=_test_app, base_url="http://test") as client:
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=_test_app), base_url="http://test"
+    ) as client:
         response = await client.post(
             "/enforce_httpsig",
             headers={"Content-Type": ap.AS_CTX},
@@ -124,7 +126,9 @@ async def test_httpsig_checker__with_valid_signature(
 
     _KEY_CACHE.clear()
 
-    async with httpx.AsyncClient(app=_test_app, base_url="http://test") as client:
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=_test_app), base_url="http://test"
+    ) as client:
         response = await client.get(
             "/httpsig_checker",
             headers={"Accept": ap.AS_CTX},
@@ -165,7 +169,9 @@ async def test_httpsig_checker__with_invvalid_signature(
 
     _KEY_CACHE.clear()
 
-    async with httpx.AsyncClient(app=_test_app, base_url="http://test") as client:
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=_test_app), base_url="http://test"
+    ) as client:
         response = await client.get(
             "/httpsig_checker",
             headers={"Accept": ap.AS_CTX},

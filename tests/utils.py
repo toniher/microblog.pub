@@ -7,19 +7,20 @@ import fastapi
 import httpx
 import respx
 
-from app import activitypub as ap
-from app import actor
+import activitypub.models
+from activitypub import activitypub as ap
+from activitypub import actor
+from activitypub.actor import LOCAL_ACTOR
+from activitypub.ap_object import RemoteObject
+from activitypub.incoming_activities import fetch_next_incoming_activity
+from activitypub.incoming_activities import process_next_incoming_activity
+from activitypub.tests import factories
 from app import httpsig
 from app import models
-from app.actor import LOCAL_ACTOR
-from app.ap_object import RemoteObject
 from app.config import session_serializer
 from app.database import AsyncSession
 from app.database import async_session
-from app.incoming_activities import fetch_next_incoming_activity
-from app.incoming_activities import process_next_incoming_activity
 from app.main import app
-from tests import factories
 
 
 @contextmanager
@@ -75,7 +76,9 @@ def setup_remote_actor(
     return ra
 
 
-def setup_remote_actor_as_follower(ra: actor.RemoteActor) -> models.Follower:
+def setup_remote_actor_as_follower(
+    ra: actor.RemoteActor,
+) -> activitypub.models.Follower:
     actor = factories.ActorFactory.from_remote_actor(ra)
 
     follow_id = uuid4().hex
@@ -99,7 +102,9 @@ def setup_remote_actor_as_follower(ra: actor.RemoteActor) -> models.Follower:
     return follower
 
 
-def setup_remote_actor_as_following(ra: actor.RemoteActor) -> models.Following:
+def setup_remote_actor_as_following(
+    ra: actor.RemoteActor,
+) -> activitypub.models.Following:
     actor = factories.ActorFactory.from_remote_actor(ra)
 
     follow_id = uuid4().hex
@@ -125,7 +130,7 @@ def setup_remote_actor_as_following(ra: actor.RemoteActor) -> models.Following:
 
 def setup_remote_actor_as_following_and_follower(
     ra: actor.RemoteActor,
-) -> tuple[models.Following, models.Follower]:
+) -> tuple[activitypub.models.Following, activitypub.models.Follower]:
     actor = factories.ActorFactory.from_remote_actor(ra)
 
     follow_id = uuid4().hex
@@ -175,7 +180,7 @@ def setup_outbox_note(
     cc: list[str] | None = None,
     tags: list[ap.RawObject] | None = None,
     in_reply_to: str | None = None,
-) -> models.OutboxObject:
+) -> activitypub.models.OutboxObject:
     note_id = uuid4().hex
     note_from_outbox = RemoteObject(
         factories.build_note_object(
@@ -193,13 +198,13 @@ def setup_outbox_note(
 
 
 def setup_inbox_note(
-    actor: models.Actor,
+    actor: activitypub.models.Actor,
     content: str = "Hello",
     to: list[str] | None = None,
     cc: list[str] | None = None,
     tags: list[ap.RawObject] | None = None,
     in_reply_to: str | None = None,
-) -> models.OutboxObject:
+) -> activitypub.models.OutboxObject:
     note_id = uuid4().hex
     note_from_outbox = RemoteObject(
         factories.build_note_object(
@@ -217,8 +222,8 @@ def setup_inbox_note(
 
 
 def setup_inbox_delete(
-    actor: models.Actor, deleted_object_ap_id: str
-) -> models.InboxObject:
+    actor: activitypub.models.Actor, deleted_object_ap_id: str
+) -> activitypub.models.InboxObject:
     follow_from_inbox = RemoteObject(
         factories.build_delete_activity(
             from_remote_actor=actor,
@@ -248,3 +253,46 @@ async def _process_next_incoming_activity(db_session: AsyncSession) -> None:
 
 def run_process_next_incoming_activity() -> None:
     run_async(_process_next_incoming_activity)
+
+
+async def setup_auth_application_client(db: AsyncSession):
+    # adds auth app client to db
+    client = models.OAuthClient(
+        client_name="testclient",
+        redirect_uris=["testuri"],
+        client_id="testclientid",
+        client_secret="testclientsecret",
+    )
+
+    db.add(client)
+    await db.commit()
+
+
+async def setup_auth_auth_token(db: AsyncSession):
+    # adds authorized access token to DB
+    await setup_auth_application_client(db)
+    auth_request = models.IndieAuthAuthorizationRequest(
+        code="accesscode",
+        scope="create",
+        redirect_uri="testuri",
+        client_id="testclientid",
+        code_challenge="",
+        code_challenge_method="",
+    )
+
+    db.add(auth_request)
+    await db.commit()
+
+
+async def setup_auth_access_token(db: AsyncSession):
+    # adds authorized access token to DB
+    await setup_auth_auth_token(db)
+    access_token = models.IndieAuthAccessToken(
+        indieauth_authorization_request_id=1,
+        access_token="accesstoken",
+        refresh_token="refreshtoken",
+        expires_in=3600,
+        scope="create update",
+    )
+    db.add(access_token)
+    await db.commit()

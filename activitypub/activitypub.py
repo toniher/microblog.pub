@@ -5,8 +5,11 @@ from typing import TYPE_CHECKING
 from typing import Any
 
 import httpx
+from fastapi import APIRouter
 from loguru import logger
+from starlette.responses import JSONResponse
 
+# TODO: What can we refactor in the library from these imports and config?
 from app import config
 from app.config import ALSO_KNOWN_AS
 from app.config import AP_CONTENT_TYPE  # noqa: F401
@@ -17,10 +20,20 @@ from app.source import dedup_tags
 from app.source import hashtagify
 from app.utils.url import check_url
 
+# TODO: MOVE the AP API currently fully implemented in the app.main file!!!
+# TODO: MOVE all that is core AP operations / not HTTP related to 'boxes'
+router = APIRouter()
+
 if TYPE_CHECKING:
-    from app.actor import Actor
+    from activitypub.actor import Actor
 
 RawObject = dict[str, Any]
+
+
+class ActivityPubResponse(JSONResponse):
+    media_type = "application/activity+json"
+
+
 AS_CTX = "https://www.w3.org/ns/activitystreams"
 AS_PUBLIC = "https://www.w3.org/ns/activitystreams#Public"
 
@@ -115,7 +128,7 @@ if config.CONFIG.metadata:
         _LOCAL_ACTOR_TAGS.extend(kv_tags)
 
 
-ME = {
+ME: RawObject = {
     "@context": AS_EXTENDED_CTX,
     "type": "Person",
     "id": config.ID,
