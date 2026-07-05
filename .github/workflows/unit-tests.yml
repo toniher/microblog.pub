@@ -4,7 +4,7 @@ on: push
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Check out repository code
@@ -28,4 +28,4 @@ jobs:
 
       - name: Run test suite
         run: |
-          poetry run inv tests
+          poetry run inv tests -n 2

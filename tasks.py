@@ -117,11 +117,15 @@ def process_incoming_activities(ctx):
 
 
 @task
-def tests(ctx, k=None):
-    # type: (Context, Optional[str]) -> None
+def tests(ctx, k=None, n=None):
+    # type: (Context, Optional[str], Optional[str]) -> None
     pytest_args = " -vvv"
     if k:
         pytest_args += f" -k {k}"
+    if n:
+        # Enable pytest-xdist parallelism with the given number of workers
+        # (e.g. inv tests -n auto, or inv tests -n 2).
+        pytest_args += f" -n {n}"
     run(
         f"MICROBLOGPUB_CONFIG_FILE=tests.toml pytest tests{pytest_args}",
         pty=True,
