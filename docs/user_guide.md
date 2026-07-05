@@ -46,6 +46,28 @@ Also, this image _can_ be used in microblog.pub - just add this:
 to an appropriate place of your template (most likely, `header.html`).
 For more information, see a section about [custom templates](/user_guide.html#custom-templates) further in this document.
 
+#### Local avatar/header files
+
+If you'd rather not host your avatar/header elsewhere and reference it with an
+absolute URL, you can drop image files directly into the instance and let it
+serve them. The avatar and header are resolved in this priority order:
+
+1. **`icon_url` / `image_url` in `data/profile.toml`** — an explicit URL here
+   always wins. If set, the files below are ignored.
+2. **`data/avatar.jpg` / `data/profile.image.jpg`** — your own files, kept with
+   the rest of your mutable data (and therefore preserved across upgrades and
+   Docker image rebuilds).
+3. **`app/static/avatar.jpg` / `app/static/profile.image.jpg`** — packaged
+   defaults shipped with the instance; a `data/` file of the same name overrides
+   them.
+
+When one of these files is used, it is served from `/img/avatar.jpg` (or
+`/img/profile.image.jpg`) on your own domain, and that URL is what gets
+advertised as your `icon`/`image` over ActivityPub and as the `og:image` meta
+tag. Only those two exact filenames are served this way. As with any profile
+change, restart the server for it to take effect (an `Update` activity is then
+federated to known servers).
+
 ### Profile metadata
 
 You can add metadata to your profile with the `metadata` config item.

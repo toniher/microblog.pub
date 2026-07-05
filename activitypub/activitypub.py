@@ -156,11 +156,11 @@ ME: RawObject = {
     "tag": dedup_tags(_LOCAL_ACTOR_TAGS),
 }
 
-if config.CONFIG.icon_url:
+if config.ICON_URL:
     ME["icon"] = {
-        "mediaType": mimetypes.guess_type(config.CONFIG.icon_url)[0],
+        "mediaType": mimetypes.guess_type(config.ICON_URL)[0],
         "type": "Image",
-        "url": config.CONFIG.icon_url,
+        "url": config.ICON_URL,
     }
 
 if ALSO_KNOWN_AS:
@@ -169,11 +169,11 @@ if ALSO_KNOWN_AS:
 if MOVED_TO:
     ME["movedTo"] = MOVED_TO
 
-if config.CONFIG.image_url:
+if config.IMAGE_URL:
     ME["image"] = {
-        "mediaType": mimetypes.guess_type(config.CONFIG.image_url)[0],
+        "mediaType": mimetypes.guess_type(config.IMAGE_URL)[0],
         "type": "Image",
-        "url": config.CONFIG.image_url,
+        "url": config.IMAGE_URL,
     }
 
 

@@ -1,4 +1,5 @@
 import base64
+import mimetypes
 import os
 import sys
 import time
@@ -201,6 +202,35 @@ app.mount(
     name="custom_emoji",
 )
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+
+@app.get("/img/{filename}", response_model=None)
+def local_actor_image(filename: str) -> FileResponse:
+    """Serve the local actor's avatar/header image.
+
+    A user-provided `data/<filename>` overrides the packaged
+    `app/static/<filename>` default. Restricted to the two known filenames so
+    this can't be used to read arbitrary files. `profile.toml` (`icon_url` /
+    `image_url`) takes priority upstream in `app/config.py` and, when set, points
+    elsewhere so this route isn't used.
+    """
+    if filename not in (config.AVATAR_FILENAME, config.PROFILE_IMAGE_FILENAME):
+        raise HTTPException(status_code=404)
+
+    for path in (
+        config.ROOT_DIR / "data" / filename,
+        config.ROOT_DIR / "app" / "static" / filename,
+    ):
+        if path.is_file():
+            return FileResponse(
+                path,
+                media_type=mimetypes.guess_type(filename)[0],
+                headers={"Cache-Control": "max-age=31536000"},
+            )
+
+    raise HTTPException(status_code=404)
+
+
 app.include_router(admin.router, prefix="/admin")
 app.include_router(admin.unauthenticated_router, prefix="/admin")
 

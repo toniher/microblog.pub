@@ -3,7 +3,7 @@
   "short_name": "microblog.pub",
   "icons": [
     {
-      "src": "/static/avatar.jpeg",
+      "src": "/static/avatar.jpg",
       "sizes": "400x400",
       "type": "image/jpeg"
     }

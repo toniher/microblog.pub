@@ -203,6 +203,30 @@ SQLALCHEMY_DATABASE_URL = f"sqlite:///{DB_PATH}"
 KEY_PATH = (
     (ROOT_DIR / CONFIG.key_path) if CONFIG.key_path else ROOT_DIR / "data" / "key.pem"
 )
+
+
+def _resolve_local_actor_image(config_url: str | None, filename: str) -> str | None:
+    """Resolve the URL for a local actor image (avatar/header).
+
+    `profile.toml` (the `icon_url` / `image_url` settings) always wins. Otherwise
+    fall back to a file bundled with the instance, preferring a user-provided
+    `data/<filename>` over the packaged `app/static/<filename>` default. Either
+    file is served through the `/img/<filename>` route (see `app/main.py`), which
+    applies the same data-over-static fallback.
+    """
+    if config_url:
+        return config_url
+    if (ROOT_DIR / "data" / filename).exists() or (
+        ROOT_DIR / "app" / "static" / filename
+    ).exists():
+        return f"{BASE_URL}/img/{filename}"
+    return None
+
+
+AVATAR_FILENAME = "avatar.jpg"
+PROFILE_IMAGE_FILENAME = "profile.image.jpg"
+ICON_URL = _resolve_local_actor_image(CONFIG.icon_url, AVATAR_FILENAME)
+IMAGE_URL = _resolve_local_actor_image(CONFIG.image_url, PROFILE_IMAGE_FILENAME)
 EMOJIS = "😺 😸 😹 😻 😼 😽 🙀 😿 😾"
 if CONFIG.emoji:
     EMOJIS = CONFIG.emoji
