@@ -41,7 +41,7 @@ def _set_sqlite_pragmas(dbapi_conn, _connection_record):
     """Apply WAL journal mode and other pragmas on every new connection."""
     cur = dbapi_conn.cursor()
     cur.execute("PRAGMA journal_mode=WAL")
-    cur.execute("PRAGMA busy_timeout=10000")  # 10 s – prevents lock errors in CI
+    cur.execute("PRAGMA busy_timeout=10000")  # 10000 ms (10 s) – prevents lock errors in CI
     cur.execute("PRAGMA synchronous=NORMAL")
     cur.execute("PRAGMA temp_store=MEMORY")
     cur.close()
@@ -118,8 +118,9 @@ from app.main import app  # noqa: E402
 def _cleanup_worker_db():
     yield
     _test_engine.dispose()
+    _test_async_engine.sync_engine.dispose()
     for suffix in ("", "-wal", "-shm"):
-        p = _DB_PATH.with_name(_DB_PATH.name + suffix)
+        p = Path(str(_DB_PATH) + suffix)
         try:
             p.unlink(missing_ok=True)
         except OSError:
