@@ -44,6 +44,71 @@ docker compose up -d
 
 Setup a reverse proxy (see the [Reverse Proxy section](/installing.html#reverse-proxy)).
 
+### What runs inside the container
+
+The image is built from `python:3.12-slim` and a single container runs **three
+processes** under [supervisord](http://supervisord.org/) (see `misc/docker-supervisord.conf`):
+
+ - `uvicorn` — the web server, listening on `0.0.0.0:8000`
+ - `incoming_worker` — processes incoming federation activities (your inbox)
+ - `outgoing_worker` — delivers your outgoing activities to other servers
+
+On every start, the entrypoint (`misc/docker_start.sh`) first runs `inv update
+--no-update-deps`, which recompiles the CSS and applies any pending database
+migrations before launching supervisord. You therefore don't need to run migrations
+by hand after pulling a new version — restarting the container is enough.
+
+The container runs as the unprivileged user `1000:1000` (see the `user:` line in
+`docker-compose.yml`), and two host directories are bind-mounted so your data
+survives image rebuilds:
+
+ - `./data` → `/app/data` — config (`profile.toml`), secrets, the SQLite database, uploads, logs
+ - `./app/static` → `/app/app/static` — compiled CSS, favicon and emoji assets
+
+### Managing the app
+
+```bash
+docker compose ps          # show the container status
+docker compose stop        # stop the app
+docker compose up -d       # (re)start the app in the background
+docker compose restart     # restart (e.g. after editing data/profile.toml)
+```
+
+Note that most configuration changes (anything in `data/profile.toml`) only take
+effect after a restart.
+
+### Viewing logs
+
+supervisord writes each process' output to a file under `data/`, which you can tail
+from the host:
+
+```bash
+tail -f data/uvicorn.log     # web server
+tail -f data/incoming.log    # incoming federation worker
+tail -f data/outgoing.log    # outgoing federation worker
+```
+
+The container's own stdout/stderr is also available via Docker:
+
+```bash
+docker compose logs -f
+```
+
+### Running maintenance tasks
+
+Administrative tasks (checking the config, resetting the password, pruning old data,
+moving instances, importing follows, …) are exposed as `make` targets that each spin
+up a throwaway container sharing your `data/` and `app/static/` volumes. For example:
+
+```bash
+make check-config                                   # validate data/profile.toml
+make reset-password                                 # set a new admin password
+make account=user@other.tld webfinger              # resolve a remote actor URL
+```
+
+See the [User's guide](/user_guide.html) for the full list and the details of each
+task (each one documents its "Docker edition" invocation).
+
 ### Updating 
 
 To update microblogpub, pull the latest changes, rebuild the Docker image and restart the process with `docker compose`.
@@ -88,7 +153,9 @@ docker compose up -d
 
 ## Python developer edition
 
-Assuming you have a working **Python 3.10+** environment. 
+Assuming you have a working **Python 3.10+** environment (Python **3.12** is
+recommended — it's what the project is developed and tested against, and what the
+Docker image ships).
 
 Setup [Poetry](https://python-poetry.org/docs/master/#installing-with-the-official-installer).
 
@@ -129,7 +196,7 @@ poetry env info
 Run the two processes with supervisord.
 
 ```bash
-VENV_DIR=/home/ubuntu/.cache/pypoetry/virtualenvs/microblogpub-chx-y1oE-py3.10 poetry run supervisord -c misc/supervisord.conf -n
+VENV_DIR=/home/ubuntu/.cache/pypoetry/virtualenvs/microblogpub-chx-y1oE-py3.12 poetry run supervisord -c misc/supervisord.conf -n
 ```
 
 Setup a reverse proxy (see the next section).

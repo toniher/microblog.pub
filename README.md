@@ -12,14 +12,12 @@ This repo and collective is a respectful attempt by the users of the project to 
 
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](code_of_conduct.md) 
 
-Instances in the wild:
+Instances in the wild (this fork or close relatives):
 
  - [blog.joaocosta.eu](https://blog.joaocosta.eu/)
  - [bw3.dev](https://bw3.dev/)
- - [blog.nigini.me](https://blog.nigini.me)
  - [chrichri.ween.de](https://chrichri.ween.de)
- - [bw3.dev](https://bw3.dev/)
-
+ - [toniher@cau.cat](https://micro.cau.cat)
 
 ## Features
 
@@ -30,7 +28,7 @@ Instances in the wild:
     - Author notes in Markdown, with code highlighting support
     - Dedicated section for articles/blog posts (enabled when the first article is posted)
  - Lightweight
-    - Uses SQLite, and Python 3.10+
+    - Uses SQLite, and Python 3.12 (3.10+ supported)
     - Can be deployed on small VPS
  - Privacy-aware
     - EXIF metadata (like GPS location) are stripped before storage

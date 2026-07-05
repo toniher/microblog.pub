@@ -47,7 +47,7 @@ when a newer Twemoji release is needed.
 
 Running a local version requires:
 
- - Python 3.10+
+ - Python 3.10+ (3.12 recommended — it's what the project is developed and tested against)
  - SQLite 3.35+
 
 You can follow the [Python developer version of the install instructions](https://docs.microblog.pub/installing.html#python-developer-edition).

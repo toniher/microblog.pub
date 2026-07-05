@@ -162,14 +162,35 @@ Do not use exotic characters in filename - only letters, numbers, and underscore
 
 The CSS is written with [SCSS](https://sass-lang.com/documentation/syntax).
 
-You can override colors by editing `data/_theme.scss`:
+You can override colors and the font by editing `data/_theme.scss`:
 
 ```scss
 $primary-color: #e14eea;                                                                            
 $secondary-color: #32cd32;
 ```
 
-See `app/scss/main.scss` to see what variables can be overridden.
+The following variables are available to override (see `app/scss/main.scss` for the
+authoritative list and their default values):
+
+| Variable | Purpose |
+| --- | --- |
+| `$font-stack` | Font family used across the site |
+| `$background` | Page background |
+| `$light-background` | Alternate/secondary background (e.g. cards) |
+| `$text-color` | Main body text |
+| `$primary-color` | Primary accent (links, default favicon) |
+| `$secondary-color` | Secondary accent |
+| `$muted-color` | Muted/secondary text (e.g. timestamps) |
+| `$form-background-color` | Form field background |
+| `$form-text-color` | Form field text |
+| `$nav-button-background-color` | Navigation button background |
+| `$nav-button-text-color` | Navigation button text |
+| `$primary-button-text-color` | Text on primary buttons |
+| `$code-highlight-background` | Background behind highlighted code blocks |
+
+Only set the variables you want to change — anything you leave out keeps its default.
+If you need to go further than variables, you can add arbitrary SCSS after the variable
+definitions in `data/_theme.scss`.
 
 You will need to [recompile CSS](#recompiling-css-files) after doing any CSS changes (for actual css files to be updates) and restart microblog.pub (for css link in HTML documents to be updated with a new checksum - otherwise, browsers that downloaded old CSS will keep using it).
 
@@ -179,9 +200,28 @@ By default, microblog.pub favicon is a square of `$primary-color` CSS color (see
 You can change it to any icon you like - just save a desired file as `data/favicon.ico`.
 After that, run the "[recompile CSS](#recompiling-css-files)" task to copy it to `app/static/favicon.ico`.
 
+#### Custom footer
+
+By default, the footer shows a "Powered by microblog.pub" line.
+You can replace it with your own text by adding a `custom_footer` config item to `profile.toml`:
+
+```toml
+custom_footer = "Content licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) — running microblog.pub {version}"
+```
+
+Markdown is supported, and the `{version}` placeholder is replaced by the running microblog.pub version.
+
 #### Custom templates
 
 If you'd like to customize your instance's theme beyond CSS, you can modify the app's HTML by placing templates in `data/templates` which overwrite the defaults in `app/templates`.
+
+A template placed in `data/templates/<name>.html` fully replaces `app/templates/<name>.html`.
+The ones you are most likely to want to override are:
+
+ - `header.html` — the site header shown at the top of every public page (name, avatar, navigation)
+ - `layout.html` — the overall page skeleton (`<head>`, footer, common markup)
+ - `index.html` — the public homepage
+ - `utils.html` — shared macros (see the per-macro override trick below)
 
 Templates are written using [Jinja](https://jinja.palletsprojects.com/en/latest/templates/) templating language.
 Moreover, `utils.html` has scoped blocks around the body of every macro.
@@ -221,13 +261,82 @@ code_highlighting_theme = "solarized-dark"
 
 #### Custom routes
 
-Custom routes can be added using in `data/custom_routes.py`:
+Custom routes can be added in `data/custom_routes.py` (the file is imported
+automatically at startup if it exists).
+
+The simplest option is to serve a static HTML page. The `html_file` is read from the
+`data/` directory and its content is inserted verbatim (as raw HTML) into the page
+body, wrapped in the site layout:
 
 ```python
 from app.customization import register_html_page
 
-register_html_page("/testcustom",title="test html page", html_file="test.txt",show_in_navbar=True)
+register_html_page(
+    "/testcustom",
+    title="test html page",
+    html_file="test.html",  # relative to data/
+    show_in_navbar=True,
+)
 ```
+
+If you register a page at `/`, it replaces the homepage, and the default stream of
+notes is moved to `/notes` automatically.
+
+For anything more dynamic, you can register a raw [FastAPI](https://fastapi.tiangolo.com/)
+handler instead:
+
+```python
+from starlette.responses import PlainTextResponse
+from app.customization import register_raw_handler
+
+async def my_handler(request):
+    return PlainTextResponse("hello from a custom route")
+
+register_raw_handler(
+    "/hello",
+    title="Hello",
+    handler=my_handler,
+    show_in_navbar=False,
+)
+```
+
+Routes registered with `show_in_navbar=True` (the default) get a link added to the
+navigation bar automatically.
+
+#### Custom stream visibility
+
+The main public stream (the homepage) shows, by default, non-reply notes from people
+you follow, plus anything mentioning you and replies within your own conversations.
+
+You can override exactly what appears in the stream by defining a
+`custom_stream_visibility_callback` in `data/stream.py`. It receives an `ObjectInfo`
+for each incoming object and returns `True` to show it in the stream or `False` to
+hide it:
+
+```python
+from app.customization import ObjectInfo
+
+def custom_stream_visibility_callback(object_info: ObjectInfo) -> bool:
+    # e.g. only show posts tagged #mycommunity from people you follow
+    return (
+        object_info.is_from_following
+        and "mycommunity" in object_info.hashtags
+    )
+```
+
+The `ObjectInfo` passed to the callback exposes:
+
+| Field | Description |
+| --- | --- |
+| `is_reply` | Whether the object is a reply |
+| `is_local_reply` | Whether it's a reply to one of your own objects |
+| `is_mention` | Whether it mentions you (the local actor) |
+| `is_from_following` | Whether it's from someone you follow |
+| `hashtags` | List of hashtags on the object, e.g. `["microblogpub"]` |
+| `actor_handle` | The author's handle, e.g. `@dev@microblog.pub` |
+| `remote_object` | The full remote object |
+
+Restart microblog.pub after adding or changing `data/stream.py`.
 
 ### Blocking servers
 
@@ -257,6 +366,12 @@ And only the last 20 interactions (likes/shares/webmentions) will be displayed, 
 
 You can login to the admin section by clicking on the `Admin` link in the footer or by visiting `https://yourdomain.tld/admin/login`.
 The password is the one set during the initial configuration.
+
+By default, an admin session stays valid for 3 days. You can change this by setting `session_timeout` (in seconds) in `profile.toml`:
+
+```toml
+session_timeout = 86400  # stay logged in for 1 day
+```
 
 ### Lookup
 
