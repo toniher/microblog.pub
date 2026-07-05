@@ -51,28 +51,13 @@ Instances in the wild:
 
 ## Getting started
 
-Check out the [online documentation](https://tinyBlogPub.github.io/microblog.pub/)
+Check out the [online documentation](https://toniher.github.io/microblog.pub/)
 
 ## Credits
 
  - Emoji from [Twemoji](https://twemoji.twitter.com/)
  - Awesome custom goose emoji from [@pamela@bsd.network](https://bsd.network/@pamela)
 
-
-## Contributing
-
-*Development used to take place on [sourcehut](https://sr.ht/~tsileo/microblog.pub/) but is staled for more than a year!*
-
-This is where the project is being reanimated:
-
- - [ORG](https://github.com/tinyBlogPub/)
- - [CONDUCT](code_of_conduct.md)
- - [CODE](https://github.com/tinyBlogPub/microblog.pub)
-    - Contributions are more than welcomed via Pull Requests, but first, make sure to discuss your ideas and get assigned to an issue.
- - [DISCUSSION](https://github.com/tinyBlogPub/microblog.pub/discussions)
-    - Where we meet to talk about the project, bounce ideas around, and shape the next steps of the project
- - [ISSUES](https://github.com/tinyBlogPub/microblog.pub/issues)
-    - Used for technical description of bugs, issues, and improvements (please use discussion for ideation and open-ended conversations.)
 
 ## License
 

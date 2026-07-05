@@ -61,7 +61,7 @@ python -m http.server 8001
 
 ## Contributing
 
-Contributions/patches are welcome, but please start a discussion in a [ticket](https://todo.sr.ht/~tsileo/microblog.pub) or a [thread in the mailing list](https://lists.sr.ht/~tsileo/microblog.pub-devel) before working on anything consequent.
+Contributions/patches are welcome, but please start a discussion in an [issue](https://github.com/toniher/microblog.pub/issues) before working on anything consequent.
 
 ### Patches
 

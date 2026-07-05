@@ -14,7 +14,7 @@ Note that if you want to serve static assets via your reverse proxy (like nginx)
 where it is accessible by your reverse proxy user.
 
 ```bash
-git clone https://git.sr.ht/~tsileo/microblog.pub your-domain.tld
+git clone https://github.com/toniher/microblog.pub your-domain.tld
 ```
 
 Build the Docker image locally.
@@ -99,7 +99,7 @@ curl -sSL https://install.python-poetry.org | python3 -
 Clone the repository.
 
 ```bash
-git clone https://git.sr.ht/~tsileo/microblog.pub testing.microblog.pub
+git clone https://github.com/toniher/microblog.pub testing.microblog.pub
 ```
 
 Install deps.
@@ -277,10 +277,6 @@ These two changes will instruct NGINX that requests sent to `https://example.com
 		location /.well-known/oauth-authorization-server  { return 301 /subdir$request_uri; }
 
 * Optionally, [check robots.txt from a running microblogpub instance](https://microblog.pub/robots.txt) and integrate it into robots.txt file in the root of your server - remember to prepend `subdir` to URLs, so for example `Disallow: /admin` becomes `Disallow: /subdir/admin`.
-
-## YunoHost edition
-
-[YunoHost](https://yunohost.org/) support is available (although it is not an official package for now): <https://git.sr.ht/~tsileo/microblog.pub_ynh>.
 
 ## Available tutorial/guides
 

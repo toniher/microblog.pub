@@ -57,7 +57,7 @@ Be aware that most other software like Mastodon will limit the number of key/val
 ```toml
 metadata = [
   {key = "Documentation", value = "[https://docs.microblog.pub](https://docs.microblog.pub)"},
-  {key = "Source code", value = "[https://sr.ht/~tsileo/microblog.pub/](https://sr.ht/~tsileo/microblog.pub/)"},
+  {key = "Source code", value = "[https://github.com/toniher/microblog.pub](https://github.com/toniher/microblog.pub)"},
 ]
 ```
 
