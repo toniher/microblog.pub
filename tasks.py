@@ -1,6 +1,5 @@
 import asyncio
 import io
-import shutil
 import tarfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -46,11 +45,10 @@ def compile_scss(ctx, watch=False):
     # type: (Context, bool) -> None
     from app.utils.favicon import build_favicon
 
-    favicon_file = Path("data/favicon.ico")
-    if not favicon_file.exists():
-        build_favicon()
-    else:
-        shutil.copy2(favicon_file, "app/static/favicon.ico")
+    # Regenerate the themed default favicon (app/static/favicon.ico). A
+    # user-provided data/favicon.ico overrides it at serve time (see the /img
+    # route in app/main.py), so it no longer needs to be copied here.
+    build_favicon()
 
     theme_file = Path("data/_theme.scss")
     if not theme_file.exists():

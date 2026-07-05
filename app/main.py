@@ -206,15 +206,19 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 @app.get("/img/{filename}", response_model=None)
 def local_actor_image(filename: str) -> FileResponse:
-    """Serve the local actor's avatar/header image.
+    """Serve the local actor's avatar/header image and the favicon.
 
     A user-provided `data/<filename>` overrides the packaged
-    `app/static/<filename>` default. Restricted to the two known filenames so
-    this can't be used to read arbitrary files. `profile.toml` (`icon_url` /
-    `image_url`) takes priority upstream in `app/config.py` and, when set, points
-    elsewhere so this route isn't used.
+    `app/static/<filename>` default. Restricted to the known filenames so this
+    can't be used to read arbitrary files. For the avatar/header, `profile.toml`
+    (`icon_url` / `image_url`) takes priority upstream in `app/config.py` and,
+    when set, points elsewhere so this route isn't used.
     """
-    if filename not in (config.AVATAR_FILENAME, config.PROFILE_IMAGE_FILENAME):
+    if filename not in (
+        config.AVATAR_FILENAME,
+        config.PROFILE_IMAGE_FILENAME,
+        config.FAVICON_FILENAME,
+    ):
         raise HTTPException(status_code=404)
 
     for path in (

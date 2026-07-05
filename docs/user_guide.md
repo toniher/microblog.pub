@@ -220,7 +220,11 @@ You will need to [recompile CSS](#recompiling-css-files) after doing any CSS cha
 
 By default, microblog.pub favicon is a square of `$primary-color` CSS color (see above section on how to redefine CSS colors).
 You can change it to any icon you like - just save a desired file as `data/favicon.ico`.
-After that, run the "[recompile CSS](#recompiling-css-files)" task to copy it to `app/static/favicon.ico`.
+It is served the same way as the [avatar/header images](#profile): a `data/favicon.ico`
+overrides the packaged `app/static/favicon.ico` default (the themed square) at
+serve time, so you only need to restart microblog.pub for it to take effect — no
+recompile step required. As with your data, it is preserved across upgrades and
+Docker image rebuilds.
 
 #### Custom footer
 

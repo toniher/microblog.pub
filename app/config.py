@@ -225,6 +225,7 @@ def _resolve_local_actor_image(config_url: str | None, filename: str) -> str | N
 
 AVATAR_FILENAME = "avatar.jpg"
 PROFILE_IMAGE_FILENAME = "profile.image.jpg"
+FAVICON_FILENAME = "favicon.ico"
 ICON_URL = _resolve_local_actor_image(CONFIG.icon_url, AVATAR_FILENAME)
 IMAGE_URL = _resolve_local_actor_image(CONFIG.image_url, PROFILE_IMAGE_FILENAME)
 EMOJIS = "😺 😸 😹 😻 😼 😽 🙀 😿 😾"
