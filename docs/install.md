@@ -61,6 +61,31 @@ As you probably already know, Docker can (and will) eat a lot of disk space, whe
 docker image prune -a --filter "until=24h"
 ```
 
+### Troubleshooting: `PermissionError` on `app/static/` or `data/` after updating
+
+`docker-compose.yml` runs the container as an unprivileged user (`user: 1000:1000`).
+If your `data/` and `app/static/` directories were created (or previously written to)
+by a container running as `root` — e.g. an older setup without the `user:` line — the
+container's uid `1000` will no longer be able to write to them, and startup tasks like
+`compile_scss` (which regenerates `app/static/favicon.ico` and the compiled CSS) will
+fail with a traceback ending in `PermissionError: [Errno 13] Permission denied`, and
+`uvicorn`/the worker processes will crash-loop under supervisord.
+
+Check ownership:
+
+```bash
+stat -c '%u:%g %n' app/static data
+```
+
+If it doesn't match the uid:gid in `docker-compose.yml`'s `user:` line (default `1000:1000`),
+fix it:
+
+```bash
+docker compose down
+sudo chown -R 1000:1000 ./data ./app/static
+docker compose up -d
+```
+
 ## Python developer edition
 
 Assuming you have a working **Python 3.10+** environment. 
