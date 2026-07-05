@@ -8,7 +8,8 @@ build:
 .PHONY: config
 config:
 	# Run and remove instantly
-	-docker run --rm -it --volume `pwd`/data:/app/data microblogpub/microblogpub inv configuration-wizard
+	# app/static is mounted so the Twemoji emoji downloaded by the wizard persist to the host
+	-docker run --rm -it --volume `pwd`/data:/app/data --volume `pwd`/app/static:/app/app/static microblogpub/microblogpub inv configuration-wizard
 
 .PHONY: update
 update:

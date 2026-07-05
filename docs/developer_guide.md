@@ -35,13 +35,32 @@ Files metadata are stored in the database.
 
 ### Emoji assets
 
-The Twemoji SVGs served from `app/static/twemoji/` aren't checked into the repo; they're
-fetched by the `inv download-twemoji` task (a dependency of `inv configuration-wizard`),
-which downloads a release tarball and extracts `assets/svg/`. The source is
-[jdecked/twemoji](https://github.com/jdecked/twemoji), the actively maintained
-continuation of the original `twitter/twemoji` project (abandoned after the Twitter/X
-acquisition). The release tag is pinned in `tasks.py:download_twemoji` — bump it there
-when a newer Twemoji release is needed.
+Standard unicode emoji are rendered as [Twemoji](https://github.com/jdecked/twemoji)
+SVGs served from `app/static/twemoji/`. These SVGs are **not** checked into the repo
+(the directory ships with only a `.gitignore`), so a fresh clone starts without them.
+
+**They are downloaded automatically during initial setup.** The `download-twemoji`
+task is a dependency of `configuration-wizard`, so:
+
+ - **Python edition:** `poetry run inv configuration-wizard` fetches the SVGs straight
+   to `app/static/twemoji/` on disk.
+ - **Docker edition:** `make config` does the same — its `docker run` mounts both
+   `data/` and `app/static/`, so the emoji downloaded by the wizard persist to the host
+   `app/static/twemoji/` (which `docker compose` then bind-mounts into the running
+   container).
+
+You don't need to download them by hand. They are fetched **once** and are *not*
+refreshed afterwards — neither `inv update` / `make update` nor the Docker container
+start re-run the download. To refresh or re-fetch them manually (e.g. after bumping the
+pinned version, or if the directory was wiped), run `poetry run inv download-twemoji`
+(or, for Docker, a `docker run` invocation of `inv download-twemoji` that mounts
+`app/static` — i.e. `--volume $(pwd)/app/static:/app/app/static`).
+
+Under the hood the task downloads a release tarball and extracts `assets/svg/` into
+`app/static/twemoji/`. The source is [jdecked/twemoji](https://github.com/jdecked/twemoji),
+the actively maintained continuation of the original `twitter/twemoji` project
+(abandoned after the Twitter/X acquisition). The release tag is pinned in
+`tasks.py:download_twemoji` — bump it there when a newer Twemoji release is needed.
 
 ## Installation
 
