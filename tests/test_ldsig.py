@@ -91,6 +91,7 @@ async def test_linked_data_sig_rejects_actor_impersonation(
     }
     doc["signature"] = options
     to_be_signed = ldsig._options_hash(doc) + ldsig._doc_hash(doc)
+    assert k.privkey is not None
     signer = PKCS1_v1_5.new(k.privkey)
     digest = SHA256.new()
     digest.update(to_be_signed.encode("utf-8"))
