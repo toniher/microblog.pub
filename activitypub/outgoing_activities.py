@@ -15,11 +15,10 @@ from sqlalchemy.orm import joinedload
 
 import activitypub.models
 from activitypub import activitypub as ap
-from app import config
-from app import ldsig
-from app import models
 from activitypub.actor import LOCAL_ACTOR
 from activitypub.actor import _actor_hash
+from app import config
+from app import ldsig
 from app.config import KEY_PATH
 from app.database import AsyncSession
 from app.key import Key

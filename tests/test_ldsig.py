@@ -5,10 +5,10 @@ import pytest
 from respx import MockRouter
 
 from activitypub import activitypub as ap
+from activitypub.tests import factories
 from app import ldsig
 from app.database import AsyncSession
 from app.key import Key
-from activitypub.tests import factories
 
 _SAMPLE_CREATE = {
     "type": "Create",

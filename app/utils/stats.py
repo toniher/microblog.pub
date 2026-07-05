@@ -10,7 +10,6 @@ from sqlalchemy.orm import joinedload
 from tabulate import tabulate
 
 import activitypub.models
-from app import models
 from app.config import ROOT_DIR
 from app.database import AsyncSession
 from app.database import async_session
@@ -62,13 +61,16 @@ async def get_outgoing_activity_stats(
         row = (
             await db_session.execute(
                 select(
-                    func.count(activitypub.models.OutgoingActivity.id).label("total_count"),
+                    func.count(activitypub.models.OutgoingActivity.id).label(
+                        "total_count"
+                    ),
                     func.sum(
                         case(
                             [
                                 (
                                     or_(
-                                        activitypub.models.OutgoingActivity.next_try > now(),
+                                        activitypub.models.OutgoingActivity.next_try
+                                        > now(),
                                         activitypub.models.OutgoingActivity.tries == 0,
                                     ),
                                     1,
@@ -80,7 +82,12 @@ async def get_outgoing_activity_stats(
                     func.sum(
                         case(
                             [
-                                (activitypub.models.OutgoingActivity.is_sent.is_(True), 1),
+                                (
+                                    activitypub.models.OutgoingActivity.is_sent.is_(
+                                        True
+                                    ),
+                                    1,
+                                ),
                             ],
                             else_=0,
                         )
@@ -88,7 +95,12 @@ async def get_outgoing_activity_stats(
                     func.sum(
                         case(
                             [
-                                (activitypub.models.OutgoingActivity.is_errored.is_(True), 1),
+                                (
+                                    activitypub.models.OutgoingActivity.is_errored.is_(
+                                        True
+                                    ),
+                                    1,
+                                ),
                             ],
                             else_=0,
                         )
@@ -103,7 +115,9 @@ async def get_outgoing_activity_stats(
             errored_count=row.errored_count or 0,
         )
 
-    from_inbox = await _get_stats(activitypub.models.OutgoingActivity.inbox_object_id.is_not(None))
+    from_inbox = await _get_stats(
+        activitypub.models.OutgoingActivity.inbox_object_id.is_not(None)
+    )
     from_outbox = await _get_stats(
         activitypub.models.OutgoingActivity.outbox_object_id.is_not(None)
     )
@@ -130,8 +144,12 @@ def print_stats() -> None:
                     await db_session.scalars(
                         select(activitypub.models.OutgoingActivity)
                         .options(
-                            joinedload(activitypub.models.OutgoingActivity.inbox_object),
-                            joinedload(activitypub.models.OutgoingActivity.outbox_object),
+                            joinedload(
+                                activitypub.models.OutgoingActivity.inbox_object
+                            ),
+                            joinedload(
+                                activitypub.models.OutgoingActivity.outbox_object
+                            ),
                         )
                         .order_by(activitypub.models.OutgoingActivity.last_try.desc())
                         .limit(10)

@@ -19,15 +19,6 @@ from sqlalchemy.orm import joinedload
 
 import activitypub.models
 from activitypub import activitypub as ap
-from activitypub.activitypub import ActivityPubResponse
-
-# TODO: What can we refactor in the library from these imports and config?
-from app import config
-from app import ldsig
-# TODO: this app.models is mostly used for WebMention (which is not ActivityPub AFAK).
-# This may contradict be related info: https://www.w3.org/TR/social-web-protocols/#delivery-interop
-# It should be easy to create a non-hard-bonding to other protocols (i.e., event-based.)
-from app import models
 from activitypub.actor import LOCAL_ACTOR
 from activitypub.actor import Actor
 from activitypub.actor import RemoteActor
@@ -35,6 +26,15 @@ from activitypub.actor import fetch_actor
 from activitypub.actor import save_actor
 from activitypub.actor import update_actor_if_needed
 from activitypub.ap_object import RemoteObject
+from activitypub.outgoing_activities import new_outgoing_activity
+
+# TODO: this app.models is mostly used for WebMention (which is not ActivityPub AFAK).
+# This may contradict be related info: https://www.w3.org/TR/social-web-protocols/#delivery-interop
+# It should be easy to create a non-hard-bonding to other protocols (i.e., event-based.)
+# TODO: What can we refactor in the library from these imports and config?
+from app import config
+from app import ldsig
+from app import models
 from app.config import BASE_URL
 from app.config import ID
 from app.config import MANUALLY_APPROVES_FOLLOWERS
@@ -42,7 +42,6 @@ from app.config import set_moved_to
 from app.config import stream_visibility_callback
 from app.customization import ObjectInfo
 from app.database import AsyncSession
-from activitypub.outgoing_activities import new_outgoing_activity
 from app.source import dedup_tags
 from app.source import markdownify
 from app.uploads import upload_to_attachment
@@ -79,9 +78,9 @@ def outbox_object_id(outbox_id) -> str:
 
 async def fetch_outbox(
     db_session: AsyncSession,
-    object_type = ["Note"], # TODO: convert to ap_object.!!!
-    public_only = True,
-    posts_limit = 20
+    object_type=["Note"],  # TODO: convert to ap_object.!!!
+    public_only=True,
+    posts_limit=20,
 ) -> list[activitypub.models.OutboxObject]:
     # Default restrictions unless the request is authenticated with an access token
     # TODO Copied code from app.main... does it make sense to only restrict types when PUBLIC?
@@ -91,12 +90,15 @@ async def fetch_outbox(
     ]
 
     # By design, we only show the last 20 public activities in the oubox
-    stmt = select(activitypub.models.OutboxObject
-    ).where(
-        activitypub.models.OutboxObject.is_deleted.is_(False),
-        *([] if not public_only else restricted_where),
-    ).order_by(activitypub.models.OutboxObject.ap_published_at.desc()
-    ).limit(posts_limit)
+    stmt = (
+        select(activitypub.models.OutboxObject)
+        .where(
+            activitypub.models.OutboxObject.is_deleted.is_(False),
+            *([] if not public_only else restricted_where),
+        )
+        .order_by(activitypub.models.OutboxObject.ap_published_at.desc())
+        .limit(posts_limit)
+    )
     result = await db_session.scalars(stmt)
     outbox_objects = result.all()
 
@@ -970,7 +972,9 @@ async def _compute_recipients(
         # Is it a known actor?
         known_actor = (
             await db_session.execute(
-                select(activitypub.models.Actor).where(activitypub.models.Actor.ap_id == r)
+                select(activitypub.models.Actor).where(
+                    activitypub.models.Actor.ap_id == r
+                )
             )
         ).scalar_one_or_none()  # type: ignore
         if known_actor:
@@ -996,17 +1000,23 @@ async def compute_all_known_recipients(db_session: AsyncSession) -> set[str]:
         actor.shared_inbox_url or actor.inbox_url
         for actor in (
             await db_session.scalars(
-                select(activitypub.models.Actor).where(activitypub.models.Actor.is_deleted.is_(False))
+                select(activitypub.models.Actor).where(
+                    activitypub.models.Actor.is_deleted.is_(False)
+                )
             )
         ).all()
     }
 
 
-async def _get_following(db_session: AsyncSession) -> list[activitypub.models.Following]:
+async def _get_following(
+    db_session: AsyncSession,
+) -> list[activitypub.models.Following]:
     return (
         (
             await db_session.scalars(
-                select(activitypub.models.Following).options(joinedload(activitypub.models.Following.actor))
+                select(activitypub.models.Following).options(
+                    joinedload(activitypub.models.Following.actor)
+                )
             )
         )
         .unique()
@@ -1018,7 +1028,9 @@ async def _get_followers(db_session: AsyncSession) -> list[activitypub.models.Fo
     return (
         (
             await db_session.scalars(
-                select(activitypub.models.Follower).options(joinedload(activitypub.models.Follower.actor))
+                select(activitypub.models.Follower).options(
+                    joinedload(activitypub.models.Follower.actor)
+                )
             )
         )
         .unique()
@@ -1083,7 +1095,8 @@ async def get_inbox_delete_for_activity_object_ap_id(
             select(activitypub.models.InboxObject)
             .where(
                 activitypub.models.InboxObject.ap_type == "Delete",
-                activitypub.models.InboxObject.activity_object_ap_id == activity_object_ap_id,
+                activitypub.models.InboxObject.activity_object_ap_id
+                == activity_object_ap_id,
             )
             .options(
                 joinedload(activitypub.models.InboxObject.actor),
@@ -1103,16 +1116,24 @@ async def get_outbox_object_by_ap_id(
                 select(activitypub.models.OutboxObject)
                 .where(activitypub.models.OutboxObject.ap_id == ap_id)
                 .options(
-                    joinedload(activitypub.models.OutboxObject.outbox_object_attachments).options(
+                    joinedload(
+                        activitypub.models.OutboxObject.outbox_object_attachments
+                    ).options(
                         joinedload(activitypub.models.OutboxObjectAttachment.upload)
                     ),
-                    joinedload(activitypub.models.OutboxObject.relates_to_inbox_object).options(
+                    joinedload(
+                        activitypub.models.OutboxObject.relates_to_inbox_object
+                    ).options(
                         joinedload(activitypub.models.InboxObject.actor),
                     ),
-                    joinedload(activitypub.models.OutboxObject.relates_to_outbox_object).options(
+                    joinedload(
+                        activitypub.models.OutboxObject.relates_to_outbox_object
+                    ).options(
                         joinedload(
                             activitypub.models.OutboxObject.outbox_object_attachments
-                        ).options(joinedload(activitypub.models.OutboxObjectAttachment.upload)),
+                        ).options(
+                            joinedload(activitypub.models.OutboxObjectAttachment.upload)
+                        ),
                     ),
                 )
             )
@@ -1132,7 +1153,9 @@ async def get_outbox_object_by_slug_and_short_id(
             await db_session.execute(
                 select(activitypub.models.OutboxObject)
                 .options(
-                    joinedload(activitypub.models.OutboxObject.outbox_object_attachments).options(
+                    joinedload(
+                        activitypub.models.OutboxObject.outbox_object_attachments
+                    ).options(
                         joinedload(activitypub.models.OutboxObjectAttachment.upload)
                     )
                 )
@@ -1178,7 +1201,9 @@ async def _handle_delete_activity(
     relates_to_inbox_object: activitypub.models.InboxObject | None,
     forwarded_by_actor: activitypub.models.Actor | None,
 ) -> None:
-    ap_object_to_delete: activitypub.models.InboxObject | activitypub.models.Actor | None = None
+    ap_object_to_delete: (
+        activitypub.models.InboxObject | activitypub.models.Actor | None
+    ) = None
     if relates_to_inbox_object:
         ap_object_to_delete = relates_to_inbox_object
     elif delete_activity.activity_object_ap_id:
@@ -1230,7 +1255,8 @@ async def _handle_delete_activity(
         follower = (
             await db_session.scalars(
                 select(activitypub.models.Follower).where(
-                    activitypub.models.Follower.ap_actor_id == ap_object_to_delete.ap_id,
+                    activitypub.models.Follower.ap_actor_id
+                    == ap_object_to_delete.ap_id,
                 )
             )
         ).one_or_none()
@@ -1258,7 +1284,8 @@ async def _handle_delete_activity(
         following = (
             await db_session.scalars(
                 select(activitypub.models.Following).where(
-                    activitypub.models.Following.ap_actor_id == ap_object_to_delete.ap_id,
+                    activitypub.models.Following.ap_actor_id
+                    == ap_object_to_delete.ap_id,
                 )
             )
         ).one_or_none()
@@ -1299,7 +1326,9 @@ async def _get_replies_count(
     return (
         await db_session.scalar(
             select(func.count(activitypub.models.InboxObject.id)).where(
-                func.json_extract(activitypub.models.InboxObject.ap_object, "$.inReplyTo")
+                func.json_extract(
+                    activitypub.models.InboxObject.ap_object, "$.inReplyTo"
+                )
                 == replied_object_ap_id,
                 activitypub.models.InboxObject.is_deleted.is_(False),
             )
@@ -1307,7 +1336,9 @@ async def _get_replies_count(
     ) + (
         await db_session.scalar(
             select(func.count(activitypub.models.OutboxObject.id)).where(
-                func.json_extract(activitypub.models.OutboxObject.ap_object, "$.inReplyTo")
+                func.json_extract(
+                    activitypub.models.OutboxObject.ap_object, "$.inReplyTo"
+                )
                 == replied_object_ap_id,
                 activitypub.models.OutboxObject.is_deleted.is_(False),
             )
@@ -1338,7 +1369,8 @@ async def _get_outbox_likes_count(
         await db_session.scalar(
             select(func.count(activitypub.models.InboxObject.id)).where(
                 activitypub.models.InboxObject.ap_type == "Like",
-                activitypub.models.InboxObject.relates_to_outbox_object_id == outbox_object.id,
+                activitypub.models.InboxObject.relates_to_outbox_object_id
+                == outbox_object.id,
                 activitypub.models.InboxObject.is_deleted.is_(False),
             )
         )
@@ -1361,7 +1393,8 @@ async def _get_outbox_announces_count(
         await db_session.scalar(
             select(func.count(activitypub.models.InboxObject.id)).where(
                 activitypub.models.InboxObject.ap_type == "Announce",
-                activitypub.models.InboxObject.relates_to_outbox_object_id == outbox_object.id,
+                activitypub.models.InboxObject.relates_to_outbox_object_id
+                == outbox_object.id,
                 activitypub.models.InboxObject.is_deleted.is_(False),
             )
         )
@@ -1470,7 +1503,8 @@ async def _revert_side_effect_for_deleted_object(
     await db_session.execute(
         update(activitypub.models.OutboxObject)
         .where(
-            activitypub.models.OutboxObject.activity_object_ap_id == deleted_ap_object.ap_id,
+            activitypub.models.OutboxObject.activity_object_ap_id
+            == deleted_ap_object.ap_id,
         )
         .values(is_deleted=True)
     )
@@ -1718,7 +1752,7 @@ async def _handle_undo_activity(
             if announced_obj_from_outbox:
                 logger.info("Found in the oubox")
                 announced_obj_from_outbox.announces_count = (
-                        activitypub.models.OutboxObject.announces_count - 1
+                    activitypub.models.OutboxObject.announces_count - 1
                 )
                 if is_notification_enabled(models.NotificationType.UNDO_ANNOUNCE):
                     notif = models.Notification(
@@ -1792,7 +1826,9 @@ async def _handle_move_activity(
     # Follow the new one
     if not (
         await db_session.execute(
-            select(activitypub.models.Following).where(activitypub.models.Following.ap_actor_id == new_actor_id)
+            select(activitypub.models.Following).where(
+                activitypub.models.Following.ap_actor_id == new_actor_id
+            )
         )
     ).scalar():
         await _send_follow(db_session, new_actor_id)
@@ -2171,7 +2207,7 @@ async def _handle_announce_activity(
     if relates_to_outbox_object:
         # This is an announce for a local object
         relates_to_outbox_object.announces_count = (
-                activitypub.models.OutboxObject.announces_count + 1
+            activitypub.models.OutboxObject.announces_count + 1
         )
 
         if is_notification_enabled(models.NotificationType.ANNOUNCE):
@@ -2208,10 +2244,13 @@ async def _handle_announce_activity(
                     await db_session.scalar(
                         select(func.count(activitypub.models.InboxObject.id)).where(
                             activitypub.models.InboxObject.ap_type == "Announce",
-                            activitypub.models.InboxObject.ap_published_at > now() - skip_delta,
+                            activitypub.models.InboxObject.ap_published_at
+                            > now() - skip_delta,
                             activitypub.models.InboxObject.relates_to_inbox_object_id
                             == relates_to_inbox_object.id,
-                            activitypub.models.InboxObject.is_hidden_from_stream.is_(False),
+                            activitypub.models.InboxObject.is_hidden_from_stream.is_(
+                                False
+                            ),
                         )
                     )
                 )
@@ -2733,18 +2772,20 @@ async def get_replies_tree(
                     select(activitypub.models.InboxObject)
                     .where(
                         (
-                                activitypub.models.InboxObject.conversation
-                                == requested_object.conversation
+                            activitypub.models.InboxObject.conversation
+                            == requested_object.conversation
                         )
                         | (
-                                activitypub.models.InboxObject.ap_context
-                                == requested_object.conversation
+                            activitypub.models.InboxObject.ap_context
+                            == requested_object.conversation
                         ),
                         activitypub.models.InboxObject.ap_type.in_(
                             ["Note", "Page", "Article", "Question"]
                         ),
                         activitypub.models.InboxObject.is_deleted.is_(False),
-                        activitypub.models.InboxObject.visibility.in_(allowed_visibility),
+                        activitypub.models.InboxObject.visibility.in_(
+                            allowed_visibility
+                        ),
                     )
                     .options(joinedload(activitypub.models.InboxObject.actor))
                 )
@@ -2764,12 +2805,16 @@ async def get_replies_tree(
                         activitypub.models.OutboxObject.ap_type.in_(
                             ["Note", "Page", "Article", "Question"]
                         ),
-                        activitypub.models.OutboxObject.visibility.in_(allowed_visibility),
+                        activitypub.models.OutboxObject.visibility.in_(
+                            allowed_visibility
+                        ),
                     )
                     .options(
                         joinedload(
                             activitypub.models.OutboxObject.outbox_object_attachments
-                        ).options(joinedload(activitypub.models.OutboxObjectAttachment.upload))
+                        ).options(
+                            joinedload(activitypub.models.OutboxObjectAttachment.upload)
+                        )
                     )
                 )
             )

@@ -213,7 +213,6 @@ LOCAL_ACTOR = RemoteActor(ap_actor=ap.ME, handle=f"@{USERNAME}@{WEBFINGER_DOMAIN
 
 
 async def save_actor(db_session: AsyncSession, ap_actor: ap.RawObject) -> "ActorModel":
-    from app import models
 
     if ap_type := ap_actor.get("type") not in ap.ACTOR_TYPES:
         raise ValueError(f"Invalid type {ap_type} for actor {ap_actor}")
@@ -237,7 +236,6 @@ async def fetch_actor(
 ) -> "ActorModel":
     if actor_id == LOCAL_ACTOR.ap_id:
         raise ValueError("local actor should not be fetched")
-    from app import models
 
     existing_actor = (
         await db_session.scalars(
@@ -295,7 +293,6 @@ async def fetch_actor(
 
 
 async def list_actors(db_session: AsyncSession, limit: int = 100) -> list["ActorModel"]:
-    from app import models
 
     return (
         (
@@ -345,7 +342,6 @@ async def get_actors_metadata(
     db_session: AsyncSession,
     actors: list[Union["ActorModel", "RemoteActor"]],
 ) -> ActorsMetadata:
-    from app import models
 
     ap_actor_ids = [actor.ap_id for actor in actors]
     followers = {
@@ -371,7 +367,10 @@ async def get_actors_metadata(
     sent_follow_requests = {
         follow_req.ap_object["object"]: follow_req.ap_id
         for follow_req in await db_session.execute(
-            select(activitypub.models.OutboxObject.ap_object, activitypub.models.OutboxObject.ap_id).where(
+            select(
+                activitypub.models.OutboxObject.ap_object,
+                activitypub.models.OutboxObject.ap_id,
+            ).where(
                 activitypub.models.OutboxObject.ap_type == "Follow",
                 activitypub.models.OutboxObject.undone_by_outbox_object_id.is_(None),
                 activitypub.models.OutboxObject.activity_object_ap_id.in_(ap_actor_ids),

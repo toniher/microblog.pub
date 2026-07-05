@@ -3,11 +3,11 @@ import pytest
 import respx
 from sqlalchemy import func
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 import activitypub.models
 from activitypub.actor import fetch_actor
-from sqlalchemy.ext.asyncio import AsyncSession
 from activitypub.tests import factories
 
 
@@ -57,5 +57,7 @@ def test_sqlalchemy_factory(db: Session) -> None:
         ap_actor=ra.ap_actor,
         ap_id=ra.ap_id,
     )
-    assert actor_in_db.id == db.execute(select(activitypub.models.Actor)).scalar_one().id
+    assert (
+        actor_in_db.id == db.execute(select(activitypub.models.Actor)).scalar_one().id
+    )
     db.close()

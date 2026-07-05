@@ -8,18 +8,19 @@ import httpx
 import respx
 
 import activitypub.models
-from activitypub import activitypub as ap, actor
-from app import httpsig
-from app import models
+from activitypub import activitypub as ap
+from activitypub import actor
 from activitypub.actor import LOCAL_ACTOR
 from activitypub.ap_object import RemoteObject
+from activitypub.incoming_activities import fetch_next_incoming_activity
+from activitypub.incoming_activities import process_next_incoming_activity
+from activitypub.tests import factories
+from app import httpsig
+from app import models
 from app.config import session_serializer
 from app.database import AsyncSession
 from app.database import async_session
-from activitypub.incoming_activities import fetch_next_incoming_activity
-from activitypub.incoming_activities import process_next_incoming_activity
 from app.main import app
-from activitypub.tests import factories
 
 
 @contextmanager
@@ -75,7 +76,9 @@ def setup_remote_actor(
     return ra
 
 
-def setup_remote_actor_as_follower(ra: actor.RemoteActor) -> activitypub.models.Follower:
+def setup_remote_actor_as_follower(
+    ra: actor.RemoteActor,
+) -> activitypub.models.Follower:
     actor = factories.ActorFactory.from_remote_actor(ra)
 
     follow_id = uuid4().hex
@@ -99,7 +102,9 @@ def setup_remote_actor_as_follower(ra: actor.RemoteActor) -> activitypub.models.
     return follower
 
 
-def setup_remote_actor_as_following(ra: actor.RemoteActor) -> activitypub.models.Following:
+def setup_remote_actor_as_following(
+    ra: actor.RemoteActor,
+) -> activitypub.models.Following:
     actor = factories.ActorFactory.from_remote_actor(ra)
 
     follow_id = uuid4().hex

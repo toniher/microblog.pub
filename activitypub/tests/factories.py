@@ -7,7 +7,8 @@ from dateutil.parser import isoparse
 from sqlalchemy import orm
 
 import activitypub.models
-from activitypub import activitypub as ap, actor
+from activitypub import activitypub as ap
+from activitypub import actor
 from activitypub.actor import RemoteActor
 from activitypub.ap_object import RemoteObject
 from app.database import SessionLocal

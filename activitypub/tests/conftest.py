@@ -5,12 +5,12 @@ import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
 
+from activitypub.tests.factories import _Session
 from app.database import Base
 from app.database import async_engine
 from app.database import async_session
 from app.database import engine
 from app.main import app
-from activitypub.tests.factories import _Session
 
 os.environ["MICROBLOGPUB_CONFIG_FILE"] = "tests.toml"
 

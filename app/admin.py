@@ -19,9 +19,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
 import activitypub.models
-from activitypub import activitypub as ap, boxes
-from app import models
-from app import templates
+from activitypub import activitypub as ap
+from activitypub import boxes
 from activitypub.actor import LOCAL_ACTOR
 from activitypub.actor import fetch_actor
 from activitypub.actor import get_actors_metadata
@@ -31,6 +30,8 @@ from activitypub.boxes import get_outbox_object_by_ap_id
 from activitypub.boxes import send_block
 from activitypub.boxes import send_follow
 from activitypub.boxes import send_unblock
+from app import models
+from app import templates
 from app.config import EMOJIS
 from app.config import SESSION_TIMEOUT
 from app.config import generate_csrf_token
@@ -283,9 +284,10 @@ async def admin_new_post(
                 (v.name, ap.VisibilityEnum.get_display_name(v))
                 for v in ap.VisibilityEnum
             ],
-            "visibility": with_visibility
+            "visibility": with_visibility,
         },
     )
+
 
 @router.get("/bookmarks", response_model=None)
 async def admin_bookmarks(
@@ -306,10 +308,14 @@ async def admin_bookmarks(
                 )
                 .options(
                     joinedload(activitypub.models.InboxObject.relates_to_inbox_object),
-                    joinedload(activitypub.models.InboxObject.relates_to_outbox_object).options(
+                    joinedload(
+                        activitypub.models.InboxObject.relates_to_outbox_object
+                    ).options(
                         joinedload(
                             activitypub.models.OutboxObject.outbox_object_attachments
-                        ).options(joinedload(activitypub.models.OutboxObjectAttachment.upload)),
+                        ).options(
+                            joinedload(activitypub.models.OutboxObjectAttachment.upload)
+                        ),
                     ),
                     joinedload(activitypub.models.InboxObject.actor),
                 )
@@ -342,7 +348,8 @@ async def admin_stream(
     ]
     if cursor:
         where.append(
-            activitypub.models.InboxObject.ap_published_at < pagination.decode_cursor(cursor)
+            activitypub.models.InboxObject.ap_published_at
+            < pagination.decode_cursor(cursor)
         )
 
     page_size = 20
@@ -355,13 +362,17 @@ async def admin_stream(
         (
             await db_session.scalars(
                 q.options(
-                    joinedload(activitypub.models.InboxObject.relates_to_inbox_object).options(
-                        joinedload(activitypub.models.InboxObject.actor)
-                    ),
-                    joinedload(activitypub.models.InboxObject.relates_to_outbox_object).options(
+                    joinedload(
+                        activitypub.models.InboxObject.relates_to_inbox_object
+                    ).options(joinedload(activitypub.models.InboxObject.actor)),
+                    joinedload(
+                        activitypub.models.InboxObject.relates_to_outbox_object
+                    ).options(
                         joinedload(
                             activitypub.models.OutboxObject.outbox_object_attachments
-                        ).options(joinedload(activitypub.models.OutboxObjectAttachment.upload)),
+                        ).options(
+                            joinedload(activitypub.models.OutboxObjectAttachment.upload)
+                        ),
                     ),
                     joinedload(activitypub.models.InboxObject.actor),
                 )
@@ -430,7 +441,8 @@ async def admin_inbox(
         where.append(activitypub.models.InboxObject.ap_type == filter_by)
     if cursor:
         where.append(
-            activitypub.models.InboxObject.ap_published_at < pagination.decode_cursor(cursor)
+            activitypub.models.InboxObject.ap_published_at
+            < pagination.decode_cursor(cursor)
         )
 
     page_size = 20
@@ -443,13 +455,17 @@ async def admin_inbox(
         (
             await db_session.scalars(
                 q.options(
-                    joinedload(activitypub.models.InboxObject.relates_to_inbox_object).options(
-                        joinedload(activitypub.models.InboxObject.actor)
-                    ),
-                    joinedload(activitypub.models.InboxObject.relates_to_outbox_object).options(
+                    joinedload(
+                        activitypub.models.InboxObject.relates_to_inbox_object
+                    ).options(joinedload(activitypub.models.InboxObject.actor)),
+                    joinedload(
+                        activitypub.models.InboxObject.relates_to_outbox_object
+                    ).options(
                         joinedload(
                             activitypub.models.OutboxObject.outbox_object_attachments
-                        ).options(joinedload(activitypub.models.OutboxObjectAttachment.upload)),
+                        ).options(
+                            joinedload(activitypub.models.OutboxObjectAttachment.upload)
+                        ),
                     ),
                     joinedload(activitypub.models.InboxObject.actor),
                 )
@@ -510,13 +526,17 @@ async def admin_direct_messages(
                     ),
                 )
                 .where(
-                    activitypub.models.InboxObject.visibility == ap.VisibilityEnum.DIRECT,
+                    activitypub.models.InboxObject.visibility
+                    == ap.VisibilityEnum.DIRECT,
                     activitypub.models.InboxObject.ap_context.is_not(None),
                     # Skip transient object like poll relies
                     activitypub.models.InboxObject.is_transient.is_(False),
                     activitypub.models.InboxObject.is_deleted.is_(False),
                 )
-                .group_by(activitypub.models.InboxObject.ap_context, activitypub.models.InboxObject.actor_id)
+                .group_by(
+                    activitypub.models.InboxObject.ap_context,
+                    activitypub.models.InboxObject.actor_id,
+                )
             )
         )
         .unique()
@@ -533,7 +553,8 @@ async def admin_direct_messages(
                     ),
                 )
                 .where(
-                    activitypub.models.OutboxObject.visibility == ap.VisibilityEnum.DIRECT,
+                    activitypub.models.OutboxObject.visibility
+                    == ap.VisibilityEnum.DIRECT,
                     activitypub.models.OutboxObject.ap_context.is_not(None),
                     # Skip transient object like poll relies
                     activitypub.models.OutboxObject.is_transient.is_(False),
@@ -625,7 +646,9 @@ async def admin_direct_messages(
                     .options(
                         joinedload(
                             activitypub.models.OutboxObject.outbox_object_attachments
-                        ).options(joinedload(activitypub.models.OutboxObjectAttachment.upload)),
+                        ).options(
+                            joinedload(activitypub.models.OutboxObjectAttachment.upload)
+                        ),
                     )
                 )
             )
@@ -647,7 +670,9 @@ async def admin_direct_messages(
         actors = list(
             (
                 await db_session.execute(
-                    select(activitypub.models.Actor).where(activitypub.models.Actor.id.in_(convo["actor_ids"]))
+                    select(activitypub.models.Actor).where(
+                        activitypub.models.Actor.id.in_(convo["actor_ids"])
+                    )
                 )
             ).scalars()
         )
@@ -693,7 +718,8 @@ async def admin_outbox(
         where.append(activitypub.models.OutboxObject.ap_type == filter_by)
     if cursor:
         where.append(
-            activitypub.models.OutboxObject.ap_published_at < pagination.decode_cursor(cursor)
+            activitypub.models.OutboxObject.ap_published_at
+            < pagination.decode_cursor(cursor)
         )
 
     page_size = 20
@@ -706,12 +732,18 @@ async def admin_outbox(
         (
             await db_session.scalars(
                 q.options(
-                    joinedload(activitypub.models.OutboxObject.relates_to_inbox_object).options(
+                    joinedload(
+                        activitypub.models.OutboxObject.relates_to_inbox_object
+                    ).options(
                         joinedload(activitypub.models.InboxObject.actor),
                     ),
-                    joinedload(activitypub.models.OutboxObject.relates_to_outbox_object),
+                    joinedload(
+                        activitypub.models.OutboxObject.relates_to_outbox_object
+                    ),
                     joinedload(activitypub.models.OutboxObject.relates_to_actor),
-                    joinedload(activitypub.models.OutboxObject.outbox_object_attachments).options(
+                    joinedload(
+                        activitypub.models.OutboxObject.outbox_object_attachments
+                    ).options(
                         joinedload(activitypub.models.OutboxObjectAttachment.upload)
                     ),
                 )
@@ -779,7 +811,9 @@ async def get_notifications(
                     joinedload(models.Notification.outbox_object).options(
                         joinedload(
                             activitypub.models.OutboxObject.outbox_object_attachments
-                        ).options(joinedload(activitypub.models.OutboxObjectAttachment.upload)),
+                        ).options(
+                            joinedload(activitypub.models.OutboxObjectAttachment.upload)
+                        ),
                     ),
                     joinedload(models.Notification.webmention),
                 )
@@ -864,7 +898,9 @@ async def admin_profile(
     # TODO: show featured/pinned
     actor = (
         await db_session.execute(
-            select(activitypub.models.Actor).where(activitypub.models.Actor.ap_id == actor_id)
+            select(activitypub.models.Actor).where(
+                activitypub.models.Actor.ap_id == actor_id
+            )
         )
     ).scalar_one_or_none()
     if not actor:
@@ -894,13 +930,17 @@ async def admin_profile(
                 select(activitypub.models.InboxObject)
                 .where(*where)
                 .options(
-                    joinedload(activitypub.models.InboxObject.relates_to_inbox_object).options(
-                        joinedload(activitypub.models.InboxObject.actor)
-                    ),
-                    joinedload(activitypub.models.InboxObject.relates_to_outbox_object).options(
+                    joinedload(
+                        activitypub.models.InboxObject.relates_to_inbox_object
+                    ).options(joinedload(activitypub.models.InboxObject.actor)),
+                    joinedload(
+                        activitypub.models.InboxObject.relates_to_outbox_object
+                    ).options(
                         joinedload(
                             activitypub.models.OutboxObject.outbox_object_attachments
-                        ).options(joinedload(activitypub.models.OutboxObjectAttachment.upload)),
+                        ).options(
+                            joinedload(activitypub.models.OutboxObjectAttachment.upload)
+                        ),
                     ),
                     joinedload(activitypub.models.InboxObject.actor),
                 )

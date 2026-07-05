@@ -10,10 +10,10 @@ from sqlalchemy.orm import Session
 
 import activitypub.models
 from activitypub import activitypub as ap
-from app import models
 from activitypub.actor import LOCAL_ACTOR
 from activitypub.ap_object import RemoteObject
 from activitypub.tests import factories
+from app import models
 from tests.utils import mock_httpsig_checker
 from tests.utils import run_process_next_incoming_activity
 from tests.utils import setup_inbox_delete
@@ -87,7 +87,9 @@ def test_inbox_incoming_follow_request(
     assert outbox_object.activity_object_ap_id == follow_activity.ap_id
 
     # And an outgoing activity was created to track the Accept activity delivery
-    outgoing_activity = db.execute(select(activitypub.models.OutgoingActivity)).scalar_one()
+    outgoing_activity = db.execute(
+        select(activitypub.models.OutgoingActivity)
+    ).scalar_one()
     assert outgoing_activity.outbox_object_id == outbox_object.id
 
 
@@ -229,14 +231,18 @@ def test_inbox__create_from_follower(
 
     # Then the Create activity was saved
     create_activity_from_inbox: activitypub.models.InboxObject | None = db.execute(
-        select(activitypub.models.InboxObject).where(activitypub.models.InboxObject.ap_type == "Create")
+        select(activitypub.models.InboxObject).where(
+            activitypub.models.InboxObject.ap_type == "Create"
+        )
     ).scalar_one_or_none()
     assert create_activity_from_inbox
     assert create_activity_from_inbox.ap_id == ro.ap_id
 
     # And the Note object was created
     note_activity_from_inbox: activitypub.models.InboxObject | None = db.execute(
-        select(activitypub.models.InboxObject).where(activitypub.models.InboxObject.ap_type == "Note")
+        select(activitypub.models.InboxObject).where(
+            activitypub.models.InboxObject.ap_type == "Note"
+        )
     ).scalar_one_or_none()
     assert note_activity_from_inbox
     assert note_activity_from_inbox.ap_id == ro.activity_object_ap_id
@@ -283,7 +289,9 @@ def test_inbox__create_already_deleted_object(
 
     # Then the Create activity was saved
     create_activity_from_inbox: activitypub.models.InboxObject | None = db.execute(
-        select(activitypub.models.InboxObject).where(activitypub.models.InboxObject.ap_type == "Create")
+        select(activitypub.models.InboxObject).where(
+            activitypub.models.InboxObject.ap_type == "Create"
+        )
     ).scalar_one_or_none()
     assert create_activity_from_inbox
     assert create_activity_from_inbox.ap_id == ro.ap_id
@@ -293,7 +301,9 @@ def test_inbox__create_already_deleted_object(
     # And the Note wasn't created
     assert (
         db.execute(
-            select(activitypub.models.InboxObject).where(activitypub.models.InboxObject.ap_type == "Note")
+            select(activitypub.models.InboxObject).where(
+                activitypub.models.InboxObject.ap_type == "Note"
+            )
         ).scalar_one_or_none()
         is None
     )
@@ -463,7 +473,9 @@ def test_inbox__block_activity(
 
     # And the Block activity was saved in the inbox
     inbox_activity = db.execute(
-        select(activitypub.models.InboxObject).where(activitypub.models.InboxObject.ap_type == "Block")
+        select(activitypub.models.InboxObject).where(
+            activitypub.models.InboxObject.ap_type == "Block"
+        )
     ).scalar_one()
 
     # And a notification was created

@@ -9,12 +9,12 @@ from sqlalchemy import select
 import activitypub.models
 from activitypub.actor import LOCAL_ACTOR
 from activitypub.ap_object import RemoteObject
-from app.database import AsyncSession
 from activitypub.outgoing_activities import _MAX_RETRIES
 from activitypub.outgoing_activities import fetch_next_outgoing_activity
 from activitypub.outgoing_activities import new_outgoing_activity
 from activitypub.outgoing_activities import process_next_outgoing_activity
 from activitypub.tests import factories
+from app.database import AsyncSession
 
 
 def _setup_outbox_object() -> activitypub.models.OutboxObject:

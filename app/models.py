@@ -18,7 +18,9 @@ from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import relationship
 
 from activitypub import activitypub as ap
-from activitypub.models import Actor, InboxObject, OutboxObject
+from activitypub.models import Actor
+from activitypub.models import InboxObject
+from activitypub.models import OutboxObject
 from app.database import Base
 from app.database import metadata_obj
 from app.utils import webmentions

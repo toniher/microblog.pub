@@ -3,7 +3,6 @@ from sqlalchemy.orm import Session
 
 import activitypub.models
 from activitypub import activitypub as ap
-from app import models
 from app.config import generate_csrf_token
 from app.utils.emoji import EMOJIS_BY_NAME
 from tests.utils import generate_admin_session_cookies

@@ -121,7 +121,6 @@ async def _prefetch_mentioned_actors(
     db_session: AsyncSession,
     content: str,
 ) -> dict[str, "Actor"]:
-    from app import models
     from activitypub.actor import fetch_actor
 
     actors = {}

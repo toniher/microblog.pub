@@ -10,7 +10,6 @@ from sqlalchemy import select
 
 import activitypub.models
 from activitypub import activitypub as ap
-from app import models
 from app.config import BASE_URL
 from app.config import INBOX_RETENTION_DAYS
 from app.database import AsyncSession
@@ -68,7 +67,9 @@ async def _prune_old_outgoing_activities(
 async def _prune_old_inbox_objects(
     db_session: AsyncSession,
 ) -> None:
-    outbox_conversation = select(func.distinct(activitypub.models.OutboxObject.conversation)).where(
+    outbox_conversation = select(
+        func.distinct(activitypub.models.OutboxObject.conversation)
+    ).where(
         activitypub.models.OutboxObject.conversation.is_not(None),
         activitypub.models.OutboxObject.conversation.not_like(f"{BASE_URL}%"),
     )
@@ -93,13 +94,16 @@ async def _prune_old_inbox_objects(
             # Keep activities related to the outbox (like Like/Announce/Follow...)
             or_(
                 # XXX: no `/` here because the local ID does not have one
-                activitypub.models.InboxObject.activity_object_ap_id.not_like(f"{BASE_URL}%"),
+                activitypub.models.InboxObject.activity_object_ap_id.not_like(
+                    f"{BASE_URL}%"
+                ),
                 activitypub.models.InboxObject.activity_object_ap_id.is_(None),
             ),
             # Keep direct messages
             not_(
                 and_(
-                    activitypub.models.InboxObject.visibility == ap.VisibilityEnum.DIRECT,
+                    activitypub.models.InboxObject.visibility
+                    == ap.VisibilityEnum.DIRECT,
                     activitypub.models.InboxObject.ap_type.in_(["Note"]),
                 )
             ),

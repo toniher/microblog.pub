@@ -76,8 +76,8 @@ class ActivityPubResponse(JSONResponse):
 
 
 def _custom_page_handler(path: str, html_page: HTMLPage) -> Any:
-    from app import templates
     from activitypub.actor import LOCAL_ACTOR
+    from app import templates
     from app.config import is_activitypub_requested
     from app.database import AsyncSession
     from app.database import get_db_session

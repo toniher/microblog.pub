@@ -12,13 +12,13 @@ from sqlalchemy import func
 from sqlalchemy import select
 
 import activitypub.models
-from app import models
 from activitypub.boxes import _get_outbox_announces_count
 from activitypub.boxes import _get_outbox_likes_count
 from activitypub.boxes import _get_outbox_replies_count
 from activitypub.boxes import get_outbox_object_by_ap_id
 from activitypub.boxes import get_outbox_object_by_slug_and_short_id
 from activitypub.boxes import is_notification_enabled
+from app import models
 from app.database import AsyncSession
 from app.database import get_db_session
 from app.utils import microformats

@@ -43,8 +43,13 @@ from starlette.types import Message
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware  # type: ignore
 
 import activitypub.models
-from activitypub import activitypub as ap, boxes
+from activitypub import activitypub as ap
+from activitypub import boxes
 from activitypub.activitypub import ActivityPubResponse
+from activitypub.actor import LOCAL_ACTOR
+from activitypub.actor import get_actors_metadata
+from activitypub.boxes import public_outbox_objects_count
+from activitypub.incoming_activities import new_ap_incoming_activity
 from app import admin
 from app import config
 from app import httpsig
@@ -54,9 +59,6 @@ from app import micropub
 from app import models
 from app import templates
 from app import webmentions
-from activitypub.actor import LOCAL_ACTOR
-from activitypub.actor import get_actors_metadata
-from activitypub.boxes import public_outbox_objects_count
 from app.config import BASE_URL
 from app.config import DEBUG
 from app.config import DOMAIN
@@ -70,7 +72,6 @@ from app.customization import get_custom_router
 from app.database import AsyncSession
 from app.database import async_session
 from app.database import get_db_session
-from activitypub.incoming_activities import new_ap_incoming_activity
 from app.templates import is_current_user_admin
 from app.uploads import UPLOAD_DIR
 from app.utils import pagination
@@ -297,7 +298,9 @@ async def index(
         activitypub.models.OutboxObject.visibility == ap.VisibilityEnum.PUBLIC,
         activitypub.models.OutboxObject.is_deleted.is_(False),
         activitypub.models.OutboxObject.is_hidden_from_homepage.is_(False),
-        activitypub.models.OutboxObject.ap_type.in_(["Announce", "Note", "Video", "Question"]),
+        activitypub.models.OutboxObject.ap_type.in_(
+            ["Announce", "Note", "Video", "Question"]
+        ),
     )
     q = select(activitypub.models.OutboxObject).where(*where)
     total_count = await db_session.scalar(
@@ -308,16 +311,18 @@ async def index(
 
     outbox_objects_result = await db_session.scalars(
         q.options(
-            joinedload(activitypub.models.OutboxObject.outbox_object_attachments).options(
-                joinedload(activitypub.models.OutboxObjectAttachment.upload)
-            ),
+            joinedload(
+                activitypub.models.OutboxObject.outbox_object_attachments
+            ).options(joinedload(activitypub.models.OutboxObjectAttachment.upload)),
             joinedload(activitypub.models.OutboxObject.relates_to_inbox_object).options(
                 joinedload(activitypub.models.InboxObject.actor),
             ),
-            joinedload(activitypub.models.OutboxObject.relates_to_outbox_object).options(
-                joinedload(activitypub.models.OutboxObject.outbox_object_attachments).options(
-                    joinedload(activitypub.models.OutboxObjectAttachment.upload)
-                ),
+            joinedload(
+                activitypub.models.OutboxObject.relates_to_outbox_object
+            ).options(
+                joinedload(
+                    activitypub.models.OutboxObject.outbox_object_attachments
+                ).options(joinedload(activitypub.models.OutboxObjectAttachment.upload)),
             ),
         )
         .order_by(activitypub.models.OutboxObject.is_pinned.desc())
@@ -360,16 +365,18 @@ async def articles(
 
     outbox_objects_result = await db_session.scalars(
         q.options(
-            joinedload(activitypub.models.OutboxObject.outbox_object_attachments).options(
-                joinedload(activitypub.models.OutboxObjectAttachment.upload)
-            ),
+            joinedload(
+                activitypub.models.OutboxObject.outbox_object_attachments
+            ).options(joinedload(activitypub.models.OutboxObjectAttachment.upload)),
             joinedload(activitypub.models.OutboxObject.relates_to_inbox_object).options(
                 joinedload(activitypub.models.InboxObject.actor),
             ),
-            joinedload(activitypub.models.OutboxObject.relates_to_outbox_object).options(
-                joinedload(activitypub.models.OutboxObject.outbox_object_attachments).options(
-                    joinedload(activitypub.models.OutboxObjectAttachment.upload)
-                ),
+            joinedload(
+                activitypub.models.OutboxObject.relates_to_outbox_object
+            ).options(
+                joinedload(
+                    activitypub.models.OutboxObject.outbox_object_attachments
+                ).options(joinedload(activitypub.models.OutboxObjectAttachment.upload)),
             ),
         ).order_by(activitypub.models.OutboxObject.ap_published_at.desc())
     )
@@ -597,7 +604,9 @@ async def outbox(
     )
     post_types = ["Create", "Note", "Article", "Announce"]
     public_only = False if maybe_access_token_info else True
-    outbox_objects = await boxes.fetch_outbox(db_session, post_types, public_only=public_only)
+    outbox_objects = await boxes.fetch_outbox(
+        db_session, post_types, public_only=public_only
+    )
     return ActivityPubResponse(
         {
             "@context": ap.AS_EXTENDED_CTX,
@@ -733,7 +742,8 @@ async def _fetch_likes(
                 select(activitypub.models.InboxObject)
                 .where(
                     activitypub.models.InboxObject.ap_type == "Like",
-                    activitypub.models.InboxObject.activity_object_ap_id == outbox_object.ap_id,
+                    activitypub.models.InboxObject.activity_object_ap_id
+                    == outbox_object.ap_id,
                     activitypub.models.InboxObject.is_deleted.is_(False),
                 )
                 .options(joinedload(activitypub.models.InboxObject.actor))
@@ -756,7 +766,8 @@ async def _fetch_shares(
                 select(activitypub.models.InboxObject)
                 .filter(
                     activitypub.models.InboxObject.ap_type == "Announce",
-                    activitypub.models.InboxObject.activity_object_ap_id == outbox_object.ap_id,
+                    activitypub.models.InboxObject.activity_object_ap_id
+                    == outbox_object.ap_id,
                     activitypub.models.InboxObject.is_deleted.is_(False),
                 )
                 .options(joinedload(activitypub.models.InboxObject.actor))
@@ -797,7 +808,9 @@ async def outbox_by_public_id(
             await db_session.execute(
                 select(activitypub.models.OutboxObject)
                 .options(
-                    joinedload(activitypub.models.OutboxObject.outbox_object_attachments).options(
+                    joinedload(
+                        activitypub.models.OutboxObject.outbox_object_attachments
+                    ).options(
                         joinedload(activitypub.models.OutboxObjectAttachment.upload)
                     )
                 )
@@ -1012,7 +1025,8 @@ async def tag_by_name(
             select(activitypub.models.OutboxObject.ap_id)
             .join(
                 activitypub.models.TaggedOutboxObject,
-                activitypub.models.TaggedOutboxObject.outbox_object_id == activitypub.models.OutboxObject.id,
+                activitypub.models.TaggedOutboxObject.outbox_object_id
+                == activitypub.models.OutboxObject.id,
             )
             .where(*where)
             .order_by(activitypub.models.OutboxObject.ap_published_at.desc())
@@ -1035,12 +1049,13 @@ async def tag_by_name(
         .where(*where)
         .join(
             activitypub.models.TaggedOutboxObject,
-            activitypub.models.TaggedOutboxObject.outbox_object_id == activitypub.models.OutboxObject.id,
+            activitypub.models.TaggedOutboxObject.outbox_object_id
+            == activitypub.models.OutboxObject.id,
         )
         .options(
-            joinedload(activitypub.models.OutboxObject.outbox_object_attachments).options(
-                joinedload(activitypub.models.OutboxObjectAttachment.upload)
-            )
+            joinedload(
+                activitypub.models.OutboxObject.outbox_object_attachments
+            ).options(joinedload(activitypub.models.OutboxObjectAttachment.upload))
         )
         .order_by(activitypub.models.OutboxObject.ap_published_at.desc())
         .limit(20)
@@ -1578,18 +1593,25 @@ Disallow: /remote_interaction
 Disallow: /remote_follow"""
 
 
-async def _get_outbox_for_feed(db_session: AsyncSession) -> list[activitypub.models.OutboxObject]:
+async def _get_outbox_for_feed(
+    db_session: AsyncSession,
+) -> list[activitypub.models.OutboxObject]:
     return (
         (
             await db_session.scalars(
                 select(activitypub.models.OutboxObject)
                 .where(
-                    activitypub.models.OutboxObject.visibility == ap.VisibilityEnum.PUBLIC,
+                    activitypub.models.OutboxObject.visibility
+                    == ap.VisibilityEnum.PUBLIC,
                     activitypub.models.OutboxObject.is_deleted.is_(False),
-                    activitypub.models.OutboxObject.ap_type.in_(["Note", "Article", "Video"]),
+                    activitypub.models.OutboxObject.ap_type.in_(
+                        ["Note", "Article", "Video"]
+                    ),
                 )
                 .options(
-                    joinedload(activitypub.models.OutboxObject.outbox_object_attachments).options(
+                    joinedload(
+                        activitypub.models.OutboxObject.outbox_object_attachments
+                    ).options(
                         joinedload(activitypub.models.OutboxObjectAttachment.upload)
                     )
                 )

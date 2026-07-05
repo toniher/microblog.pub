@@ -10,7 +10,6 @@ from sqlalchemy import select
 
 import activitypub.models
 from activitypub import activitypub as ap
-from app import models
 from app.config import BASE_URL
 from app.config import ROOT_DIR
 from app.database import AsyncSession

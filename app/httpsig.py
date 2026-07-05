@@ -100,11 +100,12 @@ async def _get_public_key(
         return cached_key
 
     # Check if the key belongs to an actor already in DB
-    from app import models
 
     existing_actor = (
         await db_session.scalars(
-            select(activitypub.models.Actor).where(activitypub.models.Actor.ap_id == key_id.split("#")[0])
+            select(activitypub.models.Actor).where(
+                activitypub.models.Actor.ap_id == key_id.split("#")[0]
+            )
         )
     ).one_or_none()
     if not should_skip_cache:
@@ -204,7 +205,6 @@ async def httpsig_checker(
     # HTTP requests trying to fetch an unavailable actor to verify the HTTP sig
     try:
         if request.method == "POST" and request.url.path.endswith("/inbox"):
-            from app import models  # TODO: solve this circular import
 
             activity = json.loads(body)
             actor_id = ap.get_id(activity["actor"])

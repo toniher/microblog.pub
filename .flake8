@@ -1,4 +1,6 @@
 [flake8]
 max-line-length = 120
 extend-ignore = E203
-exclude = alembic/versions
+# extend-exclude keeps flake8's built-in excludes (.git, __pycache__, .tox, ...)
+# and adds our own; .venv matters because poetry uses an in-project virtualenv.
+extend-exclude = .venv,alembic/versions

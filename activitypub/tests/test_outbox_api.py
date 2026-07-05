@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 
 import activitypub.models
 from activitypub import activitypub as ap
-from app import webfinger
 from activitypub.actor import LOCAL_ACTOR
+from app import webfinger
 from app.config import generate_csrf_token
 from tests.utils import generate_admin_session_cookies
 from tests.utils import setup_inbox_note
@@ -59,7 +59,9 @@ def test_send_follow_request(
     assert outbox_object.activity_object_ap_id == ra.ap_id
 
     # And an outgoing activity was queued
-    outgoing_activity = db.execute(select(activitypub.models.OutgoingActivity)).scalar_one()
+    outgoing_activity = db.execute(
+        select(activitypub.models.OutgoingActivity)
+    ).scalar_one()
     assert outgoing_activity.outbox_object_id == outbox_object.id
     assert outgoing_activity.recipient == ra.inbox_url
 
@@ -113,13 +115,17 @@ def test_send_delete__reverts_side_effects(
 
     # And the Delete activity was created in the outbox
     outbox_object = db.execute(
-        select(activitypub.models.OutboxObject).where(activitypub.models.OutboxObject.ap_type == "Delete")
+        select(activitypub.models.OutboxObject).where(
+            activitypub.models.OutboxObject.ap_type == "Delete"
+        )
     ).scalar_one()
     assert outbox_object.ap_type == "Delete"
     assert outbox_object.activity_object_ap_id == outbox_note2.ap_id
 
     # And an outgoing activity was queued
-    outgoing_activity = db.execute(select(activitypub.models.OutgoingActivity)).scalar_one()
+    outgoing_activity = db.execute(
+        select(activitypub.models.OutgoingActivity)
+    ).scalar_one()
     assert outgoing_activity.outbox_object_id == outbox_object.id
     assert outgoing_activity.recipient == ra.inbox_url
 
@@ -196,7 +202,9 @@ def test_send_create_activity__with_attachment(
         "324dcf027dd4a30a932c441f365a25e86b173defa4b8e58948253471b81b72cf"
     )
 
-    outbox_attachment = db.execute(select(activitypub.models.OutboxObjectAttachment)).scalar_one()
+    outbox_attachment = db.execute(
+        select(activitypub.models.OutboxObjectAttachment)
+    ).scalar_one()
     assert outbox_attachment.upload_id == upload.id
     assert outbox_attachment.outbox_object_id == outbox_object.id
     assert outbox_attachment.filename == "attachment.txt"
@@ -264,7 +272,9 @@ def test_send_create_activity__no_followers_and_with_mention(
     assert outbox_object.ap_type == "Note"
 
     # And an outgoing activity was queued
-    outgoing_activity = db.execute(select(activitypub.models.OutgoingActivity)).scalar_one()
+    outgoing_activity = db.execute(
+        select(activitypub.models.OutgoingActivity)
+    ).scalar_one()
     assert outgoing_activity.outbox_object_id == outbox_object.id
     assert outgoing_activity.recipient == ra.inbox_url
 
@@ -301,7 +311,9 @@ def test_send_create_activity__with_followers(
     assert outbox_object.ap_type == "Note"
 
     # And an outgoing activity was queued
-    outgoing_activity = db.execute(select(activitypub.models.OutgoingActivity)).scalar_one()
+    outgoing_activity = db.execute(
+        select(activitypub.models.OutgoingActivity)
+    ).scalar_one()
     assert outgoing_activity.outbox_object_id == outbox_object.id
     assert outgoing_activity.recipient == follower.actor.inbox_url
 
@@ -346,7 +358,9 @@ def test_send_create_activity__question__one_of(
     assert outbox_object.is_poll_ended is False
 
     # And an outgoing activity was queued
-    outgoing_activity = db.execute(select(activitypub.models.OutgoingActivity)).scalar_one()
+    outgoing_activity = db.execute(
+        select(activitypub.models.OutgoingActivity)
+    ).scalar_one()
     assert outgoing_activity.outbox_object_id == outbox_object.id
     assert outgoing_activity.recipient == follower.actor.inbox_url
 
@@ -393,7 +407,9 @@ def test_send_create_activity__question__any_of(
     assert outbox_object.is_poll_ended is False
 
     # And an outgoing activity was queued
-    outgoing_activity = db.execute(select(activitypub.models.OutgoingActivity)).scalar_one()
+    outgoing_activity = db.execute(
+        select(activitypub.models.OutgoingActivity)
+    ).scalar_one()
     assert outgoing_activity.outbox_object_id == outbox_object.id
     assert outgoing_activity.recipient == follower.actor.inbox_url
 
@@ -432,6 +448,8 @@ def test_send_create_activity__article(
     assert outbox_object.ap_object["name"] == "Article"
 
     # And an outgoing activity was queued
-    outgoing_activity = db.execute(select(activitypub.models.OutgoingActivity)).scalar_one()
+    outgoing_activity = db.execute(
+        select(activitypub.models.OutgoingActivity)
+    ).scalar_one()
     assert outgoing_activity.outbox_object_id == outbox_object.id
     assert outgoing_activity.recipient == follower.actor.inbox_url

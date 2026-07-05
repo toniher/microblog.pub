@@ -1,10 +1,10 @@
 import mf2py  # type: ignore
 
 from activitypub import activitypub as ap
-from app import webfinger
 from activitypub.actor import Actor
 from activitypub.actor import RemoteActor
 from activitypub.ap_object import RemoteObject
+from app import webfinger
 from app.database import AsyncSession
 from app.source import _MENTION_REGEX
 
