@@ -59,11 +59,32 @@ migrations before launching supervisord. You therefore don't need to run migrati
 by hand after pulling a new version — restarting the container is enough.
 
 The container runs as the unprivileged user `1000:1000` (see the `user:` line in
-`docker-compose.yml`), and two host directories are bind-mounted so your data
-survives image rebuilds:
+`docker-compose.yml`), and its state lives in two volumes so it survives image
+rebuilds:
 
- - `./data` → `/app/data` — config (`profile.toml`), secrets, the SQLite database, uploads, logs
- - `./app/static` → `/app/app/static` — compiled CSS, favicon and emoji assets
+ - `./data` → `/app/data` — a host bind mount holding your config (`profile.toml`),
+   secrets, the SQLite database, uploads and logs. Keep this backed up.
+ - `microblogpub_static` → `/app/app/static` — a **named Docker volume** for
+   generated assets: compiled CSS, the favicon, the downloaded Twemoji set and
+   custom emoji.
+
+Using a named volume (rather than a host bind mount) for `app/static` means the
+image ships a pristine copy of the static assets and the entrypoint
+(`misc/docker_start.sh`) repopulates the volume from that copy whenever it is
+empty. So if you ever remove the volume it is transparently regenerated from the
+image on the next start:
+
+```bash
+docker compose down
+docker volume rm microblogpub_static   # will be recreated & repopulated on next up
+docker compose up -d
+```
+
+When the volume is empty the entrypoint restores the base assets from the image,
+recompiles the CSS, and re-downloads the Twemoji set (this needs network access and
+runs only once per volume), so a wiped volume is fully rebuilt on the next start with
+no manual step. Note this first boot is slower because of the ~4,000-file Twemoji
+download; subsequent starts skip it.
 
 ### Managing the app
 

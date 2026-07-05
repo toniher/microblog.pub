@@ -45,16 +45,18 @@ task is a dependency of `configuration-wizard`, so:
  - **Python edition:** `poetry run inv configuration-wizard` fetches the SVGs straight
    to `app/static/twemoji/` on disk.
  - **Docker edition:** `make config` does the same — its `docker run` mounts both
-   `data/` and `app/static/`, so the emoji downloaded by the wizard persist to the host
-   `app/static/twemoji/` (which `docker compose` then bind-mounts into the running
-   container).
+   `data/` and the `microblogpub_static` named volume, so the emoji downloaded by the
+   wizard land in that volume and are then served by the running `docker compose`
+   container (which mounts the same volume at `/app/app/static`).
 
 You don't need to download them by hand. They are fetched **once** and are *not*
-refreshed afterwards — neither `inv update` / `make update` nor the Docker container
-start re-run the download. To refresh or re-fetch them manually (e.g. after bumping the
-pinned version, or if the directory was wiped), run `poetry run inv download-twemoji`
+refreshed on a normal start — `inv update` / `make update` do not re-run the download.
+The Docker entrypoint (`misc/docker_start.sh`) only re-downloads them when the
+`microblogpub_static` volume is empty (i.e. on first boot or after the volume has been
+removed), so a wiped volume rebuilds itself automatically. To refresh or re-fetch them
+manually (e.g. after bumping the pinned version), run `poetry run inv download-twemoji`
 (or, for Docker, a `docker run` invocation of `inv download-twemoji` that mounts
-`app/static` — i.e. `--volume $(pwd)/app/static:/app/app/static`).
+the static volume — i.e. `--volume microblogpub_static:/app/app/static`).
 
 Under the hood the task downloads a release tarball and extracts `assets/svg/` into
 `app/static/twemoji/`. The source is [jdecked/twemoji](https://github.com/jdecked/twemoji),

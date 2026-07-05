@@ -8,6 +8,14 @@ services:
     restart: unless-stopped
     volumes:
       - ./data:/app/data
-      - ./app/static:/app/app/static
+      # app/static is a named volume rather than a host bind mount: generated
+      # assets (compiled CSS, favicon, Twemoji, emoji) persist across rebuilds,
+      # and the entrypoint repopulates it from the image whenever it is empty
+      # (e.g. after `docker volume rm microblogpub_static`).
+      - static:/app/app/static
     ports:
       - "8000:8000"
+
+volumes:
+  static:
+    name: microblogpub_static
