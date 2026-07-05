@@ -98,8 +98,8 @@ Testing notes:
 
 Branch `dev_ap_module`: **modularizing** all ActivityPub logic out of `app/main.py`
 into the standalone `activitypub/` package (goal: a reusable AP library). `boxes.py`
-is the main landing zone and is mid-refactor — expect churn and some pre-existing
-lint debt there (untouched by the migration below).
+is the main landing zone and is mid-refactor — expect churn (its formatting/lint was
+cleaned up as part of the Python 3.12 work below).
 
 ## Python 3.12 modernization (2026-07)
 
@@ -130,10 +130,15 @@ intentionally stays on `1.4.54` (3.12-compatible); a 2.0 migration is a separate
 - **invoke 2.x**: the old `inspect.getargspec` monkeypatch in `tasks.py` is gone
   (it existed only for invoke 1.x on Python ≥3.11).
 
-**Verified**: 69 tests pass, mypy clean (76 files), and the Docker image builds on
-`python:3.12-slim`.
+**Lint cleanup** (so the CI `inv lint` job is green): applied `black`/`isort`
+project-wide, and set `extend-exclude = .venv` in `.flake8` (poetry's in-project
+`.venv` was being scanned). Removed unused imports flagged by flake8 — mostly dead
+`from app import models` leftovers from the AP refactor; safe because those modules
+query only `activitypub.models` and `app.models` is registered via `app/main.py`.
 
-**Known gap**: `inv lint` still fails on **pre-existing** flake8 debt in files not
-touched by the migration (notably `activitypub/boxes.py` E251/E124, and several
-`import app.models` F401s kept for SQLAlchemy model registration). These are identical
-at the branch's prior HEAD — not caused by the Python upgrade.
+**Verified**: `inv lint` (black/isort/flake8/mypy) and `inv tests` (69 passed) both
+green, and the Docker image builds on `python:3.12-slim`.
+
+**Note**: the test suite shares one in-memory SQLite DB (`cache=shared`) across the
+sync `db` and async `async_db_session` fixtures, which can rarely flake under timing
+variance — pre-existing, worth hardening with per-test DB isolation.
