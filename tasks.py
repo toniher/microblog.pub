@@ -298,27 +298,6 @@ def self_destruct(ctx):
 
 
 @task
-def yunohost_config(
-    ctx,
-    domain,
-    username,
-    name,
-    summary,
-    password,
-):
-    # type: (Context, str, str, str, str, str) -> None
-    from app.utils import yunohost
-
-    yunohost.setup_config_file(
-        domain=domain,
-        username=username,
-        name=name,
-        summary=summary,
-        password=password,
-    )
-
-
-@task
 def reset_password(ctx):
     # type: (Context) -> None
     import bcrypt
