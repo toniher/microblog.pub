@@ -1,3 +1,4 @@
+import asyncio
 import os
 from typing import Generator
 
@@ -13,6 +14,13 @@ from app.database import engine
 from app.main import app
 
 os.environ["MICROBLOGPUB_CONFIG_FILE"] = "tests.toml"
+
+
+def pytest_sessionfinish(session, exitstatus) -> None:
+    # aiosqlite connections run a non-daemon worker thread that only stops
+    # on close(); without disposing the pool, pytest hangs after the last
+    # test instead of exiting.
+    asyncio.run(async_engine.dispose())
 
 
 @pytest_asyncio.fixture
