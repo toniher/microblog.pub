@@ -96,10 +96,12 @@ Testing notes:
 
 ## Current work in progress
 
-Branch `dev_ap_module`: **modularizing** all ActivityPub logic out of `app/main.py`
-into the standalone `activitypub/` package (goal: a reusable AP library). `boxes.py`
-is the main landing zone and is mid-refactor — expect churn (its formatting/lint was
-cleaned up as part of the Python 3.12 work below).
+The `dev_ap_module` branch (where this fork's **modularization** of all ActivityPub
+logic out of `app/main.py` into the standalone `activitypub/` package was developed)
+has already been merged and is now part of `main` — that work is done, not in
+progress. `boxes.py` is the main landing zone from that effort and may still see
+churn as it gets exercised more (its formatting/lint was cleaned up as part of the
+Python 3.12 work below).
 
 ## Python 3.12 modernization (2026-07)
 
@@ -142,3 +144,16 @@ green, and the Docker image builds on `python:3.12-slim`.
 **Note**: the test suite shares one in-memory SQLite DB (`cache=shared`) across the
 sync `db` and async `async_db_session` fixtures, which can rarely flake under timing
 variance — pre-existing, worth hardening with per-test DB isolation.
+
+**CI hang after "N passed"**: `aiosqlite` backs each pooled connection with a
+`threading.Thread` that blocks on an internal queue until `.close()` sends it a stop
+sentinel; in this codebase that thread comes up non-daemon. The module-level
+`async_engine` in `app/database.py` is shared for the whole pytest session and was
+never disposed, so a live connection's worker thread kept the interpreter alive after
+pytest printed its summary — invisible locally (the terminal just returns), but in
+GitHub Actions it silently ate the full `timeout-minutes: 10` before being killed as
+an orphan process. Fixed by disposing the engine in a `pytest_sessionfinish` hook in
+`tests/conftest.py` (`asyncio.run(async_engine.dispose())`). Verified by dumping live
+thread stacks after `pytest.main()` returned — `Thread-1 (_connection_worker_thread)`,
+`daemon=False`, blocked in `tx.get()` — and confirming `poetry run inv tests` exits
+with code 0 instead of needing to be killed.

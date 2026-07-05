@@ -1,5 +1,10 @@
 # microblog.pub
 
+> **This is a personal fork** of [tinyBlogPub/microblog.pub](https://github.com/tinyBlogPub/microblog.pub),
+> which is itself the community continuation of the original project. It may contain
+> local changes, experiments, or work-in-progress not present upstream. For the
+> canonical version, see the upstream repository linked above.
+
 A self-hosted, single-user, ActivityPub-powered microblog created by [@tsileo](https://github.com/tsileo/microblog.pub).
 This repo and collective is a respectful attempt by the users of the project to keep it going!
 
