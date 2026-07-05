@@ -70,8 +70,23 @@ async def verify_signature(
         logger.warning("The object does contain a signature")
         return False
 
+    if "actor" not in doc:
+        logger.warning("The object does not contain an actor")
+        return False
+
     key_id = doc["signature"]["creator"]
     key = await _get_public_key(db_session, key_id)
+
+    # Ensure the signing key actually belongs to the activity's actor, otherwise
+    # anyone with a valid key could sign an object claiming to be from any actor
+    # (actor impersonation / forgery of forwarded activities).
+    actor_id = ap.get_id(doc["actor"])
+    if key.owner != actor_id:
+        logger.warning(
+            f"LD sig key owner {key.owner!r} does not match actor {actor_id!r}"
+        )
+        return False
+
     to_be_signed = _options_hash(doc) + _doc_hash(doc)
     signature = doc["signature"]["signatureValue"]
     signer = PKCS1_v1_5.new(key.pubkey or key.privkey)  # type: ignore

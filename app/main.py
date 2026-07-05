@@ -81,6 +81,7 @@ from app.utils.facepile import Face
 from app.utils.facepile import WebmentionReply
 from app.utils.facepile import merge_faces
 from app.utils.highlight import HIGHLIGHT_CSS_HASH
+from app.utils.url import InvalidURLError
 from app.utils.url import check_url
 from app.webfinger import get_remote_follow_template
 
@@ -1358,32 +1359,62 @@ async def nodeinfo(
     )
 
 
+# Follow at most this many redirects when proxying remote media.
+_PROXY_MAX_REDIRECTS = 5
+
+
 async def _proxy_get(
     proxy_client: httpx.AsyncClient,
     request: starlette.requests.Request,
     url: str,
     stream: bool,
 ) -> httpx.Response:
-    # Request the URL (and filter request headers)
-    proxy_req = proxy_client.build_request(
-        request.method,
-        url,
-        headers=[
-            (k, v)
-            for (k, v) in request.headers.raw
-            if k.lower()
-            not in [
-                b"host",
-                b"cookie",
-                b"x-forwarded-for",
-                b"x-forwarded-proto",
-                b"x-real-ip",
-                b"user-agent",
-            ]
+    proxy_headers = [
+        (k, v)
+        for (k, v) in request.headers.raw
+        if k.lower()
+        not in [
+            b"host",
+            b"cookie",
+            b"x-forwarded-for",
+            b"x-forwarded-proto",
+            b"x-real-ip",
+            b"user-agent",
         ]
-        + [(b"user-agent", USER_AGENT.encode())],
-    )
-    return await proxy_client.send(proxy_req, stream=stream)
+    ] + [(b"user-agent", USER_AGENT.encode())]
+
+    # Follow redirects manually so that every hop is re-validated by check_url.
+    # The client itself is created with follow_redirects=False; otherwise httpx
+    # would transparently follow a Location pointing at an internal address
+    # (localhost, link-local, private IPs, cloud metadata endpoints), bypassing
+    # the SSRF guard that only ran against the initial URL (GHSA-style SSRF).
+    for _ in range(_PROXY_MAX_REDIRECTS + 1):
+        proxy_req = proxy_client.build_request(
+            request.method, url, headers=proxy_headers
+        )
+        proxy_resp = await proxy_client.send(proxy_req, stream=stream)
+
+        if not proxy_resp.is_redirect:
+            return proxy_resp
+
+        location = proxy_resp.headers.get("location")
+        if not location:
+            return proxy_resp
+
+        # Resolve relative redirects against the current URL, then re-validate.
+        next_url = str(httpx.URL(url).join(location))
+        await proxy_resp.aclose()
+        try:
+            check_url(next_url)
+        except InvalidURLError:
+            logger.warning(f"refusing to follow redirect to {next_url!r}")
+            # Return the redirect response so the caller's >= 300 guard bails
+            # out without ever streaming an internal response body.
+            return proxy_resp
+        url = next_url
+
+    logger.warning(f"too many redirects while proxying {url!r}")
+    return proxy_resp
 
 
 def _filter_proxy_resp_headers(
@@ -1417,7 +1448,9 @@ async def serve_proxy_media(
     media.verify_proxied_media_sig(exp, url, sig)
 
     proxy_client = httpx.AsyncClient(
-        follow_redirects=True,
+        # Redirects are followed manually in _proxy_get so each hop is
+        # re-validated against the SSRF guard (check_url).
+        follow_redirects=False,
         timeout=httpx.Timeout(timeout=10.0),
         transport=httpx.AsyncHTTPTransport(retries=1),
     )
@@ -1486,7 +1519,9 @@ async def serve_proxy_media_resized(
         )
 
     proxy_client = httpx.AsyncClient(
-        follow_redirects=True,
+        # Redirects are followed manually in _proxy_get so each hop is
+        # re-validated against the SSRF guard (check_url).
+        follow_redirects=False,
         timeout=httpx.Timeout(timeout=10.0),
         transport=httpx.AsyncHTTPTransport(retries=1),
     )
