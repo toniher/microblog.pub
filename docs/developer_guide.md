@@ -33,6 +33,16 @@ inv -l
 The uploads are stored in the `data/` directory, using a simple content-addressed storage system (file contents hash is BLOB filename).
 Files metadata are stored in the database.
 
+### Emoji assets
+
+The Twemoji SVGs served from `app/static/twemoji/` aren't checked into the repo; they're
+fetched by the `inv download-twemoji` task (a dependency of `inv configuration-wizard`),
+which downloads a release tarball and extracts `assets/svg/`. The source is
+[jdecked/twemoji](https://github.com/jdecked/twemoji), the actively maintained
+continuation of the original `twitter/twemoji` project (abandoned after the Twitter/X
+acquisition). The release tag is pinned in `tasks.py:download_twemoji` — bump it there
+when a newer Twemoji release is needed.
+
 ## Installation
 
 Running a local version requires:

@@ -118,7 +118,7 @@ def build_docs(ctx):
 def download_twemoji(ctx):
     # type: (Context) -> None
     resp = httpx.get(
-        "https://github.com/twitter/twemoji/archive/refs/tags/v14.0.2.tar.gz",
+        "https://github.com/jdecked/twemoji/archive/refs/tags/v17.0.3.tar.gz",
         follow_redirects=True,
     )
     resp.raise_for_status()
@@ -126,7 +126,7 @@ def download_twemoji(ctx):
     members = [
         member
         for member in tf.getmembers()
-        if member.name.startswith("twemoji-14.0.2/assets/svg/")
+        if member.name.startswith("twemoji-17.0.3/assets/svg/")
     ]
     for member in members:
         emoji_name = Path(member.name).name

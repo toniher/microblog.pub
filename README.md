@@ -55,7 +55,7 @@ Check out the [online documentation](https://toniher.github.io/microblog.pub/)
 
 ## Credits
 
- - Emoji from [Twemoji](https://twemoji.twitter.com/)
+ - Emoji from [Twemoji](https://github.com/jdecked/twemoji)
  - Awesome custom goose emoji from [@pamela@bsd.network](https://bsd.network/@pamela)
 
 

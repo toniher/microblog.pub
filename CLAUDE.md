@@ -157,3 +157,14 @@ an orphan process. Fixed by disposing the engine in a `pytest_sessionfinish` hoo
 thread stacks after `pytest.main()` returned — `Thread-1 (_connection_worker_thread)`,
 `daemon=False`, blocked in `tx.get()` — and confirming `poetry run inv tests` exits
 with code 0 instead of needing to be killed.
+
+## Twemoji source switched to jdecked/twemoji (2026-07)
+
+`tasks.py:download_twemoji` used to pull SVGs from `twitter/twemoji`, which is
+abandoned post-Twitter/X acquisition. Switched to
+[jdecked/twemoji](https://github.com/jdecked/twemoji), the actively maintained
+continuation (same `assets/svg/` layout, so the extraction logic didn't need to
+change) — pinned to tag `v17.0.3` (was `v14.0.2`). Verified by running the fetch +
+tar-filter logic standalone against the new URL/tag before committing: it resolves,
+downloads, and yields the expected 4,009 `assets/svg/*.svg` members. Also see
+`docs/developer_guide.md` § Emoji assets.
