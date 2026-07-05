@@ -12,12 +12,14 @@ from loguru import logger
 from pebble import concurrent  # type: ignore
 from pydantic import BaseModel
 
-from activitypub import activitypub as ap, ap_object
-from app import config
+from activitypub import activitypub as ap
+from activitypub import ap_object
 from activitypub.actor import LOCAL_ACTOR
 from activitypub.actor import fetch_actor
+from activitypub.models import InboxObject
+from activitypub.models import OutboxObject
+from app import config
 from app.database import AsyncSession
-from activitypub.models import InboxObject, OutboxObject
 from app.utils.url import is_url_valid
 from app.utils.url import make_abs
 
@@ -67,7 +69,7 @@ def _scrap_og_meta(url: str, html: str) -> OpenGraphMeta | None:
                 elif maybe_rel == "image":
                     raw["image"] = None
 
-    return OpenGraphMeta.parse_obj(raw)
+    return OpenGraphMeta.model_validate(raw)
 
 
 def scrap_og_meta(url: str, html: str) -> OpenGraphMeta | None:
@@ -173,7 +175,7 @@ async def og_meta_from_note(
                 logger.exception(f"Failed scrap OG meta for {url}")
 
             if maybe_og_meta:
-                og_meta.append(maybe_og_meta.dict())
+                og_meta.append(maybe_og_meta.model_dump())
         except httpx.HTTPError:
             pass
 

@@ -18,7 +18,9 @@ from app.database import AsyncSession
 UPLOAD_DIR = ROOT_DIR / "data" / "uploads"
 
 
-async def save_upload(db_session: AsyncSession, f: UploadFile) -> activitypub.models.Upload | None:
+async def save_upload(
+    db_session: AsyncSession, f: UploadFile
+) -> activitypub.models.Upload | None:
     # Compute the hash
     h = hashlib.blake2b(digest_size=32)
     while True:
@@ -32,7 +34,9 @@ async def save_upload(db_session: AsyncSession, f: UploadFile) -> activitypub.mo
 
     existing_upload = (
         await db_session.execute(
-            select(activitypub.models.Upload).where(activitypub.models.Upload.content_hash == content_hash)
+            select(activitypub.models.Upload).where(
+                activitypub.models.Upload.content_hash == content_hash
+            )
         )
     ).scalar_one_or_none()
     if existing_upload:
@@ -52,6 +56,8 @@ async def save_upload(db_session: AsyncSession, f: UploadFile) -> activitypub.mo
                 # Fix image orientation (as we will remove the info from the EXIF
                 # metadata)
                 original_image = ImageOps.exif_transpose(_original_image)
+                # exif_transpose only returns None for a None input.
+                assert original_image is not None
 
                 # Re-creating the image drop the EXIF metadata
                 destination_image = Image.new(

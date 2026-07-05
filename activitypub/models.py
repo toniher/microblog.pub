@@ -1,11 +1,26 @@
-from typing import Optional, Any, Union
+from typing import Any
+from typing import Optional
+from typing import Union
 
-from sqlalchemy import Column, Integer, DateTime, String, JSON, Boolean, ForeignKey, Enum, UniqueConstraint, Index, text
-from sqlalchemy.orm import Mapped, relationship
+from sqlalchemy import JSON
+from sqlalchemy import Boolean
+from sqlalchemy import Column
+from sqlalchemy import DateTime
+from sqlalchemy import Enum
+from sqlalchemy import ForeignKey
+from sqlalchemy import Index
+from sqlalchemy import Integer
+from sqlalchemy import String
+from sqlalchemy import UniqueConstraint
+from sqlalchemy import text
+from sqlalchemy.orm import Mapped
+from sqlalchemy.orm import relationship
 
 from activitypub import activitypub as ap
-from activitypub.actor import Actor as BaseActor, LOCAL_ACTOR
-from activitypub.ap_object import Object as BaseObject, Attachment
+from activitypub.actor import LOCAL_ACTOR
+from activitypub.actor import Actor as BaseActor
+from activitypub.ap_object import Attachment
+from activitypub.ap_object import Object as BaseObject
 from app.config import BASE_URL
 from app.database import Base
 from app.utils.datetime import now
@@ -222,7 +237,7 @@ class OutboxObject(Base, BaseObject):
                 + f"/attachments/{attachment.upload.content_hash}/{attachment.filename}"
             )
             out.append(
-                Attachment.parse_obj(
+                Attachment.model_validate(
                     {
                         "type": "Document",
                         "mediaType": attachment.upload.content_type,

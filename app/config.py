@@ -135,7 +135,7 @@ class Config(pydantic.BaseModel):
 
 def load_config() -> Config:
     try:
-        return Config.parse_obj(
+        return Config.model_validate(
             tomli.loads((ROOT_DIR / "data" / _CONFIG_FILE).read_text())
         )
     except FileNotFoundError:

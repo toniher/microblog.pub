@@ -20,11 +20,11 @@ from starlette.templating import _TemplateResponse as TemplateResponse
 
 import activitypub.models
 from activitypub import activitypub as ap
-from app import config
-from app import models
 from activitypub.actor import LOCAL_ACTOR
 from activitypub.ap_object import Attachment
 from activitypub.ap_object import Object
+from app import config
+from app import models
 from app.config import BASE_URL
 from app.config import CUSTOM_FOOTER
 from app.config import DEBUG
@@ -41,9 +41,10 @@ from app.utils.highlight import highlight
 
 _templates = Jinja2Templates(
     directory=["data/templates", "app/templates"],  # type: ignore  # bad typing
-    trim_blocks=True,
-    lstrip_blocks=True,
 )
+# Starlette >=0.35 no longer accepts Jinja env options as kwargs; set them on the env.
+_templates.env.trim_blocks = True
+_templates.env.lstrip_blocks = True
 
 
 H2T = html2text.HTML2Text()
@@ -96,6 +97,7 @@ async def render_template(
     is_admin = is_current_user_admin(request)
 
     return _templates.TemplateResponse(
+        request,
         template,
         {
             "request": request,
@@ -116,7 +118,8 @@ async def render_template(
             ),
             "articles_count": await db_session.scalar(
                 select(func.count(activitypub.models.OutboxObject.id)).where(
-                    activitypub.models.OutboxObject.visibility == ap.VisibilityEnum.PUBLIC,
+                    activitypub.models.OutboxObject.visibility
+                    == ap.VisibilityEnum.PUBLIC,
                     activitypub.models.OutboxObject.is_deleted.is_(False),
                     activitypub.models.OutboxObject.is_hidden_from_homepage.is_(False),
                     activitypub.models.OutboxObject.ap_type == "Article",

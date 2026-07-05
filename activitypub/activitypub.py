@@ -29,8 +29,10 @@ if TYPE_CHECKING:
 
 RawObject = dict[str, Any]
 
+
 class ActivityPubResponse(JSONResponse):
     media_type = "application/activity+json"
+
 
 AS_CTX = "https://www.w3.org/ns/activitystreams"
 AS_PUBLIC = "https://www.w3.org/ns/activitystreams#Public"
@@ -126,7 +128,7 @@ if config.CONFIG.metadata:
         _LOCAL_ACTOR_TAGS.extend(kv_tags)
 
 
-ME = {
+ME: RawObject = {
     "@context": AS_EXTENDED_CTX,
     "type": "Person",
     "id": config.ID,
