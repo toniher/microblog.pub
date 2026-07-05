@@ -1231,8 +1231,7 @@ async def admin_edit_text(
     maybe_object = (
         (
             await db_session.execute(
-                select(models.OutboxObject)
-                .where(
+                select(models.OutboxObject).where(
                     models.OutboxObject.public_id == public_id,
                     models.OutboxObject.is_deleted.is_(False),
                 )
@@ -1271,8 +1270,7 @@ async def admin_actions_edit_text(
     maybe_object = (
         (
             await db_session.execute(
-                select(models.OutboxObject)
-                .where(
+                select(models.OutboxObject).where(
                     models.OutboxObject.public_id == public_id,
                     models.OutboxObject.is_deleted.is_(False),
                 )
@@ -1295,7 +1293,6 @@ async def admin_actions_edit_text(
         request.url_for("outbox_by_public_id", public_id=public_id),
         status_code=302,
     )
-
 
 
 @router.post("/actions/vote", response_model=None)
