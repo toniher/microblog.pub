@@ -111,6 +111,9 @@ class Config(pydantic.BaseModel):
     emoji: str | None = None
     also_known_as: str | None = None
 
+    # BCP 47 language tag used for the <html lang="…"> attribute
+    language_code: str = "en"
+
     hides_followers: bool = False
     hides_following: bool = False
 
@@ -179,6 +182,7 @@ WEBFINGER_DOMAIN = CONFIG.webfinger_domain or DOMAIN
 MANUALLY_APPROVES_FOLLOWERS = CONFIG.manually_approves_followers
 HIDES_FOLLOWERS = CONFIG.hides_followers
 HIDES_FOLLOWING = CONFIG.hides_following
+LANGUAGE_CODE = CONFIG.language_code
 PRIVACY_REPLACE = None
 if CONFIG.privacy_replace:
     PRIVACY_REPLACE = {pr.domain: pr.replace_by for pr in CONFIG.privacy_replace}

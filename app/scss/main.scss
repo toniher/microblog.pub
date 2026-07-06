@@ -1,3 +1,6 @@
+// ----- Palette -----------------------------------------------------------
+// Light theme defaults. A custom theme (imported below) can override any of
+// these before they are emitted as CSS custom properties.
 $font-stack: Helvetica, sans-serif;
 $background: #ddd;
 $light-background: #e6e6e6;
@@ -8,12 +11,119 @@ $form-background-color: #ccc;
 $form-text-color: #333;
 $nav-button-background-color: #ccc;
 $nav-button-text-color: #333;
-$muted-color: #555; // solarized comment text
+$muted-color: #4a4a4a; // darkened for AA contrast on the default background
 $primary-button-text-color: #fff;
 $code-highlight-background: #f0f0f0;
 
-// Load custom theme
+// Dark theme defaults (applied via prefers-color-scheme below).
+$dark-background: #16181c;
+$dark-light-background: #1f2229;
+$dark-text-color: #e6e6e6;
+$dark-primary-color: #57b957; // lightened green for contrast on dark
+$dark-secondary-color: #cd7bcd; // lightened purple for contrast on dark
+$dark-form-background-color: #2a2e35;
+$dark-form-text-color: #e6e6e6;
+$dark-nav-button-background-color: #2a2e35;
+$dark-nav-button-text-color: #e6e6e6;
+$dark-muted-color: #9aa0a6;
+$dark-primary-button-text-color: #16181c;
+// Keep code blocks light so the (light) Pygments token colours stay readable.
+$dark-code-highlight-background: $code-highlight-background;
+
+// Load custom theme (may override any of the variables above).
 @import "theme.scss";
+
+// Expose the palette as CSS custom properties so the theme can switch at
+// runtime (dark mode) without recompiling. The SCSS colour variables are then
+// re-pointed at these properties, so every rule below keeps referencing $foo
+// while actually resolving to var(--foo).
+:root {
+  color-scheme: light dark;
+  --background: #{$background};
+  --light-background: #{$light-background};
+  --text-color: #{$text-color};
+  --primary-color: #{$primary-color};
+  --secondary-color: #{$secondary-color};
+  --form-background-color: #{$form-background-color};
+  --form-text-color: #{$form-text-color};
+  --nav-button-background-color: #{$nav-button-background-color};
+  --nav-button-text-color: #{$nav-button-text-color};
+  --muted-color: #{$muted-color};
+  --primary-button-text-color: #{$primary-button-text-color};
+  --code-highlight-background: #{$code-highlight-background};
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #{$dark-background};
+    --light-background: #{$dark-light-background};
+    --text-color: #{$dark-text-color};
+    --primary-color: #{$dark-primary-color};
+    --secondary-color: #{$dark-secondary-color};
+    --form-background-color: #{$dark-form-background-color};
+    --form-text-color: #{$dark-form-text-color};
+    --nav-button-background-color: #{$dark-nav-button-background-color};
+    --nav-button-text-color: #{$dark-nav-button-text-color};
+    --muted-color: #{$dark-muted-color};
+    --primary-button-text-color: #{$dark-primary-button-text-color};
+    --code-highlight-background: #{$dark-code-highlight-background};
+  }
+}
+
+// Re-point the SCSS variables at the custom properties. Everything below this
+// line uses the CSS variables transparently (no colour maths on these vars).
+$background: var(--background);
+$light-background: var(--light-background);
+$text-color: var(--text-color);
+$primary-color: var(--primary-color);
+$secondary-color: var(--secondary-color);
+$form-background-color: var(--form-background-color);
+$form-text-color: var(--form-text-color);
+$nav-button-background-color: var(--nav-button-background-color);
+$nav-button-text-color: var(--nav-button-text-color);
+$muted-color: var(--muted-color);
+$primary-button-text-color: var(--primary-button-text-color);
+$code-highlight-background: var(--code-highlight-background);
+
+// Accessible focus ring for keyboard users across the whole UI.
+:focus-visible {
+  outline: 2px solid $secondary-color;
+  outline-offset: 2px;
+}
+
+// Skip-to-content link, visible only when focused.
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: 8px 16px;
+  background: $primary-color;
+  color: $primary-button-text-color;
+}
+.skip-link:focus {
+  left: 0;
+}
+
+// Subtle top progress bar while htmx-boosted navigation is in flight
+// (hx-indicator="body" toggles the .htmx-request class on <body>).
+body::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: 0;
+  z-index: 200;
+  background: $secondary-color;
+  opacity: 0;
+  transition: width .3s ease, opacity .3s ease;
+}
+body.htmx-request::after {
+  width: 100%;
+  opacity: 1;
+  transition: width 10s cubic-bezier(.1, .7, .1, 1);
+}
 
 .primary-color {
   color: $primary-color;
@@ -107,8 +217,8 @@ blockquote {
 
 body {
   font-family: $font-stack;
-  font-size: 20px;
-  line-height: 32px;
+  font-size: 1.25rem; // 20px at the default 16px root, but respects user zoom
+  line-height: 1.6;
   background: $background;
   color: $text-color;
   margin: 0;
@@ -175,7 +285,7 @@ code, pre {
 
 .form {
     input, select, textarea {
-        font-size: 20px;
+        font-size: 1.25rem;
         border: 0;
         padding: 5px;
         background: $form-background-color;
@@ -185,7 +295,7 @@ code, pre {
         }
     }
     input[type=submit] {
-        font-size: 20px;
+        font-size: 1.25rem;
         outline: none;
         background: $primary-color;
         color: $primary-button-text-color;
@@ -299,7 +409,7 @@ footer {
 }
 
 @mixin admin-button() {
-    font-size: 18px;
+    font-size: 1.125rem;
     font-family: $font-stack;
     background: $nav-button-background-color;
     color: $nav-button-text-color;
@@ -362,6 +472,7 @@ ul.poll-items {
   }
   audio.attachment {
     width: 480px;
+    max-width: 100%;
   }
 }
 
@@ -432,10 +543,15 @@ a.label-btn {
         img, audio, video {
             max-width: calc(min(740px, 100%));
         }
+        // Preserve aspect ratio now that <img> carries width/height attributes.
+        img {
+            height: auto;
+        }
     }
     img.inline-img {
         display: block;
-        max-width: 740px;
+        max-width: calc(min(740px, 100%));
+        height: auto;
     }
 }
 
@@ -555,4 +671,46 @@ a.label-btn {
     font-size: 0.8em;
     background: rgba(0,0,0,.5);
     color: #fff;
+}
+
+// ----- Small screens -----------------------------------------------------
+// The layout is fluid up to max-width:1000px; below ~700px a few fixed-width
+// pieces need to stack/wrap instead of overflowing.
+@media (max-width: 700px) {
+    body {
+        font-size: 1.125rem;
+    }
+    main {
+        margin: 20px auto;
+    }
+    dl {
+        flex-direction: column;
+        dt {
+            width: auto;
+            white-space: normal;
+        }
+        dd {
+            white-space: normal;
+        }
+    }
+    .activity-og-meta {
+        flex-direction: column;
+        img {
+            max-width: 100%;
+            max-height: none;
+        }
+    }
+    .public-interactions {
+        flex-direction: column;
+        .interactions-block {
+            flex-basis: auto;
+            max-width: 100%;
+        }
+    }
+    .indieauth-box {
+        flex-direction: column;
+    }
+    .actor-box {
+        column-gap: 12px;
+    }
 }

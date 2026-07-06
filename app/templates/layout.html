@@ -1,9 +1,10 @@
 <!DOCTYPE HTML>
-<html lang="en">
+<html lang="{{ LANGUAGE_CODE }}">
 <head>
 <meta charset="utf-8">
 <meta http-equiv="x-ua-compatible" content="ie=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="color-scheme" content="light dark">
 <link rel="stylesheet" href="{{ BASE_URL }}/static/css/main.css?v={{ CSS_HASH }}">
 <link rel="alternate" title="{{ local_actor.display_name}}'s microblog" type="application/json" href="{{ url_for("json_feed") }}" />
 <link rel="alternate" href="{{ url_for("rss_feed") }}" type="application/rss+xml" title="{{ local_actor.display_name}}'s microblog">
@@ -13,8 +14,9 @@
 {% block head %}{% endblock %}
 </head>
 <body>
+<a href="#content" class="skip-link">Skip to content</a>
 <div id="main">
-<main{%- block main_tag %}{%- endblock %}>
+<main id="content" tabindex="-1"{%- block main_tag %}{%- endblock %}>
 {% if is_admin %}
 <div id="admin">
 {% macro admin_link(url, text) %}

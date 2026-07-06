@@ -441,5 +441,6 @@ _templates.env.globals["CSS_HASH"] = config.CSS_HASH
 _templates.env.globals["BASE_URL"] = config.BASE_URL
 _templates.env.globals["HIDES_FOLLOWERS"] = config.HIDES_FOLLOWERS
 _templates.env.globals["HIDES_FOLLOWING"] = config.HIDES_FOLLOWING
+_templates.env.globals["LANGUAGE_CODE"] = config.LANGUAGE_CODE
 _templates.env.globals["NAVBAR_ITEMS"] = config.NavBarItems
 _templates.env.globals["ICON_URL"] = config.ICON_URL

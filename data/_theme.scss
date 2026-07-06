@@ -1,4 +1,7 @@
-$font-stack: "Inconsolata", monospace;
+// "Inconsolata" is kept first in case it is installed/bundled; the rest is a
+// robust cross-platform system monospace fallback so the UI renders
+// consistently without loading any external/webfont (privacy-safe).
+$font-stack: "Inconsolata", ui-monospace, "SF Mono", "Cascadia Code", "Segoe UI Mono", "Liberation Mono", Menlo, Consolas, monospace;
 $background: #ffff;
 $light-background: #f8f9fa;
 $text-color: #0d1e2d;

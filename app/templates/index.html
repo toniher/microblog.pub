@@ -54,7 +54,11 @@
 
 {% else %}
     <div class="empty-state">
+        {% if is_admin %}
+        <p>Nothing here yet — <a href="{{ url_for('admin_new') }}">write your first note</a>.</p>
+        {% else %}
         <p>Nothing to see here yet!</p>
+        {% endif %}
     </div>
 {% endif %}
 
