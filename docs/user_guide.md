@@ -111,6 +111,20 @@ hides_following = true
 
 The default value is `false`.
 
+### Default language
+
+You can set a default language for your instance with the `language_code` config item in
+`profile.toml`, using a [BCP 47](https://en.wikipedia.org/wiki/IETF_language_tag) tag
+(e.g. `en`, `fr`, `pt-BR`):
+
+```toml
+language_code = "en"
+```
+
+The default value is `en`. It is used for the `lang` attribute of the generated HTML pages
+(which helps screen readers and translation tools) and as the suggested default when
+[setting a per-note language](#authoring-notes).
+
 ### Privacy replace
 
 You can define domains to be rewritten to more "privacy friendly" alternatives, like [Invidious](https://invidious.io/)
@@ -211,6 +225,17 @@ authoritative list and their default values):
 Only set the variables you want to change — anything you leave out keeps its default.
 If you need to go further than variables, you can add arbitrary SCSS after the variable
 definitions in `data/_theme.scss`.
+
+The palette is exposed as CSS custom properties, so the site automatically follows the
+visitor's system light/dark preference (`prefers-color-scheme`). Every variable above has a
+dark-mode counterpart prefixed with `$dark-` (e.g. `$dark-background`, `$dark-text-color`,
+`$dark-primary-color`) that you can override the same way. Leave them unset to keep the
+built-in dark theme:
+
+```scss
+$dark-background: #101418;
+$dark-primary-color: #6fd06f;
+```
 
 You will need to [recompile CSS](#recompiling-css-files) after doing any CSS changes (for actual css files to be updates) and restart microblog.pub (for css link in HTML documents to be updated with a new checksum - otherwise, browsers that downloaded old CSS will keep using it).
 
@@ -413,6 +438,12 @@ The lookup supports:
 Notes are authored in [Markdown](https://commonmark.org/). There is no imposed characters limit.
 
 If you fill the content warning, the note will be automatically marked as sensitive.
+
+You can optionally set a **language** for the note (a [BCP 47](https://en.wikipedia.org/wiki/IETF_language_tag)
+tag such as `en` or `pt-BR`). When set, it is advertised to other servers through the
+ActivityPub `contentMap`, the same way Mastodon does, so remote clients can label and filter
+your post by language. Leave the field empty to omit it (no language is advertised). The field
+is pre-suggested with your instance's [default language](#default-language).
 
 You can add attachments/upload files.
 When attaching pictures, EXIF metadata (like GPS location) will be removed automatically before being stored.
