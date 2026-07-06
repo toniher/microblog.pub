@@ -1,6 +1,9 @@
 # Installing
 
-[TOC]
+```{contents}
+:local:
+:depth: 2
+```
 
 ## Docker edition
 
@@ -42,7 +45,7 @@ The port can be tweaked in the `docker-compose.yml` file.
 docker compose up -d
 ```
 
-Setup a reverse proxy (see the [Reverse Proxy section](/installing.html#reverse-proxy)).
+Setup a reverse proxy (see the [Reverse Proxy section](#reverse-proxy)).
 
 ### What runs inside the container
 
@@ -127,7 +130,7 @@ make reset-password                                 # set a new admin password
 make account=user@other.tld webfinger              # resolve a remote actor URL
 ```
 
-See the [User's guide](/user_guide.html) for the full list and the details of each
+See the [User's guide](user_guide.md) for the full list and the details of each
 task (each one documents its "Docker edition" invocation).
 
 ### Updating 

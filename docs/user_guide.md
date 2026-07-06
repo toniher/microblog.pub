@@ -1,6 +1,9 @@
 # User's guide
 
-[TOC]
+```{contents}
+:local:
+:depth: 2
+```
 
 ## ActivityPub
 
@@ -34,7 +37,7 @@ Whenever one of these config items is updated, an `Update` activity will be sent
 
 The server will need to be restarted for taking changes into account.
 
-Before restarting the server, you can ensure you haven't made any mistakes by running the [configuration checking task](/user_guide.html#configuration-checking).
+Before restarting the server, you can ensure you haven't made any mistakes by running the [configuration checking task](#configuration-checking).
 
 Note that currently `image_url` is not used anywhere in microblog.pub itself, but other clients/servers do occasionally use it when showing remote profiles as a background image.
 Also, this image _can_ be used in microblog.pub - just add this:
@@ -44,7 +47,7 @@ Also, this image _can_ be used in microblog.pub - just add this:
 ```
 
 to an appropriate place of your template (most likely, `header.html`).
-For more information, see a section about [custom templates](/user_guide.html#custom-templates) further in this document.
+For more information, see a section about [custom templates](#custom-templates) further in this document.
 
 #### Local avatar/header files
 
@@ -499,7 +502,7 @@ If you want to move followers from your existing account, ensure it is supported
 
 For [Mastodon you can look at Moving or leaving accounts](https://docs.joinmastodon.org/user/moving/).
 
-If you wish to move **to** another instance, see [Moving to another instance](/user_guide.html#moving-to-another-instance).
+If you wish to move **to** another instance, see [Moving to another instance](#moving-to-another-instance).
 
 First you need to grab the "ActivityPub actor URL" for your existing account:
 
@@ -662,7 +665,7 @@ If you want to migrate to another instance, you have the ability to move your ex
 
 Your new account should reference the existing one, refer to your software configuration (for example [Moving or leaving accounts from the Mastodon doc](https://docs.joinmastodon.org/user/moving/)).
 
-If you wish to move **from** another instance, see [Moving from another instance](/user_guide.html#moving-from-another-instance).
+If you wish to move **from** another instance, see [Moving from another instance](#moving-from-another-instance).
 
 Execute the Move task:
 
@@ -710,7 +713,7 @@ make self-destruct
 
 If the server is not (re)starting, you can:
 
- - [Ensure that the configuration is valid](/user_guide.html#configuration-checking).
- - [Verify if you haven't any syntax error in the custom theme by recompiling the CSS](/user_guide.html#recompiling-css-files).
+ - [Ensure that the configuration is valid](#configuration-checking).
+ - [Verify if you haven't any syntax error in the custom theme by recompiling the CSS](#recompiling-css-files).
  - Look at the log files (in `data/uvicorn.log`, `data/incoming.log` and `data/outgoing.log`).
  - If the CSS is not working, ensure your reverse proxy is serving the static file correctly.

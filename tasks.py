@@ -108,8 +108,7 @@ def generate_requirements_txt(ctx, where="requirements.txt"):
 @task
 def build_docs(ctx):
     # type: (Context) -> None
-    with embed_version():
-        run("PYTHONPATH=. python scripts/build_docs.py", pty=True, echo=True)
+    run("make -C docs html", pty=True, echo=True)
 
 
 @task

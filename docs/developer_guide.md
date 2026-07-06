@@ -2,7 +2,10 @@
 
 This guide assumes you have some knowledge of [ActivityPub](https://activitypub.rocks/).
 
-[TOC]
+```{contents}
+:local:
+:depth: 2
+```
 
 ## Architecture
 
@@ -71,22 +74,34 @@ Running a local version requires:
  - Python 3.10+ (3.12 recommended — it's what the project is developed and tested against)
  - SQLite 3.35+
 
-You can follow the [Python developer version of the install instructions](https://docs.microblog.pub/installing.html#python-developer-edition).
+You can follow the [Python developer version of the install instructions](install.md#python-developer-edition).
 
 ## Documentation
 
-The documention is managed as Markdown files in `docs/` and the online documentation is built using a homegrown Python script (`scripts/build_docs.py`).
+The documentation is a set of Markdown files in `docs/`, built into a static
+website with [Sphinx](https://www.sphinx-doc.org/) using the
+[MyST](https://myst-parser.readthedocs.io/) Markdown parser and the
+[Furo](https://pradyunsg.me/furo/) theme. The online documentation is published
+to GitHub Pages automatically by the `.github/workflows/pages.yml` workflow on
+every push to `main` that touches `docs/`.
 
-You can build the documentation locally by running:
+Install the documentation dependencies (ideally in a dedicated virtualenv):
+
+```bash
+pip install -r docs/requirements.txt
+```
+
+Then build the documentation locally by running:
 
 ```bash
 inv build-docs
 ```
 
-And check out the result by starting a static server using Python standard library:
+The rendered HTML lands in `docs/_build/html`. Check out the result by starting a
+static server using the Python standard library:
 
 ```bash
-cd docs/dist
+cd docs/_build/html
 python -m http.server 8001
 ```
 

@@ -5,7 +5,7 @@
 __pycache__/
 .mypy_cache/
 .pytest_cache/
-docs/dist/
+docs/_build/
 requirements.txt
 app/static/favicon.ico
 misc/dev-supervisord.conf

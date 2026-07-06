@@ -1,0 +1,5 @@
+/* Accent color to match the microblog.pub green. */
+:root {
+    --color-brand-primary: #1d781d;
+    --color-brand-content: #1d781d;
+}
