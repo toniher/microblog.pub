@@ -94,6 +94,37 @@ Testing notes:
   the whole suite ad hoc, pass `--timeout=60` (pytest-timeout) so a slow/hung test
   is killed instead of stalling the run.
 
+### Local development setup
+
+The project uses an **in-project virtualenv** (`poetry.toml` → `virtualenvs.in-project`),
+so `.venv/` lives at the repo root and CI runs `poetry run inv lint` / `inv tests`.
+
+```bash
+poetry install --no-root      # populate ./.venv with runtime + dev deps (what CI does)
+```
+
+To catch the CI lint (`black --check`, `isort --check`, `flake8`, `mypy`) *before*
+pushing, a committed **`.pre-commit-config.yaml`** runs those same checks on every commit.
+It's meant to run with [prek](https://prek.j178.dev/) — a fast, drop-in replacement for the
+`pre-commit` framework that reads the same config (plain `pre-commit` works too):
+
+```bash
+pipx install prek        # or: uv tool install prek / cargo install prek
+poetry install --no-root # populate ./.venv with the pinned tools
+prek install             # wire up .git/hooks/pre-commit (per clone)
+prek run --all-files     # run everything on demand
+```
+
+- The hooks are `repo: local`, `language: system` and call the tools from `./.venv/bin`,
+  so **tool versions stay single-sourced in `pyproject.toml`** — nothing to pin in the YAML.
+  Requires `poetry install` first (the in-project `.venv`).
+- Each hook runs on the whole tree (`pass_filenames: false`), mirroring CI exactly and
+  letting mypy load its sqlalchemy/pydantic plugins and resolve project imports.
+- `.git/hooks/` is not version-controlled, so each clone runs `prek install` once.
+  Bypass a single commit with `git commit --no-verify`.
+
+When a hook fails, run `inv autoformat` (black + isort) then fix any flake8/mypy issues.
+
 ## Current work in progress
 
 The `dev_ap_module` branch (where this fork's **modularization** of all ActivityPub

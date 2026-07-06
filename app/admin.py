@@ -1263,9 +1263,7 @@ async def admin_actions_new(
     # Optional Mastodon-style post language (BCP 47); empty means unset (None).
     language = (language or "").strip() or None
     if language and not _LANGUAGE_CODE_RE.match(language):
-        raise HTTPException(
-            status_code=422, detail="Error: invalid language code"
-        )
+        raise HTTPException(status_code=422, detail="Error: invalid language code")
 
     # Do like Mastodon, if there's only a CW with no content and some attachments,
     # swap the CW and the content
