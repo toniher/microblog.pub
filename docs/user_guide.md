@@ -1,10 +1,5 @@
 # User's guide
 
-```{contents}
-:local:
-:depth: 2
-```
-
 ## ActivityPub
 
 Using microblog.pub efficiently requires knowing a bit about how [ActivityPub](https://activitypub.rocks/) works.

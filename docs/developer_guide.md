@@ -2,11 +2,6 @@
 
 This guide assumes you have some knowledge of [ActivityPub](https://activitypub.rocks/).
 
-```{contents}
-:local:
-:depth: 2
-```
-
 ## Architecture
 
 Microblog.pub is a "modern" Python application with "old-school" server-rendered templates.

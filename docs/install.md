@@ -1,10 +1,5 @@
 # Installing
 
-```{contents}
-:local:
-:depth: 2
-```
-
 ## Docker edition
 
 Assuming Docker and [Docker Compose](https://docs.docker.com/compose/install/) are already installed.
