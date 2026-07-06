@@ -628,6 +628,7 @@ async def send_create(
     poll_answers: list[str] | None = None,
     poll_duration_in_minutes: int | None = None,
     name: str | None = None,
+    language: str | None = None,
 ) -> tuple[str, activitypub.models.OutboxObject]:
     note_id = allocate_outbox_id()
     published = now().replace(microsecond=0).isoformat().replace("+00:00", "Z")
@@ -711,6 +712,17 @@ async def send_create(
         url = f"{BASE_URL}/articles/{note_id[:7]}/{slug}"
         extra_obj_attrs = {"name": name}
 
+    # Mastodon-style per-post language: expose the natural-language properties
+    # as language maps so remote servers know the content language. Absent when
+    # no language is set.
+    lang_maps: dict[str, dict[str, str]] = {}
+    if language:
+        lang_maps["contentMap"] = {language: content}
+        if content_warning:
+            lang_maps["summaryMap"] = {language: content_warning}
+        if ap_type == "Article" and name:
+            lang_maps["nameMap"] = {language: name}
+
     obj = {
         "@context": ap.AS_EXTENDED_CTX,
         "type": ap_type,
@@ -729,6 +741,7 @@ async def send_create(
         "sensitive": is_sensitive,
         "attachment": attachments,
         **extra_obj_attrs,  # type: ignore
+        **lang_maps,  # type: ignore
     }
     outbox_object = await save_outbox_object(
         db_session,

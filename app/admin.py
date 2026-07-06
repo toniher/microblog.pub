@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from urllib.parse import quote
 
@@ -1235,6 +1236,11 @@ async def admin_actions_unpin(
     return RedirectResponse(redirect_url, status_code=302)
 
 
+# Loose BCP 47 language tag check (e.g. "en", "pt-BR", "zh-Hant"); enough to
+# keep malformed values out of the ActivityPub language maps.
+_LANGUAGE_CODE_RE = re.compile(r"^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$")
+
+
 @router.post("/actions/new", response_model=None)
 async def admin_actions_new(
     request: Request,
@@ -1247,11 +1253,19 @@ async def admin_actions_new(
     visibility: str = Form(),
     poll_type: str | None = Form(None),
     name: str | None = Form(None),
+    language: str | None = Form(None),
     csrf_check: None = Depends(verify_csrf_token),
     db_session: AsyncSession = Depends(get_db_session),
 ) -> RedirectResponse:
     if not content and not content_warning:
         raise HTTPException(status_code=422, detail="Error: object must have a content")
+
+    # Optional Mastodon-style post language (BCP 47); empty means unset (None).
+    language = (language or "").strip() or None
+    if language and not _LANGUAGE_CODE_RE.match(language):
+        raise HTTPException(
+            status_code=422, detail="Error: invalid language code"
+        )
 
     # Do like Mastodon, if there's only a CW with no content and some attachments,
     # swap the CW and the content
@@ -1315,6 +1329,7 @@ async def admin_actions_new(
         poll_answers=poll_answers,
         poll_duration_in_minutes=poll_duration_in_minutes,
         name=name,
+        language=language,
     )
     return RedirectResponse(
         request.url_for("outbox_by_public_id", public_id=public_id),
