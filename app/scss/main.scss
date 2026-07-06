@@ -70,6 +70,11 @@ $dark-code-highlight-background: $code-highlight-background;
   }
 }
 
+// Preserve the literal (light) primary colour before re-pointing, so the
+// favicon generator can still resolve a concrete hex via Sass
+// (see app/utils/favicon.py, which reads $primary-color-literal).
+$primary-color-literal: $primary-color;
+
 // Re-point the SCSS variables at the custom properties. Everything below this
 // line uses the CSS variables transparently (no colour maths on these vars).
 $background: var(--background);

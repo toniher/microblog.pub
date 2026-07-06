@@ -9,7 +9,7 @@ def _get_primary_color() -> str:
     compiled = sass.compile(
         string=(
             "@import 'app/scss/main.scss';\n"
-            "#favicon-color { color: $primary-color; }"
+            "#favicon-color { color: $primary-color-literal; }"
         )
     )
     return compiled[len(compiled) - 11 : -4]
