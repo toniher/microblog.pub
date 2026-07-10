@@ -23,6 +23,17 @@ def pytest_sessionfinish(session, exitstatus) -> None:
     asyncio.run(async_engine.dispose())
 
 
+@pytest.fixture(autouse=True)
+def _reset_scoped_session() -> Generator:
+    # `_Session` is a module-level scoped_session shared by every factory
+    # across the whole test run. Tests drop and recreate the schema around
+    # each other, so without removing it here its identity map can hold
+    # stale objects from a previous test that collide with newly inserted
+    # rows reusing the same primary keys.
+    yield
+    _Session.remove()
+
+
 @pytest_asyncio.fixture
 async def async_db_session():
     async with async_session() as session:
