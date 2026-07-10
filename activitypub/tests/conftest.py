@@ -15,6 +15,22 @@ from app.main import app
 os.environ["MICROBLOGPUB_CONFIG_FILE"] = "tests.toml"
 
 
+@pytest.fixture(autouse=True)
+def _reset_scoped_session() -> Generator:
+    # `_Session` is a module-level scoped_session shared by every factory
+    # across the whole test run. Several tests (e.g. the async
+    # process_next_outgoing_activity ones) write through it without using the
+    # `db` fixture, so nothing closes it and its identity map keeps the
+    # committed rows. Meanwhile every test drops and recreates the schema,
+    # resetting autoincrement PKs — so the next insert reuses id=1 and
+    # collides with the stale (now expired/GC'd) state left in the map,
+    # which surfaces as the flaky "NoneType has no __dict__" / "transaction
+    # is closed" errors in CI. Reset the session around every test.
+    _Session.remove()
+    yield
+    _Session.remove()
+
+
 @pytest_asyncio.fixture
 async def async_db_session():
     async with async_session() as session:

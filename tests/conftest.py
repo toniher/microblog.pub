@@ -26,10 +26,14 @@ def pytest_sessionfinish(session, exitstatus) -> None:
 @pytest.fixture(autouse=True)
 def _reset_scoped_session() -> Generator:
     # `_Session` is a module-level scoped_session shared by every factory
-    # across the whole test run. Tests drop and recreate the schema around
-    # each other, so without removing it here its identity map can hold
-    # stale objects from a previous test that collide with newly inserted
-    # rows reusing the same primary keys.
+    # across the whole test run. Several tests write through it without using
+    # the `db` fixture, so nothing closes it and its identity map keeps the
+    # committed rows. Meanwhile every test drops and recreates the schema,
+    # resetting autoincrement PKs — so the next insert reuses id=1 and
+    # collides with the stale (now expired/GC'd) state left in the map,
+    # which surfaces as the flaky "NoneType has no __dict__" / "transaction
+    # is closed" errors in CI. Reset the session around every test.
+    _Session.remove()
     yield
     _Session.remove()
 
