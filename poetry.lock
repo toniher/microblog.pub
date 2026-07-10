@@ -1184,7 +1184,7 @@ version = "2.2.1"
 description = "Pythonic task execution"
 optional = false
 python-versions = ">=3.6"
-groups = ["main", "dev"]
+groups = ["main"]
 files = [
     {file = "invoke-2.2.1-py3-none-any.whl", hash = "sha256:2413bc441b376e5cd3f55bb5d364f973ad8bdd7bf87e53c79de3c11bf3feecc8"},
     {file = "invoke-2.2.1.tar.gz", hash = "sha256:515bf49b4a48932b79b024590348da22f39c4942dff991ad1fb8b8baea1be707"},
@@ -2970,4 +2970,4 @@ dev = ["black (>=19.3b0) ; python_version >= \"3.6\"", "pytest (>=4.6.2)"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.10"
-content-hash = "a9d4082c68f2d9ca37e87db0972dee8a45900c4df4d45ad17f3c9fcd7ac95568"
+content-hash = "c5ebc75ecc6fad1171f039e1eff7243082e155309aac8c5260599e2d9dc26d5f"
