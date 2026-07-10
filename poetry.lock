@@ -1241,7 +1241,7 @@ version = "0.23.0"
 description = "Sass for Python: A straightforward binding of libsass for Python."
 optional = false
 python-versions = ">=3.8"
-groups = ["dev"]
+groups = ["main", "dev"]
 files = [
     {file = "libsass-0.23.0-cp38-abi3-macosx_11_0_x86_64.whl", hash = "sha256:34cae047cbbfc4ffa832a61cbb110f3c95f5471c6170c842d3fed161e40814dc"},
     {file = "libsass-0.23.0-cp38-abi3-macosx_14_0_arm64.whl", hash = "sha256:ea97d1b45cdc2fc3590cb9d7b60f1d8915d3ce17a98c1f2d4dd47ee0d9c68ce6"},
@@ -2970,4 +2970,4 @@ dev = ["black (>=19.3b0) ; python_version >= \"3.6\"", "pytest (>=4.6.2)"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.10"
-content-hash = "d0e03d3d6823821e93f79646b39d403894eb6f5b17784263bb7b7ec608980aee"
+content-hash = "e47afab5e98dacba64181895c3a5a76cd7b3c6445b841b6045b37358fbb3cfca"
