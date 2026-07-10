@@ -24,7 +24,10 @@ def test_index__html_microdata_enabled(db: Session, client: TestClient) -> None:
     assert response.status_code == 200
     assert 'itemtype="https://schema.org/Blog"' in response.text
     assert 'itemtype="https://schema.org/SocialMediaPosting"' in response.text
-    assert 'itemprop="blogPost"' in response.text
+    # Blog.blogPost only accepts BlogPosting, so a Note (mapped to
+    # SocialMediaPosting) is linked via the generic CreativeWork.hasPart instead.
+    assert 'itemprop="hasPart"' in response.text
+    assert 'itemprop="blogPost"' not in response.text
     assert 'itemprop="datePublished"' in response.text
     assert 'itemprop="author"' in response.text
 
