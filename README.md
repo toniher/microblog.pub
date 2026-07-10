@@ -44,6 +44,7 @@ Instances in the wild (this fork or close relatives):
     - [Micropub](https://www.w3.org/TR/micropub/) support
     - Sends and processes [Webmentions](https://www.w3.org/TR/webmention/)
     - RSS/Atom/[JSON](https://www.jsonfeed.org/) feed
+ - Support to [schema.org microdata](https://schema.org/docs/gs.html)
  - Easy to backup
     - Everything is stored in the `data/` directory: config, uploads, secrets, and the SQLite database.
 
