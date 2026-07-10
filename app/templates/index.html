@@ -24,11 +24,11 @@
 
 {% if objects %}
 
-    <div class="h-feed">
-    <data class="p-name" value="{{ local_actor.display_name}}'s notes"></data>
+    <div class="h-feed"{% if ENABLE_MICRODATA %} itemscope itemtype="https://schema.org/Blog"{% endif %}>
+    <data class="p-name" value="{{ local_actor.display_name}}'s notes"{% if ENABLE_MICRODATA %} itemprop="name"{% endif %}></data>
     {% for outbox_object in objects %}
     {% if outbox_object.ap_type in ["Note", "Video", "Question"] %}
-    {{ utils.display_object(outbox_object) }}
+    {{ utils.display_object(outbox_object, md_container_prop="blogPost") }}
     {% elif outbox_object.ap_type == "Announce" %}
     <div class="h-entry" id="{{ outbox_object.permalink_id }}">
         <div class="shared-header"><strong><a class="p-author h-card" href="{{ local_actor.url }}">{{ actor_component.tiny_actor_icon(local_actor) }}  {{ local_actor.display_name | clean_html(local_actor) | safe }}</a></strong> shared <span title="{{ outbox_object.ap_published_at.isoformat() }}">{{ outbox_object.ap_published_at | timeago }}</span></div>

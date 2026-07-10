@@ -20,13 +20,13 @@
     </div>
 {% endmacro %}
 
-{% macro actor_box(actor) %}
-<div class="actor-box h-card p-author">
+{% macro actor_box(actor, md_author=False) %}
+<div class="actor-box h-card p-author"{% if md_author and ENABLE_MICRODATA %} itemprop="author" itemscope itemtype="https://schema.org/Person"{% endif %}>
     <div class="icon-box">
-        <img src="{{ actor.resized_icon_url }}" alt="{{ actor.display_name }}'s avatar" class="actor-icon u-photo" loading="lazy">
+        <img src="{{ actor.resized_icon_url }}" alt="{{ actor.display_name }}'s avatar" class="actor-icon u-photo" loading="lazy"{% if md_author and ENABLE_MICRODATA %} itemprop="image"{% endif %}>
     </div>
-    <a href="{{ actor.url }}" class="u-url">
-        <div><strong>{{ actor.display_name | clean_html(actor) | safe  }}</strong></div>
+    <a href="{{ actor.url }}" class="u-url"{% if md_author and ENABLE_MICRODATA %} itemprop="url"{% endif %}>
+        <div><strong{% if md_author and ENABLE_MICRODATA %} itemprop="name"{% endif %}>{{ actor.display_name | clean_html(actor) | safe  }}</strong></div>
         <div class="actor-handle p-name">{{ actor.handle }}</div>
     </a>
 </div>
@@ -53,9 +53,9 @@
 {% endif %}
 {% endmacro %}
 
-{% macro display_actor(request, csrf_token, is_admin, actor, actors_metadata={}, with_details=False, pending_incoming_follow_notif=None) %}
+{% macro display_actor(request, csrf_token, is_admin, actor, actors_metadata={}, with_details=False, pending_incoming_follow_notif=None, md_author=False) %}
 {% set metadata = actors_metadata.get(actor.ap_id) %}
-{{ actor_box(actor) }}
+{{ actor_box(actor, md_author=md_author) }}
 {% if is_admin and metadata %}
 <div>
     <nav class="flexbox actor-metadata" hx-boost="true" hx-indicator="body">

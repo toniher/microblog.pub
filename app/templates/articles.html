@@ -7,11 +7,11 @@
 {% block content %}
 {% include "header.html" %}
 
-<ul class="h-feed" id="articles" hx-boost="true" hx-indicator="body">
-<data class="p-name" value="{{ local_actor.display_name}}'s articles"></data>
+<ul class="h-feed" id="articles" hx-boost="true" hx-indicator="body"{% if ENABLE_MICRODATA %} itemscope itemtype="https://schema.org/Blog"{% endif %}>
+<data class="p-name" value="{{ local_actor.display_name}}'s articles"{% if ENABLE_MICRODATA %} itemprop="name"{% endif %}></data>
 {% for outbox_object in objects %}
-    <li class="h-entry">
-        <time class="muted dt-published" datetime="{{ outbox_object.ap_published_at.isoformat() }}">{{ outbox_object.ap_published_at.strftime("%b %d, %Y") }}</time> <a href="{{ outbox_object.url }}" class="u-url u-uid p-name">{{ outbox_object.name }}</a>
+    <li class="h-entry"{% if ENABLE_MICRODATA %} itemprop="blogPost" itemscope itemtype="https://schema.org/BlogPosting"{% endif %}>
+        <time class="muted dt-published" datetime="{{ outbox_object.ap_published_at.isoformat() }}"{% if ENABLE_MICRODATA %} itemprop="datePublished"{% endif %}>{{ outbox_object.ap_published_at.strftime("%b %d, %Y") }}</time> <a href="{{ outbox_object.url }}" class="u-url u-uid p-name"{% if ENABLE_MICRODATA %} itemprop="url"{% endif %}>{% if ENABLE_MICRODATA %}<span itemprop="headline name">{{ outbox_object.name }}</span>{% else %}{{ outbox_object.name }}{% endif %}</a>
     </li>
 {% endfor %}
 </ul>

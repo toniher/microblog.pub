@@ -1,7 +1,7 @@
-{%- import "components/attachments.html" as attachments -%}
+{%- import "components/attachments.html" as attachments with context -%}
 {%- import "components/hidden_inputs.html" as hidden_inputs -%}
 {%- import "components/admin_buttons.html" as admin_buttons -%}
-{%- import "components/actor.html" as actor_component -%}
+{%- import "components/actor.html" as actor_component with context -%}
 
 {% macro display_og_meta(object) %}
 {% block display_og_meta scoped %}
@@ -69,20 +69,39 @@
 {% endblock %}
 {% endmacro %}
 
-{% macro display_object(object, likes=[], shares=[], webmentions=[], expanded=False, actors_metadata={}, is_object_page=False, is_h_entry=True) %}
+{% macro display_object(object, likes=[], shares=[], webmentions=[], expanded=False, actors_metadata={}, is_object_page=False, is_h_entry=True, md_container_prop="") %}
 {% block display_object scoped %}
 {% set is_article_mode = object.is_from_outbox and object.ap_type == "Article" and is_object_page %}
+{% set md_type = "SocialMediaPosting" %}
+{% if object.ap_type == "Article" %}
+    {% set md_type = "BlogPosting" %}
+{% elif object.ap_type == "Video" %}
+    {% set md_type = "VideoObject" %}
+{% elif object.ap_type == "Event" %}
+    {% set md_type = "Event" %}
+{% elif object.ap_type == "Page" %}
+    {% set md_type = "Article" %}
+{% endif %}
 {% if object.ap_type in ["Note", "Article", "Video", "Page", "Question", "Event"] %}
-<div class="ap-object {% if expanded %}ap-object-expanded {% endif %}{% if is_h_entry %}h-entry{% endif %}" id="{{ object.permalink_id }}">
+<div class="ap-object {% if expanded %}ap-object-expanded {% endif %}{% if is_h_entry %}h-entry{% endif %}" id="{{ object.permalink_id }}"{% if ENABLE_MICRODATA %} itemscope itemtype="https://schema.org/{{ md_type }}"{% if md_container_prop %} itemprop="{{ md_container_prop }}"{% endif %}{% endif %}>
+
+    {% if ENABLE_MICRODATA %}
+    <meta itemprop="inLanguage" content="{{ LANGUAGE_CODE }}">
+    {% for tag in object.tags %}
+        {% if tag.type == "Hashtag" %}
+        <meta itemprop="keywords" content="{{ tag.name }}">
+        {% endif %}
+    {% endfor %}
+    {% endif %}
 
     {% if is_article_mode %}
-    <data class="h-card">
-        <data class="u-photo" value="{{ local_actor.icon_url }}"></data>
-        <data class="u-url" value="{{ local_actor.url}}"></data>
-        <data class="p-name" value="{{ local_actor.handle }}"></data>
+    <data class="h-card"{% if ENABLE_MICRODATA %} itemprop="author" itemscope itemtype="https://schema.org/Person"{% endif %}>
+        <data class="u-photo" value="{{ local_actor.icon_url }}"{% if ENABLE_MICRODATA %} itemprop="image"{% endif %}></data>
+        <data class="u-url" value="{{ local_actor.url}}"{% if ENABLE_MICRODATA %} itemprop="url"{% endif %}></data>
+        <data class="p-name" value="{{ local_actor.handle }}"{% if ENABLE_MICRODATA %} itemprop="name"{% endif %}></data>
     </data>
     {% else %}
-    {{ actor_component.display_actor(request, csrf_token, is_admin, object.actor, actors_metadata) }}
+    {{ actor_component.display_actor(request, csrf_token, is_admin, object.actor, actors_metadata, md_author=ENABLE_MICRODATA) }}
     {% endif %}
 
     {% if object.in_reply_to %}
@@ -92,7 +111,7 @@
     {% endif %}
 
     {% if object.ap_type in ["Article", "Event", "Page"] %}
-        <h2 class="p-name no-margin-top">{{ object.name }}</h2>
+        <h2 class="p-name no-margin-top"{% if ENABLE_MICRODATA %} itemprop="headline name"{% endif %}>{{ object.name }}</h2>
     {% endif %}
 
     {% if object.ap_type == "Event" %}
@@ -118,20 +137,20 @@
     {% endif %}
 
     {% if is_article_mode %}
-                <time class="dt-published muted" datetime="{{ object.ap_published_at.replace(microsecond=0).isoformat() }}" title="{{ object.ap_published_at.replace(microsecond=0).isoformat() }}">{{ object.ap_published_at.strftime("%b %d, %Y") }}</time>
+                <time class="dt-published muted" datetime="{{ object.ap_published_at.replace(microsecond=0).isoformat() }}" title="{{ object.ap_published_at.replace(microsecond=0).isoformat() }}"{% if ENABLE_MICRODATA %} itemprop="datePublished"{% endif %}>{{ object.ap_published_at.strftime("%b %d, %Y") }}</time>
     {% endif %}
 
     {% if object.summary %}
     <details class="show-more-wrapper">
         <summary>
-            <div class="p-summary">
+            <div class="p-summary"{% if ENABLE_MICRODATA %} itemprop="abstract"{% endif %}>
                 <p>{{ object.summary | clean_html(object) | safe }}</p>
             </div>
             <span class="show-more-btn" aria-hidden="true"></span>
         </summary>
     {% endif %}
         <div class="obj-content">
-        <div class="e-content">
+        <div class="e-content"{% if ENABLE_MICRODATA %} itemprop="articleBody"{% endif %}>
             {{ object.content | clean_html(object) | safe }}
         </div>
 
@@ -199,7 +218,7 @@
     <nav class="flexbox activity-bar" hx-boost="true" hx-indicator="body">
     <ul>
         <li>
-            <div><a href="{{ object.url }}"{% if object.is_from_inbox %} rel="nofollow"{% endif %} class="object-permalink u-url u-uid">permalink</a></div>
+            <div><a href="{{ object.url }}"{% if object.is_from_inbox %} rel="nofollow"{% endif %} class="object-permalink u-url u-uid"{% if ENABLE_MICRODATA %} itemprop="url mainEntityOfPage"{% endif %}>permalink</a></div>
         </li>
 
         {% if object.is_from_outbox and is_object_page and not is_admin and not request.url.path.startswith("/remote_interaction") %}
@@ -213,7 +232,7 @@
 
         {% if not is_article_mode %}
             <li>
-                <time class="dt-published" datetime="{{ object.ap_published_at.replace(microsecond=0).isoformat() }}" title="{{ object.ap_published_at.replace(microsecond=0).isoformat() }}">{{ object.ap_published_at | timeago }}</time>
+                <time class="dt-published" datetime="{{ object.ap_published_at.replace(microsecond=0).isoformat() }}" title="{{ object.ap_published_at.replace(microsecond=0).isoformat() }}"{% if ENABLE_MICRODATA %} itemprop="datePublished"{% endif %}>{{ object.ap_published_at | timeago }}</time>
             </li>
         {% endif %}
         {% if object.ap_type == "Question" %}

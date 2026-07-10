@@ -117,6 +117,9 @@ class Config(pydantic.BaseModel):
     hides_followers: bool = False
     hides_following: bool = False
 
+    # Emit schema.org microdata (itemscope/itemtype/itemprop) in the public HTML
+    enable_microdata: bool = False
+
     inbox_retention_days: int = 15
 
     custom_content_security_policy: str | None = None
@@ -183,6 +186,7 @@ MANUALLY_APPROVES_FOLLOWERS = CONFIG.manually_approves_followers
 HIDES_FOLLOWERS = CONFIG.hides_followers
 HIDES_FOLLOWING = CONFIG.hides_following
 LANGUAGE_CODE = CONFIG.language_code
+ENABLE_MICRODATA = CONFIG.enable_microdata
 PRIVACY_REPLACE = None
 if CONFIG.privacy_replace:
     PRIVACY_REPLACE = {pr.domain: pr.replace_by for pr in CONFIG.privacy_replace}

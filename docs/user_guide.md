@@ -125,6 +125,23 @@ The default value is `en`. It is used for the `lang` attribute of the generated 
 (which helps screen readers and translation tools) and as the suggested default when
 [setting a per-note language](#authoring-notes).
 
+### Schema.org microdata
+
+By default, the generated HTML only carries [microformats2](https://microformats.org/wiki/microformats2)
+markup. You can additionally enable [schema.org](https://schema.org) structured data
+(`itemscope`/`itemtype`/`itemprop` microdata attributes) with:
+
+```toml
+enable_microdata = true
+```
+
+The default value is `false`. When enabled, feeds are marked up as a `Blog`, and each
+note/article/video/event as the corresponding schema.org type (`BlogPosting`,
+`SocialMediaPosting`, `VideoObject`, `Event`…), with `author`, `datePublished`, `url`
+and media properties filled in alongside the existing microformats2 classes. This can
+help search engines and other tools that read schema.org structured data (e.g. rich
+results) understand your content.
+
 ### Privacy replace
 
 You can define domains to be rewritten to more "privacy friendly" alternatives, like [Invidious](https://invidious.io/)

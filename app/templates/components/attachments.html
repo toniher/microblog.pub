@@ -31,16 +31,16 @@
                 {% if attachment.type == "Image" or (attachment | has_media_type("image")) %}
                     {% if attachment.url not in object.inlined_images %}
                     <a class="media-link" href="{{ attachment.proxied_url }}" target="_blank">
-                        <img src="{{ attachment.resized_url or attachment.proxied_url }}"{% if attachment.name %} title="{{ attachment.name }}" alt="{{ attachment.name }}"{% endif %}{% if attachment.width and attachment.height %} width="{{ attachment.width }}" height="{{ attachment.height }}"{% endif %} class="attachment u-photo" loading="lazy">
+                        <img src="{{ attachment.resized_url or attachment.proxied_url }}"{% if attachment.name %} title="{{ attachment.name }}" alt="{{ attachment.name }}"{% endif %}{% if attachment.width and attachment.height %} width="{{ attachment.width }}" height="{{ attachment.height }}"{% endif %} class="attachment u-photo" loading="lazy"{% if ENABLE_MICRODATA %} itemprop="image"{% endif %}>
                     </a>
                     {% endif %}
                 {% elif attachment.type == "Video" or (attachment | has_media_type("video")) %}
                 <div class="video-wrapper">
-                <video controls preload="metadata" src="{{ attachment.url | media_proxy_url }}"{% if attachment.name %} title="{{ attachment.name }}"{% endif %} class="u-video"></video>
+                <video controls preload="metadata" src="{{ attachment.url | media_proxy_url }}"{% if attachment.name %} title="{{ attachment.name }}"{% endif %} class="u-video"{% if ENABLE_MICRODATA %} itemprop="video"{% endif %}></video>
                 <div class="video-gif-overlay">GIF</div>
                 </div>
                 {% elif attachment.type == "Audio" or (attachment | has_media_type("audio")) %}
-                <audio controls preload="metadata" src="{{ attachment.url | media_proxy_url }}"{% if attachment.name%} title="{{ attachment.name }}"{% endif %} class="attachment u-audio"></audio>
+                <audio controls preload="metadata" src="{{ attachment.url | media_proxy_url }}"{% if attachment.name%} title="{{ attachment.name }}"{% endif %} class="attachment u-audio"{% if ENABLE_MICRODATA %} itemprop="audio"{% endif %}></audio>
                 {% elif attachment.type == "Link" %}
                 <a href="{{ attachment.url }}" class="attachment">{{ attachment.url | truncate(64, True) }}</a> ({{ attachment.mimetype}})
                 {% else %}
