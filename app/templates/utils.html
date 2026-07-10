@@ -82,8 +82,14 @@
 {% elif object.ap_type == "Page" %}
     {% set md_type = "Article" %}
 {% endif %}
+{% set md_container_itemprop = md_container_prop %}
+{% if md_container_prop == "blogPost" and md_type != "BlogPosting" %}
+    {# schema.org's Blog.blogPost only accepts BlogPosting; fall back to the
+       generic CreativeWork.hasPart relation for other post types #}
+    {% set md_container_itemprop = "hasPart" %}
+{% endif %}
 {% if object.ap_type in ["Note", "Article", "Video", "Page", "Question", "Event"] %}
-<div class="ap-object {% if expanded %}ap-object-expanded {% endif %}{% if is_h_entry %}h-entry{% endif %}" id="{{ object.permalink_id }}"{% if ENABLE_MICRODATA %} itemscope itemtype="https://schema.org/{{ md_type }}"{% if md_container_prop %} itemprop="{{ md_container_prop }}"{% endif %}{% endif %}>
+<div class="ap-object {% if expanded %}ap-object-expanded {% endif %}{% if is_h_entry %}h-entry{% endif %}" id="{{ object.permalink_id }}"{% if ENABLE_MICRODATA %} itemscope itemtype="https://schema.org/{{ md_type }}"{% if md_container_itemprop %} itemprop="{{ md_container_itemprop }}"{% endif %}{% endif %}>
 
     {% if ENABLE_MICRODATA %}
     <meta itemprop="inLanguage" content="{{ LANGUAGE_CODE }}">
