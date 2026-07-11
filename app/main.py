@@ -24,6 +24,7 @@ from fastapi import Request
 from fastapi import Response
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.responses import PlainTextResponse
 from fastapi.responses import RedirectResponse
@@ -73,6 +74,10 @@ from app.customization import get_custom_router
 from app.database import AsyncSession
 from app.database import async_session
 from app.database import get_db_session
+from app.mastodon.errors import MastodonError
+from app.mastodon.errors import mastodon_error_handler
+from app.mastodon.oauth import router as mastodon_oauth_router
+from app.mastodon.router import router as mastodon_router
 from app.templates import is_current_user_admin
 from app.uploads import UPLOAD_DIR
 from app.utils import pagination
@@ -243,6 +248,8 @@ app.include_router(admin.unauthenticated_router, prefix="/admin")
 app.include_router(indieauth.router)
 app.include_router(micropub.router)
 app.include_router(webmentions.router)
+app.include_router(mastodon_oauth_router)
+app.include_router(mastodon_router)
 config.load_custom_routes()
 if custom_router := get_custom_router():
     app.include_router(custom_router)
@@ -250,7 +257,29 @@ if custom_router := get_custom_router():
 # XXX: order matters, the proxy middleware needs to be last
 # Typechecks disabled due to https://github.com/encode/starlette/discussions/2451
 app.add_middleware(CustomMiddleware)  # type: ignore
+# Mastodon client apps (Elk, Phanpy…) run in the browser and need CORS; tokens
+# are sent as `Authorization: Bearer`, never cookies, so credentials stay off.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "Idempotency-Key",
+        "X-Requested-With",
+    ],
+    expose_headers=[
+        "Link",
+        "X-RateLimit-Limit",
+        "X-RateLimit-Remaining",
+        "X-RateLimit-Reset",
+    ],
+)
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=config.CONFIG.trusted_hosts)  # type: ignore
+
+app.add_exception_handler(MastodonError, mastodon_error_handler)  # type: ignore
 
 logger.configure(extra={"request_id": "no_req_id"})
 logger.remove()

@@ -1,3 +1,6 @@
+import base64
+import hashlib
+import hmac
 import secrets
 from dataclasses import dataclass
 from datetime import timedelta
@@ -145,6 +148,31 @@ async def indieauth_authorization_endpoint(
     )
 
 
+async def _validate_redirect_uri(
+    db_session: AsyncSession, client_id: str, redirect_uri: str
+) -> None:
+    """If `client_id` is a dynamically-registered `OAuthClient` (via
+    `/oauth/register` or the Mastodon `/api/v1/apps`), `redirect_uri` must be
+    one it registered. Plain IndieAuth clients (client_id is a profile URL,
+    no `OAuthClient` row) are unaffected — this only tightens the flow
+    registered/Mastodon clients actually use.
+    """
+    registered_client = (
+        await db_session.scalars(
+            select(models.OAuthClient).where(models.OAuthClient.client_id == client_id)
+        )
+    ).one_or_none()
+    if not registered_client:
+        return
+
+    allowed_redirect_uris = set(registered_client.redirect_uris or [])
+    if (
+        redirect_uri not in allowed_redirect_uris
+        and redirect_uri != "urn:ietf:wg:oauth:2.0:oob"
+    ):
+        raise HTTPException(status_code=400, detail="redirect_uri_mismatch")
+
+
 @router.post("/admin/indieauth", response_model=None)
 async def indieauth_flow(
     request: Request,
@@ -163,6 +191,8 @@ async def indieauth_flow(
 
     scope = " ".join(map(lambda data: str(data), form_data.getlist("scopes")))
     client_id = str(form_data["client_id"])
+
+    await _validate_redirect_uri(db_session, client_id, redirect_uri)
 
     # TODO: Ensure that me is correct
     # me = form_data.get("me")
@@ -223,10 +253,48 @@ async def _check_auth_code(
         logger.info("redirect_uri/client_id does not match request")
         return False, None
 
+    if not _verify_pkce(auth_code_req, code_verifier):
+        return False, None
+
     auth_code_req.is_used = True
     await db_session.commit()
 
     return True, auth_code_req
+
+
+def _verify_pkce(
+    auth_code_req: models.IndieAuthAuthorizationRequest,
+    code_verifier: str | None,
+) -> bool:
+    """Verify `code_verifier` against the `code_challenge` stored at consent
+    time (RFC 7636). Only enforced when a challenge was actually stored, so
+    non-PKCE IndieAuth clients (empty `code_challenge`) are unaffected.
+    """
+    if not auth_code_req.code_challenge:
+        return True
+
+    if not code_verifier:
+        logger.info("PKCE code_verifier required but missing")
+        return False
+
+    method = (auth_code_req.code_challenge_method or "").upper()
+    if method in ("", "PLAIN"):
+        is_valid = hmac.compare_digest(code_verifier, auth_code_req.code_challenge)
+    elif method == "S256":
+        computed_challenge = (
+            base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode()).digest())
+            .rstrip(b"=")
+            .decode()
+        )
+        is_valid = hmac.compare_digest(computed_challenge, auth_code_req.code_challenge)
+    else:
+        logger.info(f"Unsupported code_challenge_method {method}")
+        return False
+
+    if not is_valid:
+        logger.info("PKCE verification failed")
+
+    return is_valid
 
 
 @router.post("/auth", response_model=None)
@@ -269,45 +337,75 @@ async def indieauth_reedem_auth_code(
         )
 
 
-@router.post("/token", response_model=None)
-async def indieauth_token_endpoint(
-    request: Request,
-    db_session: AsyncSession = Depends(get_db_session),
-) -> JSONResponse:
-    form_data = await request.form()
-    logger.info(f"{form_data=}")
-    grant_type = form_data.get("grant_type", "authorization_code")
-    if grant_type not in ["authorization_code", "refresh_token"]:
-        raise ValueError(f"Invalid grant_type {grant_type}")
+class TokenGrantError(Exception):
+    """Raised by `issue_access_token` on any grant-validation failure.
 
-    # These must match the params from the first request
-    client_id = str(form_data["client_id"])
-    code_verifier = form_data.get("code_verifier")
+    Shared by `/token` (IndieAuth) and the Mastodon-shaped `/oauth/token`
+    (`app/mastodon/oauth.py`) so both can format the error in their own
+    envelope.
+    """
+
+    def __init__(self, error: str, status_code: int = 400) -> None:
+        self.error = error
+        self.status_code = status_code
+        super().__init__(error)
+
+
+async def issue_access_token(
+    db_session: AsyncSession,
+    *,
+    grant_type: str,
+    client_id: str | None,
+    code: str | None = None,
+    redirect_uri: str | None = None,
+    code_verifier: str | None = None,
+    refresh_token_param: str | None = None,
+    expires_in: int,
+    issue_refresh_token: bool,
+) -> models.IndieAuthAccessToken:
+    """Shared grant-processing core for `/token` (IndieAuth) and the
+    Mastodon-shaped `/oauth/token`. Raises `TokenGrantError` on failure.
+
+    `expires_in`/`issue_refresh_token` are caller-chosen: IndieAuth issues
+    short-lived (1h) tokens with rotating refresh tokens, while Mastodon
+    clients never call a refresh grant, so `/oauth/token` mints long-lived,
+    refresh-less tokens instead (see `app/mastodon/oauth.py`).
+
+    Deliberately no `client_credentials` grant: `POST /api/v1/apps` is
+    unauthenticated by design (any client self-registers and receives its own
+    `client_secret` back immediately), so a client_credentials grant checked
+    only against that secret would let anyone mint a token — this server has
+    a single user and no notion of an app-only principal distinct from the
+    owner, so that token would carry real owner-level scopes. Every access
+    token must instead be traced back to the admin's own login/consent
+    (`GET /auth` / `POST /admin/indieauth`).
+    """
+    if grant_type not in ("authorization_code", "refresh_token"):
+        raise TokenGrantError("unsupported_grant_type")
+
+    auth_code_request: models.IndieAuthAuthorizationRequest | None = None
 
     if grant_type == "authorization_code":
-        code = str(form_data["code"])
-        redirect_uri = str(form_data["redirect_uri"])
-        # code_verifier is optional for backward compat
+        if not code or not redirect_uri or not client_id:
+            raise TokenGrantError("invalid_request")
         is_code_valid, auth_code_request = await _check_auth_code(
             db_session,
             code=code,
             client_id=client_id,
             redirect_uri=redirect_uri,
-            code_verifier=str(code_verifier) if code_verifier is not None else None,
+            code_verifier=code_verifier,
         )
         if not is_code_valid or (auth_code_request and not auth_code_request.scope):
-            return JSONResponse(
-                content={"error": "invalid_grant"},
-                status_code=400,
-            )
+            raise TokenGrantError("invalid_grant")
 
     elif grant_type == "refresh_token":
-        refresh_token = str(form_data["refresh_token"])
-        access_token = (
+        if not refresh_token_param:
+            raise TokenGrantError("invalid_request")
+        existing_access_token = (
             await db_session.scalars(
                 select(models.IndieAuthAccessToken)
                 .where(
-                    models.IndieAuthAccessToken.refresh_token == refresh_token,
+                    models.IndieAuthAccessToken.refresh_token == refresh_token_param,
                     models.IndieAuthAccessToken.was_refreshed.is_(False),
                 )
                 .options(
@@ -317,36 +415,91 @@ async def indieauth_token_endpoint(
                 )
             )
         ).one_or_none()
-        if not access_token:
-            raise ValueError("invalid refresh token")
+        if (
+            not existing_access_token
+            or existing_access_token.is_revoked
+            or not existing_access_token.indieauth_authorization_request
+        ):
+            raise TokenGrantError("invalid_grant")
 
-        if access_token.indieauth_authorization_request.client_id != client_id:
-            raise ValueError("invalid client ID")
+        if (
+            client_id
+            and existing_access_token.indieauth_authorization_request.client_id
+            != client_id
+        ):
+            raise TokenGrantError("invalid_grant")
 
-        auth_code_request = access_token.indieauth_authorization_request
-        access_token.was_refreshed = True
+        auth_code_request = existing_access_token.indieauth_authorization_request
+        existing_access_token.was_refreshed = True
 
     if not auth_code_request:
-        raise ValueError("Should never happen")
+        raise TokenGrantError("invalid_grant")
 
     access_token = models.IndieAuthAccessToken(
         indieauth_authorization_request_id=auth_code_request.id,
         access_token=secrets.token_urlsafe(32),
-        refresh_token=secrets.token_urlsafe(32),
-        expires_in=3600,
+        refresh_token=secrets.token_urlsafe(32) if issue_refresh_token else None,
+        expires_in=expires_in,
         scope=auth_code_request.scope,
     )
     db_session.add(access_token)
     await db_session.commit()
+
+    return access_token
+
+
+@router.post("/token", response_model=None)
+async def indieauth_token_endpoint(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+) -> JSONResponse:
+    form_data = await request.form()
+    logger.info(f"{form_data=}")
+    grant_type = str(form_data.get("grant_type", "authorization_code"))
+    if grant_type not in ("authorization_code", "refresh_token"):
+        raise ValueError(f"Invalid grant_type {grant_type}")
+
+    client_id = str(form_data["client_id"])
+    code_verifier = form_data.get("code_verifier")
+
+    try:
+        access_token = await issue_access_token(
+            db_session,
+            grant_type=grant_type,
+            client_id=client_id,
+            code=str(form_data["code"]) if grant_type == "authorization_code" else None,
+            redirect_uri=(
+                str(form_data["redirect_uri"])
+                if grant_type == "authorization_code"
+                else None
+            ),
+            # code_verifier is optional for backward compat
+            code_verifier=str(code_verifier) if code_verifier is not None else None,
+            refresh_token_param=(
+                str(form_data["refresh_token"])
+                if grant_type == "refresh_token"
+                else None
+            ),
+            expires_in=3600,
+            issue_refresh_token=True,
+        )
+    except TokenGrantError as exc:
+        return JSONResponse(
+            content={"error": exc.error},
+            status_code=exc.status_code,
+        )
 
     return JSONResponse(
         content={
             "access_token": access_token.access_token,
             "refresh_token": access_token.refresh_token,
             "token_type": "Bearer",
-            "scope": auth_code_request.scope,
+            "scope": access_token.scope,
             "me": config.ID + "/",
-            "expires_in": 3600,
+            "expires_in": access_token.expires_in,
+            "created_at": int(
+                access_token.created_at.replace(tzinfo=timezone.utc).timestamp()
+            ),
         },
         status_code=200,
     )

@@ -138,6 +138,9 @@ class Config(pydantic.BaseModel):
     # Only set when the app is served on a non-root path
     id: str | None = None
 
+    # Used by the Mastodon client API's /api/v1/instance and /api/v2/instance
+    contact_email: str | None = None
+
 
 def load_config() -> Config:
     try:
@@ -194,6 +197,7 @@ if CONFIG.privacy_replace:
 BLOCKED_SERVERS = {blocked_server.hostname for blocked_server in CONFIG.blocked_servers}
 ALSO_KNOWN_AS = CONFIG.also_known_as
 CUSTOM_CONTENT_SECURITY_POLICY = CONFIG.custom_content_security_policy
+CONTACT_EMAIL = CONFIG.contact_email
 
 INBOX_RETENTION_DAYS = CONFIG.inbox_retention_days
 SESSION_TIMEOUT = CONFIG.session_timeout
