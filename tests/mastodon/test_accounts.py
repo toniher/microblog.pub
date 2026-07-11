@@ -5,6 +5,11 @@ import respx
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from activitypub import activitypub as ap
+from activitypub import boxes
+from activitypub.ap_object import ObjectType
+from activitypub.ap_object import RemoteObject
+from activitypub.tests import factories
 from app import config
 from app import models
 from app.mastodon import ids
@@ -201,3 +206,115 @@ def test_accounts_lookup_remote_actor(
 def test_accounts_lookup_not_found(client: TestClient) -> None:
     response = client.get("/api/v1/accounts/lookup?acct=nobody@nowhere.example")
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_accounts_statuses_owner(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    _, outbox_object = await boxes.send_create(
+        async_db_session,
+        ObjectType.NOTE.value,
+        "My post",
+        uploads=[],
+        in_reply_to=None,
+        visibility=ap.VisibilityEnum.PUBLIC,
+    )
+
+    response = client.get(f"/api/v1/accounts/{ids.LOCAL_ACTOR_ID}/statuses")
+
+    assert response.status_code == 200
+    returned_ids = [status["id"] for status in response.json()]
+    assert ids.encode_outbox_id(outbox_object) in returned_ids
+
+
+def test_accounts_statuses_remote_actor(
+    client: TestClient, respx_mock: respx.MockRouter
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    follower = setup_remote_actor_as_follower(ra)
+    assert follower.actor is not None
+
+    remote_note = RemoteObject(
+        factories.build_note_object(from_remote_actor=ra, content="From them"),
+        ra,
+    )
+    inbox_object = factories.InboxObjectFactory.from_remote_object(
+        remote_note, follower.actor
+    )
+
+    response = client.get(
+        f"/api/v1/accounts/{ids.encode_account_id(follower.actor)}/statuses"
+    )
+
+    assert response.status_code == 200
+    returned_ids = [status["id"] for status in response.json()]
+    assert ids.encode_inbox_id(inbox_object) in returned_ids
+
+
+def test_accounts_statuses_unknown_actor_404s(client: TestClient) -> None:
+    response = client.get("/api/v1/accounts/999999/statuses")
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_accounts_statuses_owner_hides_non_public_from_anonymous_callers(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    _, public_post = await boxes.send_create(
+        async_db_session,
+        ObjectType.NOTE.value,
+        "Public post",
+        uploads=[],
+        in_reply_to=None,
+        visibility=ap.VisibilityEnum.PUBLIC,
+    )
+    _, direct_post = await boxes.send_create(
+        async_db_session,
+        ObjectType.NOTE.value,
+        "Direct message",
+        uploads=[],
+        in_reply_to=None,
+        visibility=ap.VisibilityEnum.DIRECT,
+    )
+
+    anonymous_response = client.get(f"/api/v1/accounts/{ids.LOCAL_ACTOR_ID}/statuses")
+    anonymous_ids = {status["id"] for status in anonymous_response.json()}
+    assert ids.encode_outbox_id(public_post) in anonymous_ids
+    assert ids.encode_outbox_id(direct_post) not in anonymous_ids
+
+    token = await _make_access_token(async_db_session, "read:statuses")
+    admin_response = client.get(
+        f"/api/v1/accounts/{ids.LOCAL_ACTOR_ID}/statuses",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    admin_ids = {status["id"] for status in admin_response.json()}
+    assert ids.encode_outbox_id(direct_post) in admin_ids
+
+
+@pytest.mark.asyncio
+async def test_statuses_favourited_by_404s_for_private_status(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    _, private_post = await boxes.send_create(
+        async_db_session,
+        ObjectType.NOTE.value,
+        "Followers only",
+        uploads=[],
+        in_reply_to=None,
+        visibility=ap.VisibilityEnum.FOLLOWERS_ONLY,
+    )
+    status_id = ids.encode_outbox_id(private_post)
+
+    favourited_by = client.get(f"/api/v1/statuses/{status_id}/favourited_by")
+    assert favourited_by.status_code == 404
+
+    reblogged_by = client.get(f"/api/v1/statuses/{status_id}/reblogged_by")
+    assert reblogged_by.status_code == 404
+
+    token = await _make_access_token(async_db_session, "read:statuses")
+    authorized = client.get(
+        f"/api/v1/statuses/{status_id}/favourited_by",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert authorized.status_code == 200

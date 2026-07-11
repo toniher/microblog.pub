@@ -405,6 +405,11 @@ class Upload(Base):
 
     has_thumbnail = Column(Boolean, nullable=False)
 
+    # Alt text set via the Mastodon media API (POST/PUT /api/v1/media), which
+    # uploads media before a status exists to attach it to — unlike
+    # OutboxObjectAttachment.alt, this must survive independently of any post.
+    description = Column(String, nullable=True)
+
     # Only set for images
     blurhash = Column(String, nullable=True)
     width = Column(Integer, nullable=True)

@@ -1,32 +1,51 @@
 """Mastodon client REST API — /api/v1 and /api/v2 endpoints.
 
 Grown incrementally across build phases; see PLAN-0.md for the full map.
-This module currently covers Phase 0's instance/meta surface and Phase 1a's
-accounts/relationships surface.
+This module currently covers Phase 0's instance/meta surface, Phase 1a's
+accounts/relationships surface, Phase 1b's timelines/statuses surface,
+Phase 1c's notifications + read-degradation surface, and Phase 2a's media
+upload surface.
 """
 
 from datetime import datetime
 from datetime import timezone
+from typing import cast
 from urllib.parse import urlparse
 
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import Request
+from fastapi import UploadFile as FastAPIUploadFile
+from sqlalchemy import delete
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
+from starlette.datastructures import UploadFile
 from starlette.responses import JSONResponse
 
 import activitypub.models
+from activitypub import activitypub as ap
 from activitypub.actor import get_actors_metadata
+from activitypub.boxes import AnyboxObject
+from activitypub.boxes import ReplyTreeNode
+from activitypub.boxes import get_replies_tree
+from activitypub.boxes import send_announce
+from activitypub.boxes import send_create
+from activitypub.boxes import send_delete
+from activitypub.boxes import send_like
+from activitypub.boxes import send_undo
+from activitypub.boxes import send_vote
 from app import config
+from app import models
 from app.database import AsyncSession
 from app.database import get_db_session
 from app.indieauth import AccessTokenInfo
+from app.indieauth import check_access_token
 from app.mastodon import ids
 from app.mastodon import pagination
 from app.mastodon import serializers
 from app.mastodon.errors import MastodonError
 from app.mastodon.scopes import require_scope
+from app.uploads import save_upload
 from app.utils.emoji import EMOJIS
 
 router = APIRouter()
@@ -360,6 +379,117 @@ async def accounts_show(
     )
 
 
+async def _respond_with_status_list(
+    request: Request, db_session: AsyncSession, objects: list
+) -> JSONResponse:
+    statuses = [await serializers.serialize_status(db_session, obj) for obj in objects]
+    response = JSONResponse(content=statuses, status_code=200)
+    link_header = pagination.build_link_header(
+        request, [status["id"] for status in statuses]
+    )
+    if link_header:
+        response.headers["Link"] = link_header
+    return response
+
+
+@router.get("/api/v1/accounts/{account_id}/statuses", response_model=None)
+async def accounts_statuses(
+    account_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+) -> JSONResponse:
+    params = pagination.parse_pagination(request)
+    exclude_replies = request.query_params.get("exclude_replies") == "true"
+    pinned_only = request.query_params.get("pinned") == "true"
+    # Only the owner's own authenticated session may see non-public posts
+    # here (e.g. followers-only or direct posts/DMs); everyone else gets the
+    # public-facing view, matching statuses_show's visibility gate.
+    is_admin = await _is_authenticated_admin(request, db_session)
+    allowed_visibility = (
+        list(ap.VisibilityEnum)
+        if is_admin
+        else [ap.VisibilityEnum.PUBLIC, ap.VisibilityEnum.UNLISTED]
+    )
+
+    if account_id == ids.LOCAL_ACTOR_ID:
+        query = (
+            select(activitypub.models.OutboxObject)
+            .where(
+                activitypub.models.OutboxObject.is_deleted.is_(False),
+                activitypub.models.OutboxObject.ap_type.in_(
+                    ["Note", "Article", "Question"]
+                ),
+                activitypub.models.OutboxObject.visibility.in_(allowed_visibility),
+            )
+            .options(
+                joinedload(
+                    activitypub.models.OutboxObject.outbox_object_attachments
+                ).joinedload(activitypub.models.OutboxObjectAttachment.upload)
+            )
+            .order_by(activitypub.models.OutboxObject.id.desc())
+            .limit(params.limit)
+        )
+        if pinned_only:
+            query = query.where(activitypub.models.OutboxObject.is_pinned.is_(True))
+        if exclude_replies:
+            query = query.where(
+                activitypub.models.OutboxObject.is_hidden_from_homepage.is_(False)
+            )
+        if params.max_id:
+            decoded = ids.decode_object_id_for_source(
+                params.max_id, ids.ObjectSource.OUTBOX
+            )
+            if decoded is not None:
+                query = query.where(activitypub.models.OutboxObject.id < decoded)
+        cursor = params.min_id or params.since_id
+        if cursor:
+            decoded = ids.decode_object_id_for_source(cursor, ids.ObjectSource.OUTBOX)
+            if decoded is not None:
+                query = query.where(activitypub.models.OutboxObject.id > decoded)
+
+        items = (await db_session.scalars(query)).unique().all()
+        return await _respond_with_status_list(request, db_session, items)
+
+    actor = await ids.get_account_by_mastodon_id(db_session, account_id)
+    if actor is None:
+        raise MastodonError(404, "not_found", "account not found")
+
+    if pinned_only:
+        # We don't track pins on a remote actor's own posts.
+        return JSONResponse(content=[], status_code=200)
+
+    query = (
+        select(activitypub.models.InboxObject)
+        .where(
+            activitypub.models.InboxObject.ap_actor_id == actor.ap_id,
+            activitypub.models.InboxObject.is_deleted.is_(False),
+            activitypub.models.InboxObject.ap_type.in_(
+                ["Note", "Article", "Question", "Announce"]
+            ),
+            activitypub.models.InboxObject.visibility.in_(allowed_visibility),
+        )
+        .options(joinedload(activitypub.models.InboxObject.actor))
+        .order_by(activitypub.models.InboxObject.id.desc())
+        .limit(params.limit)
+    )
+    if exclude_replies:
+        query = query.where(
+            activitypub.models.InboxObject.is_hidden_from_stream.is_(False)
+        )
+    if params.max_id:
+        decoded = ids.decode_object_id_for_source(params.max_id, ids.ObjectSource.INBOX)
+        if decoded is not None:
+            query = query.where(activitypub.models.InboxObject.id < decoded)
+    cursor = params.min_id or params.since_id
+    if cursor:
+        decoded = ids.decode_object_id_for_source(cursor, ids.ObjectSource.INBOX)
+        if decoded is not None:
+            query = query.where(activitypub.models.InboxObject.id > decoded)
+
+    items = (await db_session.scalars(query)).unique().all()
+    return await _respond_with_status_list(request, db_session, items)
+
+
 async def _paginated_actor_list(
     request: Request,
     db_session: AsyncSession,
@@ -444,3 +574,1132 @@ async def accounts_following(
         model=activitypub.models.Following,
         join_column=activitypub.models.Following.actor_id,
     )
+
+
+# --- Statuses ----------------------------------------------------------------
+
+
+async def _is_authenticated_admin(request: Request, db_session: AsyncSession) -> bool:
+    """Every valid access token belongs to the single owner (no
+    client_credentials/multi-user support — see PR-0b's security fix), so a
+    valid token always means "the admin is asking".
+    """
+    token_info = await check_access_token(request, db_session)
+    return token_info is not None
+
+
+async def _get_visible_status_or_404(
+    request: Request, db_session: AsyncSession, status_id: str
+) -> AnyboxObject:
+    obj = await ids.get_object_by_mastodon_id(db_session, status_id)
+    if obj is None or obj.is_deleted:
+        raise MastodonError(404, "not_found", "status not found")
+
+    if obj.visibility not in (ap.VisibilityEnum.PUBLIC, ap.VisibilityEnum.UNLISTED):
+        if not await _is_authenticated_admin(request, db_session):
+            raise MastodonError(404, "not_found", "status not found")
+
+    return obj
+
+
+@router.get("/api/v1/statuses/{status_id}", response_model=None)
+async def statuses_show(
+    status_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+) -> JSONResponse:
+    obj = await _get_visible_status_or_404(request, db_session, status_id)
+    return JSONResponse(
+        content=await serializers.serialize_status(db_session, obj), status_code=200
+    )
+
+
+def _find_node_with_ancestors(
+    node: ReplyTreeNode, target_ap_id: str, path: list[ReplyTreeNode]
+) -> tuple[ReplyTreeNode, list[ReplyTreeNode]] | None:
+    if node.ap_object is not None and node.ap_object.ap_id == target_ap_id:
+        return node, path
+    for child in node.children:
+        found = _find_node_with_ancestors(child, target_ap_id, path + [node])
+        if found is not None:
+            return found
+    return None
+
+
+def _flatten_descendants(node: ReplyTreeNode) -> list[ReplyTreeNode]:
+    out = []
+    for child in node.children:
+        out.append(child)
+        out.extend(_flatten_descendants(child))
+    return out
+
+
+@router.get("/api/v1/statuses/{status_id}/context", response_model=None)
+async def statuses_context(
+    status_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+) -> JSONResponse:
+    obj = await _get_visible_status_or_404(request, db_session, status_id)
+    is_admin = await _is_authenticated_admin(request, db_session)
+
+    tree = await get_replies_tree(db_session, obj, is_admin)
+    found = _find_node_with_ancestors(tree, obj.ap_id, [])
+
+    ancestor_nodes: list[ReplyTreeNode] = []
+    descendant_nodes: list[ReplyTreeNode] = []
+    if found is not None:
+        requested_node, ancestor_nodes = found
+        descendant_nodes = _flatten_descendants(requested_node)
+
+    ancestors = [
+        await serializers.serialize_status(db_session, node.ap_object)
+        for node in ancestor_nodes
+        if node.ap_object is not None
+    ]
+    descendants = [
+        await serializers.serialize_status(db_session, node.ap_object)
+        for node in descendant_nodes
+        if node.ap_object is not None
+    ]
+
+    return JSONResponse(
+        content={"ancestors": ancestors, "descendants": descendants},
+        status_code=200,
+    )
+
+
+@router.get("/api/v1/statuses/{status_id}/favourited_by", response_model=None)
+async def statuses_favourited_by(
+    status_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+) -> JSONResponse:
+    # Same visibility gate as statuses_show: a private/direct status's likers
+    # must not be discoverable (nor its existence confirmed) by non-admins.
+    obj = await _get_visible_status_or_404(request, db_session, status_id)
+    if not isinstance(obj, activitypub.models.OutboxObject):
+        # We only know who liked OUR OWN posts (their Like activities land in
+        # our inbox); a remote post's likers aren't visible to us.
+        return JSONResponse(content=[], status_code=200)
+
+    likers = (
+        (
+            await db_session.scalars(
+                select(activitypub.models.InboxObject)
+                .where(
+                    activitypub.models.InboxObject.ap_type == "Like",
+                    activitypub.models.InboxObject.activity_object_ap_id == obj.ap_id,
+                    activitypub.models.InboxObject.undone_by_inbox_object_id.is_(None),
+                )
+                .options(joinedload(activitypub.models.InboxObject.actor))
+            )
+        )
+        .unique()
+        .all()
+    )
+
+    accounts = [
+        await serializers.serialize_account(db_session, like.actor) for like in likers
+    ]
+    return JSONResponse(content=accounts, status_code=200)
+
+
+@router.get("/api/v1/statuses/{status_id}/reblogged_by", response_model=None)
+async def statuses_reblogged_by(
+    status_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+) -> JSONResponse:
+    obj = await _get_visible_status_or_404(request, db_session, status_id)
+    if not isinstance(obj, activitypub.models.OutboxObject):
+        return JSONResponse(content=[], status_code=200)
+
+    boosters = (
+        (
+            await db_session.scalars(
+                select(activitypub.models.InboxObject)
+                .where(
+                    activitypub.models.InboxObject.ap_type == "Announce",
+                    activitypub.models.InboxObject.activity_object_ap_id == obj.ap_id,
+                    activitypub.models.InboxObject.undone_by_inbox_object_id.is_(None),
+                )
+                .options(joinedload(activitypub.models.InboxObject.actor))
+            )
+        )
+        .unique()
+        .all()
+    )
+
+    accounts = [
+        await serializers.serialize_account(db_session, boost.actor)
+        for boost in boosters
+    ]
+    return JSONResponse(content=accounts, status_code=200)
+
+
+# --- Timelines -----------------------------------------------------------------
+
+
+async def _resolve_cursor_published_at(
+    db_session: AsyncSession, mastodon_id: str | None
+) -> datetime | None:
+    if not mastodon_id:
+        return None
+    obj = await ids.get_object_by_mastodon_id(db_session, mastodon_id)
+    return obj.ap_published_at if obj else None
+
+
+def _published_at(obj: AnyboxObject) -> datetime:
+    return obj.ap_published_at or datetime.min.replace(tzinfo=timezone.utc)
+
+
+async def _fetch_inbox_timeline_page(
+    db_session: AsyncSession,
+    *,
+    before: datetime | None,
+    after: datetime | None,
+    limit: int,
+    extra_where: tuple = (),
+) -> list[activitypub.models.InboxObject]:
+    query = (
+        select(activitypub.models.InboxObject)
+        .where(
+            activitypub.models.InboxObject.is_hidden_from_stream.is_(False),
+            activitypub.models.InboxObject.is_deleted.is_(False),
+            *extra_where,
+        )
+        .options(joinedload(activitypub.models.InboxObject.actor))
+        .order_by(activitypub.models.InboxObject.ap_published_at.desc())
+        .limit(limit)
+    )
+    if before:
+        query = query.where(activitypub.models.InboxObject.ap_published_at < before)
+    if after:
+        query = query.where(activitypub.models.InboxObject.ap_published_at > after)
+    return list((await db_session.scalars(query)).unique().all())
+
+
+async def _fetch_outbox_timeline_page(
+    db_session: AsyncSession,
+    *,
+    before: datetime | None,
+    after: datetime | None,
+    limit: int,
+    extra_where: tuple = (),
+) -> list[activitypub.models.OutboxObject]:
+    query = (
+        select(activitypub.models.OutboxObject)
+        .where(
+            activitypub.models.OutboxObject.is_hidden_from_homepage.is_(False),
+            activitypub.models.OutboxObject.is_deleted.is_(False),
+            *extra_where,
+        )
+        .options(
+            joinedload(
+                activitypub.models.OutboxObject.outbox_object_attachments
+            ).joinedload(activitypub.models.OutboxObjectAttachment.upload)
+        )
+        .order_by(activitypub.models.OutboxObject.ap_published_at.desc())
+        .limit(limit)
+    )
+    if before:
+        query = query.where(activitypub.models.OutboxObject.ap_published_at < before)
+    if after:
+        query = query.where(activitypub.models.OutboxObject.ap_published_at > after)
+    return list((await db_session.scalars(query)).unique().all())
+
+
+@router.get("/api/v1/timelines/home", response_model=None)
+async def timelines_home(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:statuses")),
+) -> JSONResponse:
+    params = pagination.parse_pagination(request)
+    before = await _resolve_cursor_published_at(db_session, params.max_id)
+    after = await _resolve_cursor_published_at(
+        db_session, params.min_id or params.since_id
+    )
+
+    # Mixed inbox+outbox timeline: ids aren't comparable across the two
+    # tables, so the cursor is the boundary object's ap_published_at instead
+    # (see PLAN-0.md's pagination design). Fetching `limit` from EACH side
+    # before merging guarantees the merged top-`limit` is correct even if
+    # every recent post came from just one side.
+    inbox_items = await _fetch_inbox_timeline_page(
+        db_session, before=before, after=after, limit=params.limit
+    )
+    outbox_items = await _fetch_outbox_timeline_page(
+        db_session, before=before, after=after, limit=params.limit
+    )
+    combined: list[AnyboxObject] = [*inbox_items, *outbox_items]
+    merged = sorted(
+        combined,
+        key=_published_at,
+        reverse=True,
+    )[: params.limit]
+
+    return await _respond_with_status_list(request, db_session, merged)
+
+
+@router.get("/api/v1/timelines/public", response_model=None)
+async def timelines_public(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+) -> JSONResponse:
+    params = pagination.parse_pagination(request)
+    local_only = request.query_params.get("local") == "true"
+
+    if local_only:
+        # Single table: plain id-based pagination, no published_at cursor
+        # needed.
+        query = (
+            select(activitypub.models.OutboxObject)
+            .where(
+                activitypub.models.OutboxObject.visibility == ap.VisibilityEnum.PUBLIC,
+                activitypub.models.OutboxObject.is_deleted.is_(False),
+            )
+            .options(
+                joinedload(
+                    activitypub.models.OutboxObject.outbox_object_attachments
+                ).joinedload(activitypub.models.OutboxObjectAttachment.upload)
+            )
+            .order_by(activitypub.models.OutboxObject.id.desc())
+            .limit(params.limit)
+        )
+        if params.max_id:
+            decoded = ids.decode_object_id_for_source(
+                params.max_id, ids.ObjectSource.OUTBOX
+            )
+            if decoded is not None:
+                query = query.where(activitypub.models.OutboxObject.id < decoded)
+        cursor = params.min_id or params.since_id
+        if cursor:
+            decoded = ids.decode_object_id_for_source(cursor, ids.ObjectSource.OUTBOX)
+            if decoded is not None:
+                query = query.where(activitypub.models.OutboxObject.id > decoded)
+
+        items = (await db_session.scalars(query)).unique().all()
+        return await _respond_with_status_list(request, db_session, items)
+
+    before = await _resolve_cursor_published_at(db_session, params.max_id)
+    after = await _resolve_cursor_published_at(
+        db_session, params.min_id or params.since_id
+    )
+    inbox_items = await _fetch_inbox_timeline_page(
+        db_session,
+        before=before,
+        after=after,
+        limit=params.limit,
+        extra_where=(
+            activitypub.models.InboxObject.visibility == ap.VisibilityEnum.PUBLIC,
+        ),
+    )
+    outbox_items = await _fetch_outbox_timeline_page(
+        db_session,
+        before=before,
+        after=after,
+        limit=params.limit,
+        extra_where=(
+            activitypub.models.OutboxObject.visibility == ap.VisibilityEnum.PUBLIC,
+        ),
+    )
+    combined: list[AnyboxObject] = [*inbox_items, *outbox_items]
+    merged = sorted(
+        combined,
+        key=_published_at,
+        reverse=True,
+    )[: params.limit]
+
+    return await _respond_with_status_list(request, db_session, merged)
+
+
+@router.get("/api/v1/timelines/tag/{hashtag}", response_model=None)
+async def timelines_tag(
+    hashtag: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+) -> JSONResponse:
+    params = pagination.parse_pagination(request)
+    wanted = hashtag.lstrip("#").lower()
+
+    # Hashtags live inside the ap_object JSON blob, not a queryable column, so
+    # this scans a bounded recent-public-posts window and filters in Python
+    # rather than pushing the predicate into SQL. Fine for a single-user
+    # instance's post volume; not a real search index.
+    before = await _resolve_cursor_published_at(db_session, params.max_id)
+    after = await _resolve_cursor_published_at(
+        db_session, params.min_id or params.since_id
+    )
+    scan_limit = max(params.limit * 5, 100)
+
+    inbox_items = await _fetch_inbox_timeline_page(
+        db_session,
+        before=before,
+        after=after,
+        limit=scan_limit,
+        extra_where=(
+            activitypub.models.InboxObject.visibility == ap.VisibilityEnum.PUBLIC,
+        ),
+    )
+    outbox_items = await _fetch_outbox_timeline_page(
+        db_session,
+        before=before,
+        after=after,
+        limit=scan_limit,
+        extra_where=(
+            activitypub.models.OutboxObject.visibility == ap.VisibilityEnum.PUBLIC,
+        ),
+    )
+
+    def _has_tag(obj: AnyboxObject) -> bool:
+        return any(
+            tag.get("type") == "Hashtag"
+            and tag.get("name", "").lstrip("#").lower() == wanted
+            for tag in obj.tags
+        )
+
+    combined: list[AnyboxObject] = [*inbox_items, *outbox_items]
+    candidates = [obj for obj in combined if _has_tag(obj)]
+    merged = sorted(candidates, key=_published_at, reverse=True)[: params.limit]
+
+    return await _respond_with_status_list(request, db_session, merged)
+
+
+# --- Notifications -------------------------------------------------------------
+
+# Only these carry a real Mastodon equivalent. Everything else (undo_*,
+# webmention_*, block/unblock, unfollow, follow_request_accepted/rejected) has
+# no matching Mastodon notification type, so it's filtered out entirely
+# rather than surfaced with a made-up/incorrect `type`.
+_NOTIFICATION_TYPE_MAP = {
+    models.NotificationType.NEW_FOLLOWER: "follow",
+    models.NotificationType.PENDING_INCOMING_FOLLOWER: "follow_request",
+    models.NotificationType.LIKE: "favourite",
+    models.NotificationType.ANNOUNCE: "reblog",
+    models.NotificationType.MENTION: "mention",
+    models.NotificationType.MOVE: "move",
+}
+
+_NOTIFICATION_OPTIONS = [
+    joinedload(models.Notification.actor),
+    joinedload(models.Notification.inbox_object).options(
+        joinedload(activitypub.models.InboxObject.actor)
+    ),
+    joinedload(models.Notification.outbox_object).options(
+        joinedload(activitypub.models.OutboxObject.outbox_object_attachments).options(
+            joinedload(activitypub.models.OutboxObjectAttachment.upload)
+        ),
+    ),
+]
+
+
+def _decode_notification_id(mastodon_id: str) -> int | None:
+    # Notifications are a single table (unlike statuses/accounts), so the
+    # Mastodon id is just the row's own PK — no dual-table encoding needed.
+    try:
+        return int(mastodon_id)
+    except ValueError:
+        return None
+
+
+async def _serialize_notification(
+    db_session: AsyncSession, notification: models.Notification
+) -> dict | None:
+    if notification.notification_type is None or notification.actor is None:
+        return None
+
+    mastodon_type = _NOTIFICATION_TYPE_MAP.get(notification.notification_type)
+    if mastodon_type is None:
+        return None
+
+    created_at = notification.created_at or datetime.min.replace(tzinfo=timezone.utc)
+    result = {
+        "id": str(notification.id),
+        "type": mastodon_type,
+        "created_at": created_at.replace(tzinfo=timezone.utc)
+        .isoformat()
+        .replace("+00:00", "Z"),
+        "account": await serializers.serialize_account(db_session, notification.actor),
+    }
+
+    target = notification.outbox_object or notification.inbox_object
+    if target is not None:
+        result["status"] = await serializers.serialize_status(db_session, target)
+
+    return result
+
+
+@router.get("/api/v1/notifications", response_model=None)
+async def notifications_list(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:notifications")),
+) -> JSONResponse:
+    params = pagination.parse_pagination(request)
+    include_types = set(request.query_params.getlist("types[]"))
+    exclude_types = set(request.query_params.getlist("exclude_types[]"))
+
+    allowed_internal_types = list(_NOTIFICATION_TYPE_MAP.keys())
+    if include_types:
+        allowed_internal_types = [
+            t
+            for t in allowed_internal_types
+            if _NOTIFICATION_TYPE_MAP[t] in include_types
+        ]
+    if exclude_types:
+        allowed_internal_types = [
+            t
+            for t in allowed_internal_types
+            if _NOTIFICATION_TYPE_MAP[t] not in exclude_types
+        ]
+
+    query = (
+        select(models.Notification)
+        .where(models.Notification.notification_type.in_(allowed_internal_types))
+        .options(*_NOTIFICATION_OPTIONS)
+        .order_by(models.Notification.id.desc())
+        .limit(params.limit)
+    )
+    if params.max_id:
+        decoded = _decode_notification_id(params.max_id)
+        if decoded is not None:
+            query = query.where(models.Notification.id < decoded)
+    cursor = params.min_id or params.since_id
+    if cursor:
+        decoded = _decode_notification_id(cursor)
+        if decoded is not None:
+            query = query.where(models.Notification.id > decoded)
+
+    notifications = list((await db_session.scalars(query)).unique().all())
+
+    serialized = [
+        entity
+        for notif in notifications
+        if (entity := await _serialize_notification(db_session, notif)) is not None
+    ]
+
+    # Mirror the existing HTML notifications page (app/admin.py): viewing
+    # marks them read.
+    if any(notif.is_new for notif in notifications):
+        for notif in notifications:
+            notif.is_new = False
+        await db_session.commit()
+
+    response = JSONResponse(content=serialized, status_code=200)
+    link_header = pagination.build_link_header(
+        request, [entity["id"] for entity in serialized]
+    )
+    if link_header:
+        response.headers["Link"] = link_header
+    return response
+
+
+@router.get("/api/v1/notifications/{notification_id}", response_model=None)
+async def notifications_show(
+    notification_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:notifications")),
+) -> JSONResponse:
+    internal_id = _decode_notification_id(notification_id)
+    notification = (
+        await db_session.get(
+            models.Notification, internal_id, options=_NOTIFICATION_OPTIONS
+        )
+        if internal_id is not None
+        else None
+    )
+    serialized = (
+        await _serialize_notification(db_session, notification)
+        if notification is not None
+        else None
+    )
+    if serialized is None:
+        raise MastodonError(404, "not_found", "notification not found")
+
+    return JSONResponse(content=serialized, status_code=200)
+
+
+@router.post("/api/v1/notifications/clear", response_model=None)
+async def notifications_clear(
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:notifications")),
+) -> JSONResponse:
+    await db_session.execute(delete(models.Notification))
+    await db_session.commit()
+    return JSONResponse(content={}, status_code=200)
+
+
+@router.post("/api/v1/notifications/{notification_id}/dismiss", response_model=None)
+async def notifications_dismiss(
+    notification_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:notifications")),
+) -> JSONResponse:
+    internal_id = _decode_notification_id(notification_id)
+    if internal_id is not None:
+        await db_session.execute(
+            delete(models.Notification).where(models.Notification.id == internal_id)
+        )
+        await db_session.commit()
+    return JSONResponse(content={}, status_code=200)
+
+
+# --- Single-user degradations ---------------------------------------------------
+# Multi-user-only Mastodon features this single-user server has no data for.
+# Empty collection (or harmless no-op) rather than 404, so clients render an
+# empty state instead of an error. `follow_requests` stays here (not a real
+# list) until PR-3 lands accept/reject — no point showing a request the
+# client can't yet act on.
+
+
+@router.get("/api/v1/lists", response_model=None)
+async def lists_index(
+    token_info: AccessTokenInfo = Depends(require_scope("read")),
+) -> JSONResponse:
+    return JSONResponse(content=[], status_code=200)
+
+
+@router.get("/api/v1/filters", response_model=None)
+async def filters_v1_index(
+    token_info: AccessTokenInfo = Depends(require_scope("read")),
+) -> JSONResponse:
+    return JSONResponse(content=[], status_code=200)
+
+
+@router.get("/api/v2/filters", response_model=None)
+async def filters_v2_index(
+    token_info: AccessTokenInfo = Depends(require_scope("read")),
+) -> JSONResponse:
+    return JSONResponse(content=[], status_code=200)
+
+
+@router.get("/api/v1/suggestions", response_model=None)
+async def suggestions_v1_index(
+    token_info: AccessTokenInfo = Depends(require_scope("read")),
+) -> JSONResponse:
+    return JSONResponse(content=[], status_code=200)
+
+
+@router.get("/api/v2/suggestions", response_model=None)
+async def suggestions_v2_index(
+    token_info: AccessTokenInfo = Depends(require_scope("read")),
+) -> JSONResponse:
+    return JSONResponse(content=[], status_code=200)
+
+
+@router.get("/api/v1/mutes", response_model=None)
+async def mutes_index(
+    token_info: AccessTokenInfo = Depends(require_scope("read")),
+) -> JSONResponse:
+    return JSONResponse(content=[], status_code=200)
+
+
+@router.get("/api/v1/follow_requests", response_model=None)
+async def follow_requests_index(
+    token_info: AccessTokenInfo = Depends(require_scope("read")),
+) -> JSONResponse:
+    return JSONResponse(content=[], status_code=200)
+
+
+# Public, unauthenticated in real Mastodon too.
+
+
+@router.get("/api/v1/directory", response_model=None)
+async def directory_index() -> JSONResponse:
+    return JSONResponse(content=[], status_code=200)
+
+
+@router.get("/api/v1/trends/tags", response_model=None)
+async def trends_tags() -> JSONResponse:
+    return JSONResponse(content=[], status_code=200)
+
+
+@router.get("/api/v1/trends/statuses", response_model=None)
+async def trends_statuses() -> JSONResponse:
+    return JSONResponse(content=[], status_code=200)
+
+
+@router.get("/api/v1/trends/links", response_model=None)
+async def trends_links() -> JSONResponse:
+    return JSONResponse(content=[], status_code=200)
+
+
+# --- Media -----------------------------------------------------------------
+# No async processing state machine: `save_upload` (EXIF-strip, blurhash,
+# thumbnail) runs inline, so every response here is the final, fully
+# populated MediaAttachment — never Mastodon's `206`/still-processing shape.
+
+
+@router.post("/api/v2/media", response_model=None)
+async def media_create(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:media")),
+) -> JSONResponse:
+    form = await request.form()
+    file = form.get("file")
+    if not isinstance(file, UploadFile):
+        raise MastodonError(422, "validation_failed", "file is required")
+
+    # request.form() always returns Starlette's base UploadFile, never
+    # FastAPI's subclass (that only comes from `File(...)` dependency
+    # injection) — save_upload only touches attributes both share.
+    upload = await save_upload(db_session, cast(FastAPIUploadFile, file))
+    if upload is None:
+        raise MastodonError(422, "validation_failed", "unable to process upload")
+
+    description = form.get("description")
+    if description:
+        upload.description = str(description)
+        await db_session.commit()
+
+    return JSONResponse(content=serializers.serialize_upload(upload), status_code=200)
+
+
+@router.post("/api/v1/media", response_model=None)
+async def media_create_v1(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:media")),
+) -> JSONResponse:
+    return await media_create(request, db_session, token_info)
+
+
+@router.get("/api/v1/media/{media_id}", response_model=None)
+async def media_show(
+    media_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:media")),
+) -> JSONResponse:
+    upload = await ids.get_upload_by_mastodon_id(db_session, media_id)
+    if upload is None:
+        raise MastodonError(404, "not_found", "media not found")
+
+    return JSONResponse(content=serializers.serialize_upload(upload), status_code=200)
+
+
+@router.put("/api/v1/media/{media_id}", response_model=None)
+async def media_update(
+    media_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:media")),
+) -> JSONResponse:
+    upload = await ids.get_upload_by_mastodon_id(db_session, media_id)
+    if upload is None:
+        raise MastodonError(404, "not_found", "media not found")
+
+    form = await request.form()
+    if "description" in form:
+        description = form.get("description")
+        upload.description = str(description) if description else None
+        await db_session.commit()
+
+    return JSONResponse(content=serializers.serialize_upload(upload), status_code=200)
+
+
+# --- Status writes / interactions / polls -----------------------------------
+
+_MASTODON_VISIBILITY_TO_AP = {
+    "public": ap.VisibilityEnum.PUBLIC,
+    "unlisted": ap.VisibilityEnum.UNLISTED,
+    "private": ap.VisibilityEnum.FOLLOWERS_ONLY,
+    "direct": ap.VisibilityEnum.DIRECT,
+}
+
+# In-process only (not persisted, not shared across workers) — enough to stop
+# a client's retried POST from double-posting within this process's lifetime,
+# without standing up a Redis-like store for a single-user server.
+_IDEMPOTENCY_CACHE: dict[str, str] = {}
+
+
+@router.post("/api/v1/statuses", response_model=None)
+async def statuses_create(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:statuses")),
+) -> JSONResponse:
+    idempotency_key = request.headers.get("Idempotency-Key")
+    cache_key = (
+        f"{token_info.access_token}:{idempotency_key}" if idempotency_key else None
+    )
+    if cache_key and cache_key in _IDEMPOTENCY_CACHE:
+        cached = await ids.get_object_by_mastodon_id(
+            db_session, _IDEMPOTENCY_CACHE[cache_key]
+        )
+        if cached is not None:
+            return JSONResponse(
+                content=await serializers.serialize_status(db_session, cached),
+                status_code=200,
+            )
+
+    form = await request.form()
+
+    content_value = form.get("status")
+    content = str(content_value) if content_value is not None else ""
+    content_warning_value = form.get("spoiler_text")
+    content_warning = str(content_warning_value) if content_warning_value else None
+    sensitive = str(form.get("sensitive", "")).lower() == "true"
+
+    media_ids = form.getlist("media_ids[]") or form.getlist("media_ids")
+    uploads = []
+    for media_id in media_ids:
+        upload = await ids.get_upload_by_mastodon_id(db_session, str(media_id))
+        if upload is None:
+            raise MastodonError(
+                422, "validation_failed", f"unknown media id {media_id}"
+            )
+        uploads.append(
+            (upload, serializers.synthetic_filename(upload), upload.description)
+        )
+
+    # Mirrors the existing HTML new-post form (app/admin.py): a CW with no
+    # body text but attached media becomes the visible content instead.
+    if not content and content_warning and uploads:
+        content = content_warning
+        sensitive = True
+        content_warning = None
+
+    if not content:
+        raise MastodonError(422, "validation_failed", "status is required")
+
+    in_reply_to_id = form.get("in_reply_to_id")
+    in_reply_to = None
+    if in_reply_to_id:
+        parent = await ids.get_object_by_mastodon_id(db_session, str(in_reply_to_id))
+        if parent is None:
+            raise MastodonError(422, "validation_failed", "in_reply_to_id not found")
+        in_reply_to = parent.ap_id
+
+    visibility_param = str(form.get("visibility") or "public")
+    visibility = _MASTODON_VISIBILITY_TO_AP.get(visibility_param)
+    if visibility is None:
+        raise MastodonError(422, "validation_failed", "invalid visibility")
+
+    language_value = form.get("language")
+    language = str(language_value) if language_value else None
+
+    ap_type = "Note"
+    poll_type = None
+    poll_answers = None
+    poll_duration_in_minutes = None
+    poll_options = form.getlist("poll[options][]")
+    if poll_options:
+        ap_type = "Question"
+        poll_answers = [str(option) for option in poll_options]
+        if len(poll_answers) < 2:
+            raise MastodonError(
+                422, "validation_failed", "poll must have at least 2 options"
+            )
+        multiple = str(form.get("poll[multiple]", "")).lower() == "true"
+        poll_type = "anyOf" if multiple else "oneOf"
+        expires_in_value = form.get("poll[expires_in]")
+        expires_in_seconds = int(str(expires_in_value)) if expires_in_value else 3600
+        # send_create takes whole minutes; never round a short-lived poll
+        # down to 0 (which would mean "no expiration" / immediately expired).
+        poll_duration_in_minutes = max(1, expires_in_seconds // 60)
+
+    _, outbox_object = await send_create(
+        db_session,
+        ap_type=ap_type,
+        source=content,
+        uploads=uploads,
+        in_reply_to=in_reply_to,
+        visibility=visibility,
+        content_warning=content_warning,
+        is_sensitive=True if content_warning else sensitive,
+        poll_type=poll_type,
+        poll_answers=poll_answers,
+        poll_duration_in_minutes=poll_duration_in_minutes,
+        name=None,
+        language=language,
+    )
+
+    status_id = ids.encode_outbox_id(outbox_object)
+    if cache_key:
+        _IDEMPOTENCY_CACHE[cache_key] = status_id
+
+    # Re-fetch through the eager-loading helper: `outbox_object` as returned
+    # by send_create doesn't have outbox_object_attachments loaded, and it's
+    # already in the session's identity map (see ids.py's populate_existing).
+    created = await ids.get_object_by_mastodon_id(db_session, status_id)
+    assert created is not None
+    return JSONResponse(
+        content=await serializers.serialize_status(db_session, created),
+        status_code=200,
+    )
+
+
+@router.delete("/api/v1/statuses/{status_id}", response_model=None)
+async def statuses_delete(
+    status_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:statuses")),
+) -> JSONResponse:
+    obj = await ids.get_object_by_mastodon_id(db_session, status_id)
+    if obj is None or not isinstance(obj, activitypub.models.OutboxObject):
+        raise MastodonError(404, "not_found", "status not found")
+
+    # Capture the source text for client-side redraft before deleting —
+    # matches Mastodon's DELETE response, which includes the original text.
+    serialized = await serializers.serialize_status(db_session, obj)
+    serialized["text"] = obj.source or ""
+
+    await send_delete(db_session, obj.ap_id)
+
+    return JSONResponse(content=serialized, status_code=200)
+
+
+@router.post("/api/v1/statuses/{status_id}/favourite", response_model=None)
+async def statuses_favourite(
+    status_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:favourites")),
+) -> JSONResponse:
+    obj = await _get_visible_status_or_404(request, db_session, status_id)
+    await send_like(db_session, obj.ap_id)
+    return JSONResponse(
+        content=await serializers.serialize_status(db_session, obj), status_code=200
+    )
+
+
+@router.post("/api/v1/statuses/{status_id}/unfavourite", response_model=None)
+async def statuses_unfavourite(
+    status_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:favourites")),
+) -> JSONResponse:
+    obj = await _get_visible_status_or_404(request, db_session, status_id)
+    like_ap_id = getattr(obj, "liked_via_outbox_object_ap_id", None)
+    if like_ap_id:
+        await send_undo(db_session, like_ap_id)
+    return JSONResponse(
+        content=await serializers.serialize_status(db_session, obj), status_code=200
+    )
+
+
+@router.post("/api/v1/statuses/{status_id}/reblog", response_model=None)
+async def statuses_reblog(
+    status_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:statuses")),
+) -> JSONResponse:
+    obj = await _get_visible_status_or_404(request, db_session, status_id)
+    await send_announce(db_session, obj.ap_id)
+    return JSONResponse(
+        content=await serializers.serialize_status(db_session, obj), status_code=200
+    )
+
+
+@router.post("/api/v1/statuses/{status_id}/unreblog", response_model=None)
+async def statuses_unreblog(
+    status_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:statuses")),
+) -> JSONResponse:
+    obj = await _get_visible_status_or_404(request, db_session, status_id)
+    announce_ap_id = getattr(obj, "announced_via_outbox_object_ap_id", None)
+    if announce_ap_id:
+        await send_undo(db_session, announce_ap_id)
+    return JSONResponse(
+        content=await serializers.serialize_status(db_session, obj), status_code=200
+    )
+
+
+@router.post("/api/v1/statuses/{status_id}/bookmark", response_model=None)
+async def statuses_bookmark(
+    status_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:bookmarks")),
+) -> JSONResponse:
+    obj = await _get_visible_status_or_404(request, db_session, status_id)
+    # OutboxObject has no is_bookmarked column — bookmarking one's own status
+    # is a no-op (matches the existing HTML bookmark action, which only ever
+    # operates on InboxObject too).
+    if isinstance(obj, activitypub.models.InboxObject):
+        obj.is_bookmarked = True
+        await db_session.commit()
+    return JSONResponse(
+        content=await serializers.serialize_status(db_session, obj), status_code=200
+    )
+
+
+@router.post("/api/v1/statuses/{status_id}/unbookmark", response_model=None)
+async def statuses_unbookmark(
+    status_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:bookmarks")),
+) -> JSONResponse:
+    obj = await _get_visible_status_or_404(request, db_session, status_id)
+    if isinstance(obj, activitypub.models.InboxObject):
+        obj.is_bookmarked = False
+        await db_session.commit()
+    return JSONResponse(
+        content=await serializers.serialize_status(db_session, obj), status_code=200
+    )
+
+
+@router.post("/api/v1/statuses/{status_id}/pin", response_model=None)
+async def statuses_pin(
+    status_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:accounts")),
+) -> JSONResponse:
+    obj = await ids.get_object_by_mastodon_id(db_session, status_id)
+    if obj is None or not isinstance(obj, activitypub.models.OutboxObject):
+        raise MastodonError(
+            422, "validation_failed", "only your own statuses can be pinned"
+        )
+    obj.is_pinned = True
+    await db_session.commit()
+    return JSONResponse(
+        content=await serializers.serialize_status(db_session, obj), status_code=200
+    )
+
+
+@router.post("/api/v1/statuses/{status_id}/unpin", response_model=None)
+async def statuses_unpin(
+    status_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:accounts")),
+) -> JSONResponse:
+    obj = await ids.get_object_by_mastodon_id(db_session, status_id)
+    if obj is None or not isinstance(obj, activitypub.models.OutboxObject):
+        raise MastodonError(
+            422, "validation_failed", "only your own statuses can be unpinned"
+        )
+    obj.is_pinned = False
+    await db_session.commit()
+    return JSONResponse(
+        content=await serializers.serialize_status(db_session, obj), status_code=200
+    )
+
+
+@router.get("/api/v1/polls/{poll_id}", response_model=None)
+async def polls_show(
+    poll_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+) -> JSONResponse:
+    obj = await _get_visible_status_or_404(request, db_session, poll_id)
+    poll = serializers.serialize_poll(obj, poll_id)
+    if poll is None:
+        raise MastodonError(404, "not_found", "poll not found")
+    return JSONResponse(content=poll, status_code=200)
+
+
+@router.post("/api/v1/polls/{poll_id}/votes", response_model=None)
+async def polls_vote(
+    poll_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:statuses")),
+) -> JSONResponse:
+    # send_vote only supports voting on a remote (inbox) poll — matches the
+    # existing HTML poll-vote action's own capability.
+    obj = await ids.get_object_by_mastodon_id(db_session, poll_id)
+    if (
+        obj is None
+        or not isinstance(obj, activitypub.models.InboxObject)
+        or not obj.poll_items
+    ):
+        raise MastodonError(404, "not_found", "poll not found")
+    if obj.is_poll_ended:
+        raise MastodonError(422, "validation_failed", "poll has ended")
+
+    form = await request.form()
+    choices = form.getlist("choices[]") or form.getlist("choices")
+    if not choices:
+        raise MastodonError(422, "validation_failed", "choices is required")
+    if obj.is_one_of_poll and len(choices) > 1:
+        raise MastodonError(
+            422, "validation_failed", "this poll only allows a single choice"
+        )
+
+    try:
+        indices = [int(str(choice)) for choice in choices]
+    except ValueError:
+        raise MastodonError(422, "validation_failed", "invalid choice index")
+
+    names = []
+    for index in indices:
+        if index < 0 or index >= len(obj.poll_items):
+            raise MastodonError(422, "validation_failed", "invalid choice index")
+        names.append(obj.poll_items[index].get("name", ""))
+
+    await send_vote(db_session, in_reply_to=obj.ap_id, names=names)
+
+    poll = serializers.serialize_poll(obj, poll_id)
+    if poll is None:
+        raise MastodonError(404, "not_found", "poll not found")
+    return JSONResponse(content=poll, status_code=200)
+
+
+@router.get("/api/v1/bookmarks", response_model=None)
+async def bookmarks_index(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:bookmarks")),
+) -> JSONResponse:
+    params = pagination.parse_pagination(request)
+    query = (
+        select(activitypub.models.InboxObject)
+        .where(
+            activitypub.models.InboxObject.is_bookmarked.is_(True),
+            activitypub.models.InboxObject.is_deleted.is_(False),
+        )
+        .options(joinedload(activitypub.models.InboxObject.actor))
+        .order_by(activitypub.models.InboxObject.id.desc())
+        .limit(params.limit)
+    )
+    if params.max_id:
+        decoded = ids.decode_object_id_for_source(params.max_id, ids.ObjectSource.INBOX)
+        if decoded is not None:
+            query = query.where(activitypub.models.InboxObject.id < decoded)
+    cursor = params.min_id or params.since_id
+    if cursor:
+        decoded = ids.decode_object_id_for_source(cursor, ids.ObjectSource.INBOX)
+        if decoded is not None:
+            query = query.where(activitypub.models.InboxObject.id > decoded)
+
+    items = (await db_session.scalars(query)).unique().all()
+    return await _respond_with_status_list(request, db_session, items)
+
+
+@router.get("/api/v1/favourites", response_model=None)
+async def favourites_index(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:favourites")),
+) -> JSONResponse:
+    params = pagination.parse_pagination(request)
+    query = (
+        select(activitypub.models.InboxObject)
+        .where(
+            activitypub.models.InboxObject.liked_via_outbox_object_ap_id.is_not(None),
+            activitypub.models.InboxObject.is_deleted.is_(False),
+        )
+        .options(joinedload(activitypub.models.InboxObject.actor))
+        .order_by(activitypub.models.InboxObject.id.desc())
+        .limit(params.limit)
+    )
+    if params.max_id:
+        decoded = ids.decode_object_id_for_source(params.max_id, ids.ObjectSource.INBOX)
+        if decoded is not None:
+            query = query.where(activitypub.models.InboxObject.id < decoded)
+    cursor = params.min_id or params.since_id
+    if cursor:
+        decoded = ids.decode_object_id_for_source(cursor, ids.ObjectSource.INBOX)
+        if decoded is not None:
+            query = query.where(activitypub.models.InboxObject.id > decoded)
+
+    items = (await db_session.scalars(query)).unique().all()
+    return await _respond_with_status_list(request, db_session, items)
