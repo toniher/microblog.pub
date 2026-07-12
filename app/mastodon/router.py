@@ -783,8 +783,21 @@ async def _resolve_cursor_published_at(
     return obj.ap_published_at if obj else None
 
 
-def _published_at(obj: AnyboxObject) -> datetime:
-    return obj.ap_published_at or datetime.min.replace(tzinfo=timezone.utc)
+def _status_id_int(obj: AnyboxObject) -> int:
+    """Sort key aligning array order with the status id's own ordering.
+
+    The status id is timestamp-prefixed (see `app.mastodon.ids`), so sorting
+    by it (rather than by `ap_published_at` directly) guarantees the returned
+    array order exactly matches numeric id order — which is what the `Link`
+    header's `max_id`/`min_id` cursors (`pagination.build_link_header`) and
+    any client that re-sorts locally by id both assume.
+    """
+    status_id = (
+        ids.encode_outbox_id(obj)
+        if isinstance(obj, activitypub.models.OutboxObject)
+        else ids.encode_inbox_id(obj)
+    )
+    return ids.mastodon_id_int(status_id)
 
 
 async def _fetch_inbox_timeline_page(
@@ -871,7 +884,7 @@ async def timelines_home(
     combined: list[AnyboxObject] = [*inbox_items, *outbox_items]
     merged = sorted(
         combined,
-        key=_published_at,
+        key=_status_id_int,
         reverse=True,
     )[: params.limit]
 
@@ -944,7 +957,7 @@ async def timelines_public(
     combined: list[AnyboxObject] = [*inbox_items, *outbox_items]
     merged = sorted(
         combined,
-        key=_published_at,
+        key=_status_id_int,
         reverse=True,
     )[: params.limit]
 
@@ -998,7 +1011,7 @@ async def timelines_tag(
 
     combined: list[AnyboxObject] = [*inbox_items, *outbox_items]
     candidates = [obj for obj in combined if _has_tag(obj)]
-    merged = sorted(candidates, key=_published_at, reverse=True)[: params.limit]
+    merged = sorted(candidates, key=_status_id_int, reverse=True)[: params.limit]
 
     return await _respond_with_status_list(request, db_session, merged)
 
@@ -2020,7 +2033,7 @@ async def _search_statuses(
     matches = [
         obj for obj in combined if obj.content and query_lower in obj.content.lower()
     ]
-    matches.sort(key=_published_at, reverse=True)
+    matches.sort(key=_status_id_int, reverse=True)
     return [
         await serializers.serialize_status(db_session, obj) for obj in matches[:limit]
     ]

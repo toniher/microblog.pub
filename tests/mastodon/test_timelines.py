@@ -227,6 +227,63 @@ async def test_timelines_home_pagination_max_id(
 
 
 @pytest.mark.asyncio
+async def test_timelines_home_ids_sort_descending_across_inbox_and_outbox(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    # Regression test for the id-monotonicity bug: InboxObject/OutboxObject
+    # have independent PK sequences, so interleaved inserts used to produce
+    # ids like [5, 6, 4, 2] once merged by publish time — not descending, even
+    # though the array itself was correctly ordered by publish time. Ids are
+    # now timestamp-prefixed so id order always matches array order.
+    _, first_post = await boxes.send_create(
+        async_db_session,
+        ObjectType.NOTE.value,
+        "First own post",
+        uploads=[],
+        in_reply_to=None,
+        visibility=ap.VisibilityEnum.PUBLIC,
+    )
+
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    follower = setup_remote_actor_as_follower(ra)
+    assert follower.actor is not None
+    remote_note = RemoteObject(
+        factories.build_note_object(from_remote_actor=ra, content="Followed note"),
+        ra,
+    )
+    inbox_object = factories.InboxObjectFactory.from_remote_object(
+        remote_note, follower.actor
+    )
+
+    _, second_post = await boxes.send_create(
+        async_db_session,
+        ObjectType.NOTE.value,
+        "Second own post",
+        uploads=[],
+        in_reply_to=None,
+        visibility=ap.VisibilityEnum.PUBLIC,
+    )
+
+    token = await _make_access_token(async_db_session, "read:statuses")
+    response = client.get(
+        "/api/v1/timelines/home", headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    returned_ids = {status["id"] for status in data}
+    assert returned_ids == {
+        ids.encode_outbox_id(first_post),
+        ids.encode_inbox_id(inbox_object),
+        ids.encode_outbox_id(second_post),
+    }
+    numeric_ids = [int(status["id"]) for status in data]
+    assert numeric_ids == sorted(numeric_ids, reverse=True)
+
+
+@pytest.mark.asyncio
 async def test_timelines_home_coerces_null_sensitive_to_bool(
     client: TestClient,
     async_db_session: AsyncSession,

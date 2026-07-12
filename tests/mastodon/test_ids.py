@@ -1,3 +1,6 @@
+from datetime import datetime
+from datetime import timezone
+
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,26 +11,88 @@ from activitypub.models import OutboxObject
 from activitypub.tests import factories
 from app.mastodon import ids
 
+_DT = datetime(2024, 1, 1, tzinfo=timezone.utc)
+
 
 def test_encode_decode_object_id_roundtrip_outbox() -> None:
-    encoded = ids.encode_object_id(42, ids.ObjectSource.OUTBOX)
+    encoded = ids.encode_object_id(42, ids.ObjectSource.OUTBOX, _DT)
     assert ids.decode_object_id(encoded) == (42, ids.ObjectSource.OUTBOX)
 
 
 def test_encode_decode_object_id_roundtrip_inbox() -> None:
-    encoded = ids.encode_object_id(42, ids.ObjectSource.INBOX)
+    encoded = ids.encode_object_id(42, ids.ObjectSource.INBOX, _DT)
     assert ids.decode_object_id(encoded) == (42, ids.ObjectSource.INBOX)
 
 
 def test_outbox_and_inbox_ids_with_same_internal_id_do_not_collide() -> None:
-    outbox_id = ids.encode_object_id(1, ids.ObjectSource.OUTBOX)
-    inbox_id = ids.encode_object_id(1, ids.ObjectSource.INBOX)
+    outbox_id = ids.encode_object_id(1, ids.ObjectSource.OUTBOX, _DT)
+    inbox_id = ids.encode_object_id(1, ids.ObjectSource.INBOX, _DT)
     assert outbox_id != inbox_id
 
 
 @pytest.mark.parametrize("bogus", ["not-a-number", "-1", "", "1.5"])
 def test_decode_object_id_rejects_invalid_input(bogus: str) -> None:
     assert ids.decode_object_id(bogus) is None
+
+
+@pytest.mark.parametrize("source", [ids.ObjectSource.OUTBOX, ids.ObjectSource.INBOX])
+@pytest.mark.parametrize("rowid", [1, 2, 1000, (1 << 30) - 1])
+def test_encode_decode_object_id_roundtrip_across_rowids_and_timestamps(
+    rowid: int, source: "ids.ObjectSource"
+) -> None:
+    for dt in (
+        datetime(1970, 1, 1, tzinfo=timezone.utc),
+        datetime(2020, 6, 15, 12, 30, 45, tzinfo=timezone.utc),
+        datetime(2106, 2, 1, tzinfo=timezone.utc),
+    ):
+        encoded = ids.encode_object_id(rowid, source, dt)
+        assert ids.decode_object_id(encoded) == (rowid, source)
+
+
+def test_encode_object_id_is_monotonic_with_published_at() -> None:
+    earlier = ids.encode_object_id(1, ids.ObjectSource.OUTBOX, _DT)
+    later = ids.encode_object_id(
+        1, ids.ObjectSource.OUTBOX, datetime(2024, 1, 2, tzinfo=timezone.utc)
+    )
+    assert ids.mastodon_id_int(later) > ids.mastodon_id_int(earlier)
+
+    # Cross-source: a later timestamp still wins regardless of table.
+    later_inbox = ids.encode_object_id(
+        1, ids.ObjectSource.INBOX, datetime(2024, 1, 2, tzinfo=timezone.utc)
+    )
+    assert ids.mastodon_id_int(later_inbox) > ids.mastodon_id_int(earlier)
+
+
+def test_encode_object_id_is_monotonic_with_rowid_within_same_second() -> None:
+    lower = ids.encode_object_id(1, ids.ObjectSource.OUTBOX, _DT)
+    higher = ids.encode_object_id(2, ids.ObjectSource.OUTBOX, _DT)
+    assert ids.mastodon_id_int(higher) > ids.mastodon_id_int(lower)
+
+
+def test_encode_object_id_is_stable() -> None:
+    assert ids.encode_object_id(7, ids.ObjectSource.INBOX, _DT) == ids.encode_object_id(
+        7, ids.ObjectSource.INBOX, _DT
+    )
+
+
+def test_decode_object_id_is_backward_compatible_with_old_format() -> None:
+    # The pre-timestamp scheme was `str(internal_id * 2 + source)`; those ids
+    # must still decode to the same (rowid, source), since they're the
+    # zero-seconds-prefix subset of the new bit layout.
+    old_format_id = str(42 * 2 + int(ids.ObjectSource.OUTBOX))
+    assert ids.decode_object_id(old_format_id) == (42, ids.ObjectSource.OUTBOX)
+
+
+def test_encode_object_id_rejects_rowid_over_ceiling() -> None:
+    with pytest.raises(ValueError):
+        ids.encode_object_id(1 << 30, ids.ObjectSource.OUTBOX, _DT)
+
+
+def test_encode_object_id_rejects_seconds_over_ceiling() -> None:
+    with pytest.raises(ValueError):
+        ids.encode_object_id(
+            1, ids.ObjectSource.OUTBOX, datetime(2200, 1, 1, tzinfo=timezone.utc)
+        )
 
 
 def _make_outbox_object() -> OutboxObject:
@@ -91,7 +156,7 @@ async def test_get_object_by_mastodon_id_falls_back_to_other_table(
     # OutboxObject with the same internal id.
     outbox_object = _make_outbox_object()
     assert outbox_object.id is not None
-    stray_id = ids.encode_object_id(outbox_object.id, ids.ObjectSource.INBOX)
+    stray_id = ids.encode_object_id(outbox_object.id, ids.ObjectSource.INBOX, _DT)
 
     resolved = await ids.get_object_by_mastodon_id(async_db_session, stray_id)
 
