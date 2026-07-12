@@ -37,6 +37,34 @@ from app.mastodon import ids
 _FALLBACK_CREATED_AT = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 
+def _format_datetime(dt: datetime) -> str:
+    """Format a datetime the way the Mastodon API does: RFC3339 with
+    millisecond precision and a ``Z`` suffix (``2024-01-01T00:00:00.000Z``).
+
+    Python's default ``isoformat()`` emits either no fractional part or
+    6-digit microseconds; pinning to 3 digits keeps strict clients that only
+    accept millisecond precision (some RFC3339 parsers) from rejecting it.
+    """
+    return (
+        dt.replace(tzinfo=timezone.utc)
+        .isoformat(timespec="milliseconds")
+        .replace("+00:00", "Z")
+    )
+
+
+def _as_str(value: object, fallback: str = "") -> str:
+    """Coerce a federation-supplied value to a plain non-empty string.
+
+    Remote actors/objects can populate a field the Mastodon API types as a
+    non-null string with a dict, list, or null instead (e.g. ``url`` given as
+    a Link object, or a non-string ``name``). Emitting a non-string there
+    makes strict clients (Tusky/Fedilab) fail to deserialize and silently drop
+    the entire response, so fall back to ``fallback`` when the value isn't a
+    usable string.
+    """
+    return value if isinstance(value, str) and value else fallback
+
+
 def _owner_created_at() -> datetime:
     try:
         return datetime.fromtimestamp(config.KEY_PATH.stat().st_mtime, tz=timezone.utc)
@@ -59,12 +87,12 @@ async def _owner_counts(db_session: AsyncSession) -> tuple[int, int, int]:
 def _fields(actor: BaseActor) -> list[dict]:
     return [
         {
-            "name": item.get("name", ""),
-            "value": item.get("value", ""),
+            "name": _as_str(item.get("name")),
+            "value": _as_str(item.get("value")),
             "verified_at": None,
         }
         for item in actor.attachments
-        if item.get("type") == "PropertyValue"
+        if isinstance(item, dict) and item.get("type") == "PropertyValue"
     ]
 
 
@@ -96,23 +124,23 @@ async def serialize_account(
 
     return {
         "id": account_id,
-        "username": actor.preferred_username,
-        "acct": acct,
-        "display_name": actor.display_name,
+        "username": _as_str(actor.preferred_username),
+        "acct": _as_str(acct),
+        "display_name": _as_str(actor.display_name),
         "locked": locked,
         "bot": actor.ap_type == "Service",
         "discoverable": True,
         "group": False,
-        "created_at": created_at.replace(tzinfo=timezone.utc)
-        .isoformat()
-        .replace("+00:00", "Z"),
-        "note": actor.summary or "",
-        "url": actor.url or actor.ap_id,
+        "created_at": _format_datetime(created_at),
+        "note": _as_str(actor.summary),
+        # `actor.url` can be a Link dict/list on some servers; coerce to a
+        # string, falling back to the actor's id.
+        "url": _as_str(actor.url, actor.ap_id),
         "uri": actor.ap_id,
-        "avatar": actor.resized_icon_url or "",
-        "avatar_static": actor.icon_url or "",
-        "header": actor.image_url or "",
-        "header_static": actor.image_url or "",
+        "avatar": _as_str(actor.resized_icon_url),
+        "avatar_static": _as_str(actor.icon_url),
+        "header": _as_str(actor.image_url),
+        "header_static": _as_str(actor.image_url),
         "followers_count": followers_count,
         "following_count": following_count,
         "statuses_count": statuses_count,
@@ -202,11 +230,7 @@ def serialize_poll(obj: AnyboxObject, status_id: str) -> dict | None:
     return {
         "id": status_id,
         "expires_at": (
-            obj.poll_end_time.replace(tzinfo=timezone.utc)
-            .isoformat()
-            .replace("+00:00", "Z")
-            if obj.poll_end_time
-            else None
+            _format_datetime(obj.poll_end_time) if obj.poll_end_time else None
         ),
         "expired": obj.is_poll_ended,
         "multiple": not obj.is_one_of_poll,
@@ -223,7 +247,11 @@ async def _serialize_mentions(
     db_session: AsyncSession, obj: AnyboxObject
 ) -> list[dict]:
     mention_tags = [
-        tag for tag in obj.tags if tag.get("type") == "Mention" and tag.get("href")
+        tag
+        for tag in obj.tags
+        if isinstance(tag, dict)
+        and tag.get("type") == "Mention"
+        and _as_str(tag.get("href"))
     ]
     if not mention_tags:
         return []
@@ -248,15 +276,15 @@ async def _serialize_mentions(
             mentions.append(
                 {
                     "id": ids.encode_account_id(actor),
-                    "username": actor.preferred_username,
-                    "url": actor.url or actor.ap_id,
+                    "username": _as_str(actor.preferred_username),
+                    "url": _as_str(actor.url, actor.ap_id),
                     "acct": f"{actor.preferred_username}@{urlparse(actor.ap_id).netloc}",
                 }
             )
         else:
             # Not cached locally: degrade to a stub built from the tag itself
             # rather than fetching it (serializing must stay network-free).
-            name = tag.get("name", "").lstrip("@")
+            name = _as_str(tag.get("name")).lstrip("@")
             mentions.append({"id": "", "username": name, "url": href, "acct": name})
 
     return mentions
@@ -264,9 +292,14 @@ async def _serialize_mentions(
 
 def _serialize_hashtags(obj: AnyboxObject) -> list[dict]:
     return [
-        {"name": tag["name"].lstrip("#"), "url": tag.get("href", "")}
+        {
+            "name": _as_str(tag.get("name")).lstrip("#"),
+            "url": _as_str(tag.get("href")),
+        }
         for tag in obj.tags
-        if tag.get("type") == "Hashtag" and tag.get("name")
+        if isinstance(tag, dict)
+        and tag.get("type") == "Hashtag"
+        and _as_str(tag.get("name"))
     ]
 
 
@@ -321,18 +354,16 @@ async def serialize_status(
     return {
         "id": status_id,
         "uri": obj.ap_id,
-        "url": obj.url or obj.ap_id,
-        "created_at": created_at.replace(tzinfo=timezone.utc)
-        .isoformat()
-        .replace("+00:00", "Z"),
+        "url": _as_str(obj.url, obj.ap_id),
+        "created_at": _format_datetime(created_at),
         "edited_at": None,
         "account": await serialize_account(db_session, obj.actor),
-        "content": obj.content or "",
+        "content": _as_str(obj.content),
         "visibility": _VISIBILITY_MAP.get(
             obj.visibility or ap.VisibilityEnum.PUBLIC, "public"
         ),
-        "sensitive": obj.sensitive,
-        "spoiler_text": obj.summary or "",
+        "sensitive": bool(obj.sensitive),
+        "spoiler_text": _as_str(obj.summary),
         "media_attachments": [
             serialize_media_attachment(attachment, index, status_id)
             for index, attachment in enumerate(obj.attachments)
