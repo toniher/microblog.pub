@@ -232,7 +232,20 @@ class Object:
 
     @property
     def in_reply_to(self) -> str | None:
-        return self.ap_object.get("inReplyTo")
+        raw_in_reply_to = self.ap_object.get("inReplyTo")
+        if not raw_in_reply_to:
+            return None
+
+        for item in ap.as_list(raw_in_reply_to):
+            if isinstance(item, str) and item:
+                return item
+            if isinstance(item, dict):
+                if item_id := item.get("id"):
+                    return ap.get_id(item_id)
+                if href := item.get("href"):
+                    return href
+
+        return None
 
     @property
     def is_local_reply(self) -> bool:

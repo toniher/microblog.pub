@@ -278,3 +278,62 @@ async def test_timelines_home_serializes_reblog_target_url_list_with_strings(
         and status["reblog"]["url"] == remote_note_data["url"][0]
         for status in response.json()
     )
+
+
+@pytest.mark.asyncio
+async def test_timelines_home_serializes_reblog_target_dict_in_reply_to(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    follower = setup_remote_actor_as_follower(ra)
+    assert follower.actor is not None
+
+    root_note = RemoteObject(
+        factories.build_note_object(
+            from_remote_actor=ra,
+            content="Root remote note",
+        ),
+        ra,
+    )
+    root_inbox_object = factories.InboxObjectFactory.from_remote_object(
+        root_note, follower.actor
+    )
+
+    reply_note_data = factories.build_note_object(
+        from_remote_actor=ra,
+        content="Reply remote note",
+    )
+    reply_note_data["inReplyTo"] = {"id": root_note.ap_id}
+    reply_note = RemoteObject(reply_note_data, ra)
+    factories.InboxObjectFactory.from_remote_object(reply_note, follower.actor)
+
+    reblog = RemoteObject(
+        {
+            "@context": ap.AS_CTX,
+            "type": "Announce",
+            "id": f"{ra.ap_id}/announce/with-dict-in-reply-to",
+            "actor": ra.ap_id,
+            "object": reply_note.ap_id,
+            "to": [ap.AS_PUBLIC],
+            "cc": [],
+            "published": reply_note_data["published"],
+            "url": f"{ra.ap_id}/announce/with-dict-in-reply-to",
+        },
+        ra,
+    )
+    factories.InboxObjectFactory.from_remote_object(reblog, follower.actor)
+
+    token = await _make_access_token(async_db_session, "read:statuses")
+    response = client.get(
+        "/api/v1/timelines/home",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert any(
+        status["reblog"] is not None
+        and status["reblog"]["in_reply_to_id"] == ids.encode_inbox_id(root_inbox_object)
+        for status in response.json()
+    )
