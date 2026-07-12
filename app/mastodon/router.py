@@ -3,8 +3,9 @@
 Grown incrementally across build phases; see PLAN-0.md for the full map.
 This module currently covers Phase 0's instance/meta surface, Phase 1a's
 accounts/relationships surface, Phase 1b's timelines/statuses surface,
-Phase 1c's notifications + read-degradation surface, and Phase 2a's media
-upload surface.
+Phase 1c's notifications + read-degradation surface, Phase 2a's media
+upload surface, Phase 2b's status-write surface, and Phase 3's social
+graph + search surface.
 """
 
 from datetime import datetime
@@ -24,14 +25,24 @@ from starlette.responses import JSONResponse
 
 import activitypub.models
 from activitypub import activitypub as ap
+from activitypub.actor import RemoteActor
+from activitypub.actor import fetch_actor
 from activitypub.actor import get_actors_metadata
+from activitypub.ap_object import RemoteObject
 from activitypub.boxes import AnyboxObject
 from activitypub.boxes import ReplyTreeNode
+from activitypub.boxes import get_anybox_object_by_ap_id
 from activitypub.boxes import get_replies_tree
+from activitypub.boxes import save_object_to_inbox
+from activitypub.boxes import send_accept
 from activitypub.boxes import send_announce
+from activitypub.boxes import send_block
 from activitypub.boxes import send_create
 from activitypub.boxes import send_delete
+from activitypub.boxes import send_follow
 from activitypub.boxes import send_like
+from activitypub.boxes import send_reject
+from activitypub.boxes import send_unblock
 from activitypub.boxes import send_undo
 from activitypub.boxes import send_vote
 from app import config
@@ -40,6 +51,7 @@ from app.database import AsyncSession
 from app.database import get_db_session
 from app.indieauth import AccessTokenInfo
 from app.indieauth import check_access_token
+from app.lookup import lookup
 from app.mastodon import ids
 from app.mastodon import pagination
 from app.mastodon import serializers
@@ -254,6 +266,55 @@ async def accounts_verify_credentials(
     return JSONResponse(content=account, status_code=200)
 
 
+def _serialize_relationship(
+    account_id: str,
+    actor: activitypub.models.Actor | None,
+    meta,
+) -> dict:
+    if actor is None:
+        # LOCAL_ACTOR_ID sentinel — a relationship with yourself is
+        # trivially all-false; there's no metadata to look up.
+        return {
+            "id": account_id,
+            "following": False,
+            "showing_reblogs": True,
+            "notifying": False,
+            "followed_by": False,
+            "blocking": False,
+            "blocked_by": False,
+            "muting": False,
+            "muting_notifications": False,
+            "requested": False,
+            "domain_blocking": False,
+            "endorsed": False,
+            "note": "",
+        }
+    return {
+        "id": account_id,
+        "following": meta.is_following if meta else False,
+        "showing_reblogs": True,
+        "notifying": False,
+        "followed_by": meta.is_follower if meta else False,
+        "blocking": actor.is_blocked,
+        "blocked_by": meta.has_blocked_local_actor if meta else False,
+        # No mute model exists — always false, matching the /api/v1/mutes
+        # stub (see PR-1c).
+        "muting": False,
+        "muting_notifications": False,
+        "requested": meta.is_follow_request_sent if meta else False,
+        "domain_blocking": False,
+        "endorsed": False,
+        "note": "",
+    }
+
+
+async def _relationship_for_actor(
+    db_session: AsyncSession, account_id: str, actor: activitypub.models.Actor
+) -> dict:
+    metadata = await get_actors_metadata(db_session, [actor])
+    return _serialize_relationship(account_id, actor, metadata.get(actor.ap_id))
+
+
 @router.get("/api/v1/accounts/relationships", response_model=None)
 async def accounts_relationships(
     request: Request,
@@ -268,21 +329,7 @@ async def accounts_relationships(
     for raw_id in raw_ids:
         if raw_id == ids.LOCAL_ACTOR_ID:
             relationships.append(
-                {
-                    "id": ids.LOCAL_ACTOR_ID,
-                    "following": False,
-                    "showing_reblogs": True,
-                    "notifying": False,
-                    "followed_by": False,
-                    "blocking": False,
-                    "blocked_by": False,
-                    "muting": False,
-                    "muting_notifications": False,
-                    "requested": False,
-                    "domain_blocking": False,
-                    "endorsed": False,
-                    "note": "",
-                }
+                _serialize_relationship(ids.LOCAL_ACTOR_ID, None, None)
             )
             continue
 
@@ -295,23 +342,8 @@ async def accounts_relationships(
             db_session, list(remote_actors_by_raw_id.values())
         )
         for raw_id, actor in remote_actors_by_raw_id.items():
-            meta = metadata.get(actor.ap_id)
             relationships.append(
-                {
-                    "id": raw_id,
-                    "following": meta.is_following if meta else False,
-                    "showing_reblogs": True,
-                    "notifying": False,
-                    "followed_by": meta.is_follower if meta else False,
-                    "blocking": actor.is_blocked,
-                    "blocked_by": meta.has_blocked_local_actor if meta else False,
-                    "muting": False,
-                    "muting_notifications": False,
-                    "requested": meta.is_follow_request_sent if meta else False,
-                    "domain_blocking": False,
-                    "endorsed": False,
-                    "note": "",
-                }
+                _serialize_relationship(raw_id, actor, metadata.get(actor.ap_id))
             )
 
     return JSONResponse(content=relationships, status_code=200)
@@ -1196,11 +1228,8 @@ async def mutes_index(
     return JSONResponse(content=[], status_code=200)
 
 
-@router.get("/api/v1/follow_requests", response_model=None)
-async def follow_requests_index(
-    token_info: AccessTokenInfo = Depends(require_scope("read")),
-) -> JSONResponse:
-    return JSONResponse(content=[], status_code=200)
+# follow_requests is a real, non-stub list — see the "Social graph" section
+# below (PR-3), which also lands authorize/reject.
 
 
 # Public, unauthenticated in real Mastodon too.
@@ -1703,3 +1732,376 @@ async def favourites_index(
 
     items = (await db_session.scalars(query)).unique().all()
     return await _respond_with_status_list(request, db_session, items)
+
+
+# --- Social graph -------------------------------------------------------------
+
+
+async def _find_own_follow_activity(
+    db_session: AsyncSession, actor_ap_id: str
+) -> activitypub.models.OutboxObject | None:
+    """Find OUR OWN Follow activity targeting `actor_ap_id` (pending or
+    accepted — the `Following` row only exists once accepted, but the Follow
+    activity itself exists as soon as it's sent). `send_undo` needs this
+    activity's own ap_id, not the target actor's.
+    """
+    return (
+        await db_session.scalars(
+            select(activitypub.models.OutboxObject)
+            .where(
+                activitypub.models.OutboxObject.ap_type == "Follow",
+                activitypub.models.OutboxObject.activity_object_ap_id == actor_ap_id,
+                activitypub.models.OutboxObject.undone_by_outbox_object_id.is_(None),
+                activitypub.models.OutboxObject.is_deleted.is_(False),
+            )
+            .order_by(activitypub.models.OutboxObject.id.desc())
+        )
+    ).first()
+
+
+async def _resolve_account_or_404(
+    db_session: AsyncSession, account_id: str
+) -> activitypub.models.Actor:
+    if account_id == ids.LOCAL_ACTOR_ID:
+        raise MastodonError(422, "validation_failed", "cannot target yourself")
+    actor = await ids.get_account_by_mastodon_id(db_session, account_id)
+    if actor is None:
+        raise MastodonError(404, "not_found", "account not found")
+    return actor
+
+
+@router.post("/api/v1/accounts/{account_id}/follow", response_model=None)
+async def accounts_follow(
+    account_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:follows")),
+) -> JSONResponse:
+    actor = await _resolve_account_or_404(db_session, account_id)
+    await send_follow(db_session, actor.ap_id)
+    return JSONResponse(
+        content=await _relationship_for_actor(db_session, account_id, actor),
+        status_code=200,
+    )
+
+
+@router.post("/api/v1/accounts/{account_id}/unfollow", response_model=None)
+async def accounts_unfollow(
+    account_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:follows")),
+) -> JSONResponse:
+    actor = await _resolve_account_or_404(db_session, account_id)
+    follow_activity = await _find_own_follow_activity(db_session, actor.ap_id)
+    if follow_activity is not None:
+        await send_undo(db_session, follow_activity.ap_id)
+    return JSONResponse(
+        content=await _relationship_for_actor(db_session, account_id, actor),
+        status_code=200,
+    )
+
+
+@router.post("/api/v1/accounts/{account_id}/block", response_model=None)
+async def accounts_block(
+    account_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:blocks")),
+) -> JSONResponse:
+    actor = await _resolve_account_or_404(db_session, account_id)
+    if not actor.is_blocked:
+        await send_block(db_session, actor.ap_id)
+    return JSONResponse(
+        content=await _relationship_for_actor(db_session, account_id, actor),
+        status_code=200,
+    )
+
+
+@router.post("/api/v1/accounts/{account_id}/unblock", response_model=None)
+async def accounts_unblock(
+    account_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:blocks")),
+) -> JSONResponse:
+    actor = await _resolve_account_or_404(db_session, account_id)
+    if actor.is_blocked:
+        await send_unblock(db_session, actor.ap_id)
+    return JSONResponse(
+        content=await _relationship_for_actor(db_session, account_id, actor),
+        status_code=200,
+    )
+
+
+@router.post("/api/v1/accounts/{account_id}/mute", response_model=None)
+async def accounts_mute(
+    account_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:mutes")),
+) -> JSONResponse:
+    # No mute model exists (see PR-1c's /api/v1/mutes stub) — no-op, always
+    # returns muting:false.
+    actor = await _resolve_account_or_404(db_session, account_id)
+    return JSONResponse(
+        content=await _relationship_for_actor(db_session, account_id, actor),
+        status_code=200,
+    )
+
+
+@router.post("/api/v1/accounts/{account_id}/unmute", response_model=None)
+async def accounts_unmute(
+    account_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:mutes")),
+) -> JSONResponse:
+    actor = await _resolve_account_or_404(db_session, account_id)
+    return JSONResponse(
+        content=await _relationship_for_actor(db_session, account_id, actor),
+        status_code=200,
+    )
+
+
+@router.post("/api/v1/accounts/{account_id}/note", response_model=None)
+async def accounts_note(
+    account_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:accounts")),
+) -> JSONResponse:
+    # Not persisted (no model for personal notes about an account) — echo
+    # the submitted comment back for this response only, rather than
+    # silently discarding it into an always-empty "note".
+    actor = await _resolve_account_or_404(db_session, account_id)
+    form = await request.form()
+    comment = form.get("comment")
+
+    relationship = await _relationship_for_actor(db_session, account_id, actor)
+    relationship["note"] = str(comment) if comment else ""
+    return JSONResponse(content=relationship, status_code=200)
+
+
+async def _pending_follower_notification(
+    db_session: AsyncSession, actor: activitypub.models.Actor
+) -> models.Notification | None:
+    return (
+        await db_session.scalars(
+            select(models.Notification)
+            .where(
+                models.Notification.notification_type
+                == models.NotificationType.PENDING_INCOMING_FOLLOWER,
+                models.Notification.actor_id == actor.id,
+                models.Notification.is_accepted.is_(None),
+                models.Notification.is_rejected.is_(None),
+            )
+            .options(joinedload(models.Notification.actor))
+            .order_by(models.Notification.id.desc())
+        )
+    ).first()
+
+
+@router.get("/api/v1/follow_requests", response_model=None)
+async def follow_requests_index(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:follows")),
+) -> JSONResponse:
+    params = pagination.parse_pagination(request)
+    query = (
+        select(models.Notification)
+        .where(
+            models.Notification.notification_type
+            == models.NotificationType.PENDING_INCOMING_FOLLOWER,
+            models.Notification.is_accepted.is_(None),
+            models.Notification.is_rejected.is_(None),
+        )
+        .options(joinedload(models.Notification.actor))
+        .order_by(models.Notification.id.desc())
+        .limit(params.limit)
+    )
+    notifications = (await db_session.scalars(query)).unique().all()
+
+    accounts = [
+        await serializers.serialize_account(db_session, notif.actor)
+        for notif in notifications
+        if notif.actor is not None
+    ]
+    return JSONResponse(content=accounts, status_code=200)
+
+
+@router.post("/api/v1/follow_requests/{account_id}/authorize", response_model=None)
+async def follow_requests_authorize(
+    account_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:follows")),
+) -> JSONResponse:
+    actor = await _resolve_account_or_404(db_session, account_id)
+    notif = await _pending_follower_notification(db_session, actor)
+    if notif is None or notif.id is None:
+        raise MastodonError(404, "not_found", "follow request not found")
+
+    await send_accept(db_session, notif.id)
+    return JSONResponse(
+        content=await _relationship_for_actor(db_session, account_id, actor),
+        status_code=200,
+    )
+
+
+@router.post("/api/v1/follow_requests/{account_id}/reject", response_model=None)
+async def follow_requests_reject(
+    account_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:follows")),
+) -> JSONResponse:
+    actor = await _resolve_account_or_404(db_session, account_id)
+    notif = await _pending_follower_notification(db_session, actor)
+    if notif is None or notif.id is None:
+        raise MastodonError(404, "not_found", "follow request not found")
+
+    await send_reject(db_session, notif.id)
+    return JSONResponse(
+        content=await _relationship_for_actor(db_session, account_id, actor),
+        status_code=200,
+    )
+
+
+# --- Search --------------------------------------------------------------------
+
+
+async def _search_accounts(
+    db_session: AsyncSession, query: str, limit: int
+) -> list[dict]:
+    # Same pragmatic approach as accounts/lookup (PR-1a): the single-user
+    # instance's cached-actor table is small, so scan-then-filter in Python
+    # rather than a DB-specific JSON query against ap_actor.
+    query_lower = query.lstrip("@").lower()
+    known_actors = (await db_session.scalars(select(activitypub.models.Actor))).all()
+    matches = [
+        actor
+        for actor in known_actors
+        if query_lower in actor.preferred_username.lower()
+        or query_lower in actor.display_name.lower()
+        or query_lower in actor.ap_id.lower()
+    ]
+    return [
+        await serializers.serialize_account(db_session, actor)
+        for actor in matches[:limit]
+    ]
+
+
+async def _search_statuses(
+    db_session: AsyncSession, query: str, limit: int
+) -> list[dict]:
+    # Same bounded-scan-then-filter approach as timelines/tag (PR-1b) — there
+    # is no full-text index (the outbox_fts table some code comments allude
+    # to was never wired up: no migration creates it, nothing keeps it in
+    # sync). Fine for a single-user instance's post volume.
+    query_lower = query.lower()
+    scan_limit = max(limit * 5, 100)
+    inbox_items = await _fetch_inbox_timeline_page(
+        db_session,
+        before=None,
+        after=None,
+        limit=scan_limit,
+        extra_where=(
+            activitypub.models.InboxObject.visibility == ap.VisibilityEnum.PUBLIC,
+        ),
+    )
+    outbox_items = await _fetch_outbox_timeline_page(
+        db_session,
+        before=None,
+        after=None,
+        limit=scan_limit,
+        extra_where=(
+            activitypub.models.OutboxObject.visibility == ap.VisibilityEnum.PUBLIC,
+        ),
+    )
+    combined: list[AnyboxObject] = [*inbox_items, *outbox_items]
+    matches = [
+        obj for obj in combined if obj.content and query_lower in obj.content.lower()
+    ]
+    matches.sort(key=_published_at, reverse=True)
+    return [
+        await serializers.serialize_status(db_session, obj) for obj in matches[:limit]
+    ]
+
+
+async def _resolve_remote(db_session: AsyncSession, query: str):
+    try:
+        return await lookup(db_session, query)
+    except Exception:
+        # Network/parse failures just mean "nothing resolved" — search must
+        # not 500 because a query isn't a fetchable handle/URL.
+        return None
+
+
+@router.get("/api/v2/search", response_model=None)
+async def search(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:search")),
+) -> JSONResponse:
+    query = (request.query_params.get("q") or "").strip()
+    if not query:
+        raise MastodonError(422, "validation_failed", "q is required")
+
+    search_type = request.query_params.get("type")
+    resolve = request.query_params.get("resolve") == "true"
+    try:
+        limit = min(max(int(request.query_params.get("limit", "20")), 1), 40)
+    except ValueError:
+        limit = 20
+
+    accounts: list[dict] = []
+    statuses: list[dict] = []
+    hashtags: list[dict] = []
+
+    if search_type in (None, "accounts"):
+        accounts = await _search_accounts(db_session, query, limit)
+    if search_type in (None, "statuses"):
+        statuses = await _search_statuses(db_session, query, limit)
+    if search_type in (None, "hashtags"):
+        tag = query.lstrip("#").strip().lower()
+        if tag:
+            # No per-day usage history is tracked; this just confirms the
+            # query looks like a taggable hashtag.
+            hashtags = [
+                {"name": tag, "url": f"{config.BASE_URL}/t/{tag}", "history": []}
+            ]
+
+    need_accounts = search_type in (None, "accounts") and not accounts
+    need_statuses = search_type in (None, "statuses") and not statuses
+    if resolve and (need_accounts or need_statuses):
+        resolved = await _resolve_remote(db_session, query)
+        if isinstance(resolved, RemoteActor) and need_accounts:
+            try:
+                actor_row = await fetch_actor(db_session, resolved.ap_id)
+            except Exception:
+                actor_row = None
+            if actor_row is not None:
+                accounts = [await serializers.serialize_account(db_session, actor_row)]
+        elif (
+            isinstance(resolved, RemoteObject)
+            and not isinstance(resolved, RemoteActor)
+            and need_statuses
+        ):
+            cached = await get_anybox_object_by_ap_id(db_session, resolved.ap_id)
+            if cached is None:
+                cached = await save_object_to_inbox(db_session, resolved.ap_object)
+                await db_session.commit()
+            # A remote object's ap_id never matches our own BASE_URL, so
+            # get_anybox_object_by_ap_id always resolves it via the inbox
+            # path (see its implementation) — this is just narrowing that
+            # for mypy, not a runtime possibility.
+            if isinstance(cached, activitypub.models.InboxObject):
+                # Re-fetch through the eager-loading helper (see PR-2b's
+                # populate_existing fix) — `cached` may not have `.actor`
+                # loaded.
+                reloaded = await ids.get_object_by_mastodon_id(
+                    db_session, ids.encode_inbox_id(cached)
+                )
+                if reloaded is not None:
+                    statuses = [
+                        await serializers.serialize_status(db_session, reloaded)
+                    ]
+
+    return JSONResponse(
+        content={"accounts": accounts, "statuses": statuses, "hashtags": hashtags},
+        status_code=200,
+    )
