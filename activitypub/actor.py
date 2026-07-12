@@ -67,6 +67,28 @@ def _handle(raw_actor: ap.RawObject) -> str:
     return handle
 
 
+def _media_link_url(media: object) -> str | None:
+    for item in ap.as_list(media):
+        if isinstance(item, str) and item:
+            return item
+        if not isinstance(item, dict):
+            continue
+        url = item.get("url") or item.get("href")
+        if isinstance(url, str) and url:
+            return url
+    return None
+
+
+def _media_link_media_type(media: object) -> str | None:
+    for item in ap.as_list(media):
+        if not isinstance(item, dict):
+            continue
+        media_type = item.get("mediaType")
+        if isinstance(media_type, str) and media_type:
+            return media_type
+    return None
+
+
 class Actor:
     @property
     def ap_actor(self) -> ap.RawObject:
@@ -121,19 +143,19 @@ class Actor:
     @property
     def icon_url(self) -> str | None:
         if icon := self.ap_actor.get("icon"):
-            return icon.get("url")
+            return _media_link_url(icon)
         return None
 
     @property
     def icon_media_type(self) -> str | None:
         if icon := self.ap_actor.get("icon"):
-            return icon.get("mediaType")
+            return _media_link_media_type(icon)
         return None
 
     @property
     def image_url(self) -> str | None:
         if image := self.ap_actor.get("image"):
-            return image.get("url")
+            return _media_link_url(image)
         return None
 
     @property

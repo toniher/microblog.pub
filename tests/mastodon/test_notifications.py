@@ -243,3 +243,34 @@ async def test_notifications_type_filters(
         "/api/v1/notifications?exclude_types[]=follow", headers=headers
     ).json()
     assert {n["id"] for n in excluding_follow} == {str(mention_notif.id)}
+
+
+@pytest.mark.asyncio
+async def test_notifications_list_serializes_actor_string_media_fields(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    ra.ap_actor["icon"] = "https://example.com/media/avatar.jpg"
+    ra.ap_actor["image"] = "https://example.com/media/header.jpg"
+    follower = setup_remote_actor_as_follower(ra)
+    assert follower.actor is not None
+
+    notif = models.Notification(
+        notification_type=models.NotificationType.NEW_FOLLOWER,
+        actor_id=follower.actor.id,
+    )
+    async_db_session.add(notif)
+    await async_db_session.commit()
+
+    token = await _make_access_token(async_db_session, "read:notifications")
+    response = client.get(
+        "/api/v1/notifications",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    account = response.json()[0]["account"]
+    assert account["avatar_static"] == "https://example.com/media/avatar.jpg"
+    assert account["header"] == "https://example.com/media/header.jpg"
