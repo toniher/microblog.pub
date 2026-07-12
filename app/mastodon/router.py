@@ -61,6 +61,7 @@ from app.uploads import save_upload
 from app.utils.emoji import EMOJIS
 
 router = APIRouter()
+_TIMELINE_OBJECT_TYPES = ["Announce", "Article", "Note", "Page", "Question", "Video"]
 
 # Advisory client hints only — nothing here is enforced server-side. The
 # backend has no hard cap on note/article length, so max_characters is set
@@ -797,6 +798,7 @@ async def _fetch_inbox_timeline_page(
     query = (
         select(activitypub.models.InboxObject)
         .where(
+            activitypub.models.InboxObject.ap_type.in_(_TIMELINE_OBJECT_TYPES),
             activitypub.models.InboxObject.is_hidden_from_stream.is_(False),
             activitypub.models.InboxObject.is_deleted.is_(False),
             *extra_where,
@@ -823,6 +825,7 @@ async def _fetch_outbox_timeline_page(
     query = (
         select(activitypub.models.OutboxObject)
         .where(
+            activitypub.models.OutboxObject.ap_type.in_(_TIMELINE_OBJECT_TYPES),
             activitypub.models.OutboxObject.is_hidden_from_homepage.is_(False),
             activitypub.models.OutboxObject.is_deleted.is_(False),
             *extra_where,
@@ -889,6 +892,7 @@ async def timelines_public(
         query = (
             select(activitypub.models.OutboxObject)
             .where(
+                activitypub.models.OutboxObject.ap_type.in_(_TIMELINE_OBJECT_TYPES),
                 activitypub.models.OutboxObject.visibility == ap.VisibilityEnum.PUBLIC,
                 activitypub.models.OutboxObject.is_deleted.is_(False),
             )

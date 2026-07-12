@@ -65,9 +65,10 @@ async def test_timelines_home_merges_own_posts_and_followed_notes(
     )
 
     assert response.status_code == 200
-    ids_in_timeline = {status["id"] for status in response.json()}
-    assert ids.encode_outbox_id(own_post) in ids_in_timeline
-    assert ids.encode_inbox_id(inbox_object) in ids_in_timeline
+    assert {status["id"] for status in response.json()} == {
+        ids.encode_outbox_id(own_post),
+        ids.encode_inbox_id(inbox_object),
+    }
 
 
 @pytest.mark.asyncio
