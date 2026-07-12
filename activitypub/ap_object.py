@@ -182,10 +182,13 @@ class Object:
             return obj_url
         elif obj_url:
             for u in ap.as_list(obj_url):
-                if u.get("type") == "Link":
+                if isinstance(u, str) and u:
+                    return u
+                if not isinstance(u, dict):
+                    continue
+                if u.get("type") == "Link" and u.get("href"):
                     return u["href"]
-
-                if u["mediaType"] == "text/html":
+                if u.get("mediaType") == "text/html" and u.get("href"):
                     return u["href"]
 
         return self.ap_id
