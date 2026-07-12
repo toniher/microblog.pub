@@ -227,6 +227,42 @@ async def test_timelines_home_pagination_max_id(
 
 
 @pytest.mark.asyncio
+async def test_timelines_home_coerces_null_sensitive_to_bool(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    # Some AP servers send an explicit `"sensitive": null`. If serialized as
+    # `null`, strict Mastodon clients (Tusky/Fedilab) fail to deserialize the
+    # non-null boolean and silently drop the entire timeline page.
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    follower = setup_remote_actor_as_follower(ra)
+    assert follower.actor is not None
+
+    note_data = factories.build_note_object(
+        from_remote_actor=ra,
+        content="Explicit null sensitive",
+        to=[ap.AS_PUBLIC],
+    )
+    note_data["sensitive"] = None
+    inbox_object = factories.InboxObjectFactory.from_remote_object(
+        RemoteObject(note_data, ra), follower.actor
+    )
+
+    token = await _make_access_token(async_db_session, "read:statuses")
+    response = client.get(
+        "/api/v1/timelines/home",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    status = next(
+        s for s in response.json() if s["id"] == ids.encode_inbox_id(inbox_object)
+    )
+    assert status["sensitive"] is False
+
+
+@pytest.mark.asyncio
 async def test_timelines_home_serializes_reblog_target_url_list_with_strings(
     client: TestClient,
     async_db_session: AsyncSession,

@@ -86,7 +86,13 @@ class Object:
 
     @property
     def sensitive(self) -> bool:
-        return self.ap_object.get("sensitive", False)
+        # Some servers send an explicit `"sensitive": null` (or another
+        # non-bool); `dict.get(k, False)` only substitutes the default when the
+        # key is *absent*, so coerce to guarantee the declared bool return.
+        # A null here serializes to `"sensitive": null` in the Mastodon API,
+        # which breaks strict clients (Tusky/Fedilab) that expect a non-null
+        # boolean and silently drop the whole timeline page.
+        return bool(self.ap_object.get("sensitive"))
 
     @property
     def tags(self) -> list[ap.RawObject]:
