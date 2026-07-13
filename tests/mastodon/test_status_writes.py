@@ -88,6 +88,29 @@ async def test_statuses_create_basic(
     assert data["account"]["id"] == ids.LOCAL_ACTOR_ID
 
 
+@pytest.mark.asyncio
+async def test_statuses_create_json_body(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    # Regression test: some clients (e.g. Tusky) POST this endpoint as
+    # `application/json` rather than form-encoded. Starlette's `Request.form()`
+    # silently returns empty data for a JSON body, which used to turn this
+    # into a 422 "status is required".
+    token = await _make_access_token(async_db_session, "write:statuses")
+
+    response = client.post(
+        "/api/v1/statuses",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"status": "Hello from Tusky", "visibility": "unlisted"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["content"] == "<p>Hello from Tusky</p>\n"
+    assert data["visibility"] == "unlisted"
+    assert data["account"]["id"] == ids.LOCAL_ACTOR_ID
+
+
 def test_statuses_create_requires_auth(client: TestClient) -> None:
     response = client.post("/api/v1/statuses", data={"status": "no token"})
     assert response.status_code == 401
@@ -161,6 +184,28 @@ async def test_statuses_create_with_poll(
             "status": "Pick one",
             "poll[options][]": ["Cats", "Dogs"],
             "poll[expires_in]": "3600",
+        },
+    )
+
+    assert response.status_code == 200
+    poll = response.json()["poll"]
+    assert poll is not None
+    assert [o["title"] for o in poll["options"]] == ["Cats", "Dogs"]
+    assert poll["multiple"] is False
+
+
+@pytest.mark.asyncio
+async def test_statuses_create_with_poll_json_body(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    token = await _make_access_token(async_db_session, "write:statuses")
+
+    response = client.post(
+        "/api/v1/statuses",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "status": "Pick one",
+            "poll": {"options": ["Cats", "Dogs"], "expires_in": 3600},
         },
     )
 

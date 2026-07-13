@@ -10,6 +10,7 @@ graph + search surface.
 
 from datetime import datetime
 from datetime import timezone
+from typing import Any
 from typing import cast
 from urllib.parse import urlparse
 
@@ -1361,6 +1362,58 @@ _MASTODON_VISIBILITY_TO_AP = {
 _IDEMPOTENCY_CACHE: dict[str, str] = {}
 
 
+class _StatusParams:
+    """Normalizes the POST /api/v1/statuses body across content types.
+
+    The Mastodon API accepts this endpoint as `multipart/form-data`,
+    `application/x-www-form-urlencoded`, or `application/json` — clients
+    disagree on which they use (e.g. Tusky sends JSON; Fedilab sends form
+    data). Starlette's `Request.form()` silently returns an empty `FormData`
+    for a JSON body rather than raising, which was turning every JSON-body
+    post into a 422 "status is required".
+    """
+
+    def __init__(self, json_body: dict[str, Any] | None, form: Any) -> None:
+        self._json = json_body
+        self._form = form
+
+    def get(self, key: str) -> Any:
+        if self._json is not None:
+            return self._json.get(key)
+        return self._form.get(key)
+
+    def get_bool(self, key: str) -> bool:
+        value = self.get(key)
+        if isinstance(value, bool):
+            return value
+        return str(value).lower() == "true"
+
+    def get_list(self, key: str) -> list[Any]:
+        if self._json is not None:
+            value = self._json.get(key)
+            return list(value) if value else []
+        return self._form.getlist(f"{key}[]") or self._form.getlist(key)
+
+    def get_poll_options(self) -> list[str]:
+        if self._json is not None:
+            options = (self._json.get("poll") or {}).get("options") or []
+        else:
+            options = self._form.getlist("poll[options][]")
+        return [str(option) for option in options]
+
+    def get_poll_multiple(self) -> bool:
+        if self._json is not None:
+            return bool((self._json.get("poll") or {}).get("multiple"))
+        return str(self._form.get("poll[multiple]", "")).lower() == "true"
+
+    def get_poll_expires_in_seconds(self) -> int | None:
+        if self._json is not None:
+            value = (self._json.get("poll") or {}).get("expires_in")
+        else:
+            value = self._form.get("poll[expires_in]")
+        return int(str(value)) if value else None
+
+
 @router.post("/api/v1/statuses", response_model=None)
 async def statuses_create(
     request: Request,
@@ -1381,15 +1434,19 @@ async def statuses_create(
                 status_code=200,
             )
 
-    form = await request.form()
+    content_type, _, _ = request.headers.get("Content-Type", "").partition(";")
+    if content_type.strip().lower() == "application/json":
+        params = _StatusParams(await request.json(), None)
+    else:
+        params = _StatusParams(None, await request.form())
 
-    content_value = form.get("status")
+    content_value = params.get("status")
     content = str(content_value) if content_value is not None else ""
-    content_warning_value = form.get("spoiler_text")
+    content_warning_value = params.get("spoiler_text")
     content_warning = str(content_warning_value) if content_warning_value else None
-    sensitive = str(form.get("sensitive", "")).lower() == "true"
+    sensitive = params.get_bool("sensitive")
 
-    media_ids = form.getlist("media_ids[]") or form.getlist("media_ids")
+    media_ids = params.get_list("media_ids")
     uploads = []
     for media_id in media_ids:
         upload = await ids.get_upload_by_mastodon_id(db_session, str(media_id))
@@ -1411,7 +1468,7 @@ async def statuses_create(
     if not content:
         raise MastodonError(422, "validation_failed", "status is required")
 
-    in_reply_to_id = form.get("in_reply_to_id")
+    in_reply_to_id = params.get("in_reply_to_id")
     in_reply_to = None
     if in_reply_to_id:
         parent = await ids.get_object_by_mastodon_id(db_session, str(in_reply_to_id))
@@ -1419,30 +1476,28 @@ async def statuses_create(
             raise MastodonError(422, "validation_failed", "in_reply_to_id not found")
         in_reply_to = parent.ap_id
 
-    visibility_param = str(form.get("visibility") or "public")
+    visibility_param = str(params.get("visibility") or "public")
     visibility = _MASTODON_VISIBILITY_TO_AP.get(visibility_param)
     if visibility is None:
         raise MastodonError(422, "validation_failed", "invalid visibility")
 
-    language_value = form.get("language")
+    language_value = params.get("language")
     language = str(language_value) if language_value else None
 
     ap_type = "Note"
     poll_type = None
     poll_answers = None
     poll_duration_in_minutes = None
-    poll_options = form.getlist("poll[options][]")
+    poll_options = params.get_poll_options()
     if poll_options:
         ap_type = "Question"
-        poll_answers = [str(option) for option in poll_options]
+        poll_answers = poll_options
         if len(poll_answers) < 2:
             raise MastodonError(
                 422, "validation_failed", "poll must have at least 2 options"
             )
-        multiple = str(form.get("poll[multiple]", "")).lower() == "true"
-        poll_type = "anyOf" if multiple else "oneOf"
-        expires_in_value = form.get("poll[expires_in]")
-        expires_in_seconds = int(str(expires_in_value)) if expires_in_value else 3600
+        poll_type = "anyOf" if params.get_poll_multiple() else "oneOf"
+        expires_in_seconds = params.get_poll_expires_in_seconds() or 3600
         # send_create takes whole minutes; never round a short-lived poll
         # down to 0 (which would mean "no expiration" / immediately expired).
         poll_duration_in_minutes = max(1, expires_in_seconds // 60)
