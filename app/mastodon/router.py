@@ -20,6 +20,7 @@ from fastapi import Request
 from fastapi import UploadFile as FastAPIUploadFile
 from sqlalchemy import delete
 from sqlalchemy import select
+from sqlalchemy import update
 from sqlalchemy.orm import joinedload
 from starlette.datastructures import UploadFile
 from starlette.responses import JSONResponse
@@ -1217,6 +1218,237 @@ async def notifications_dismiss(
         )
         await db_session.commit()
     return JSONResponse(content={}, status_code=200)
+
+
+# --- Conversations ---------------------------------------------------------------
+# Mastodon's DM inbox: one entry per `ap_context` thread of direct-visibility
+# statuses. There's no dedicated "conversation" table, so threads are grouped
+# the same way `app.admin.admin_direct_messages` builds the existing HTML view.
+
+
+async def _dm_thread_unread_contexts(db_session: AsyncSession) -> set[str]:
+    return set(
+        (
+            await db_session.execute(
+                select(activitypub.models.InboxObject.ap_context)
+                .join(
+                    models.Notification,
+                    models.Notification.inbox_object_id
+                    == activitypub.models.InboxObject.id,
+                )
+                .where(
+                    models.Notification.notification_type
+                    == models.NotificationType.MENTION,
+                    models.Notification.is_new.is_(True),
+                    activitypub.models.InboxObject.visibility
+                    == ap.VisibilityEnum.DIRECT,
+                    activitypub.models.InboxObject.ap_context.is_not(None),
+                )
+                .distinct()
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+
+async def _dm_threads(
+    db_session: AsyncSession,
+) -> list[tuple[AnyboxObject, set[int], bool]]:
+    """Every DM thread's most recent status, participant actor ids (from the
+    inbox side only — an outbox-only thread has none yet), and unread state,
+    newest first.
+    """
+    inbox_objects = (
+        (
+            await db_session.execute(
+                select(activitypub.models.InboxObject)
+                .where(
+                    activitypub.models.InboxObject.visibility
+                    == ap.VisibilityEnum.DIRECT,
+                    activitypub.models.InboxObject.ap_context.is_not(None),
+                    activitypub.models.InboxObject.is_transient.is_(False),
+                    activitypub.models.InboxObject.is_deleted.is_(False),
+                )
+                .options(joinedload(activitypub.models.InboxObject.actor))
+            )
+        )
+        .unique()
+        .scalars()
+        .all()
+    )
+    outbox_objects = (
+        (
+            await db_session.execute(
+                select(activitypub.models.OutboxObject)
+                .where(
+                    activitypub.models.OutboxObject.visibility
+                    == ap.VisibilityEnum.DIRECT,
+                    activitypub.models.OutboxObject.ap_context.is_not(None),
+                    activitypub.models.OutboxObject.is_transient.is_(False),
+                    activitypub.models.OutboxObject.is_deleted.is_(False),
+                )
+                .options(
+                    joinedload(
+                        activitypub.models.OutboxObject.outbox_object_attachments
+                    ).joinedload(activitypub.models.OutboxObjectAttachment.upload)
+                )
+            )
+        )
+        .unique()
+        .scalars()
+        .all()
+    )
+
+    unread_contexts = await _dm_thread_unread_contexts(db_session)
+
+    by_context: dict[str, dict] = {}
+    for obj in [*inbox_objects, *outbox_objects]:
+        thread = by_context.setdefault(
+            obj.ap_context, {"objects": [], "actor_ids": set()}
+        )
+        thread["objects"].append(obj)
+        if isinstance(obj, activitypub.models.InboxObject):
+            thread["actor_ids"].add(obj.actor_id)
+
+    threads = [
+        (
+            max(thread["objects"], key=_status_id_int),
+            thread["actor_ids"],
+            context in unread_contexts,
+        )
+        for context, thread in by_context.items()
+    ]
+    threads.sort(key=lambda item: _status_id_int(item[0]), reverse=True)
+    return threads
+
+
+async def _serialize_conversation(
+    db_session: AsyncSession,
+    last: AnyboxObject,
+    actor_ids: set[int],
+    unread: bool,
+) -> dict:
+    actors: list[activitypub.models.Actor] = []
+    if actor_ids:
+        actors = list(
+            (
+                await db_session.execute(
+                    select(activitypub.models.Actor).where(
+                        activitypub.models.Actor.id.in_(actor_ids)
+                    )
+                )
+            ).scalars()
+        )
+    elif last.is_from_outbox:
+        # A thread the owner started that hasn't been replied to yet has no
+        # inbox rows to read participants off of — fall back to the mention
+        # tags, like the HTML DM view does.
+        mention_ap_ids = [
+            tag["href"]
+            for tag in last.tags
+            if isinstance(tag, dict)
+            and tag.get("type") == "Mention"
+            and isinstance(tag.get("href"), str)
+        ]
+        if mention_ap_ids:
+            actors = list(
+                (
+                    await db_session.execute(
+                        select(activitypub.models.Actor).where(
+                            activitypub.models.Actor.ap_id.in_(mention_ap_ids)
+                        )
+                    )
+                ).scalars()
+            )
+
+    status_id = (
+        ids.encode_outbox_id(last)
+        if isinstance(last, activitypub.models.OutboxObject)
+        else ids.encode_inbox_id(last)
+    )
+
+    return {
+        "id": status_id,
+        "unread": unread,
+        "accounts": [
+            await serializers.serialize_account(db_session, actor) for actor in actors
+        ],
+        "last_status": await serializers.serialize_status(db_session, last),
+    }
+
+
+def _safe_id_int(mastodon_id: str | None) -> int | None:
+    if not mastodon_id:
+        return None
+    try:
+        return int(mastodon_id)
+    except ValueError:
+        return None
+
+
+@router.get("/api/v1/conversations", response_model=None)
+async def conversations_list(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:statuses")),
+) -> JSONResponse:
+    params = pagination.parse_pagination(request)
+    threads = await _dm_threads(db_session)
+
+    if (max_int := _safe_id_int(params.max_id)) is not None:
+        threads = [t for t in threads if _status_id_int(t[0]) < max_int]
+    if (cursor_int := _safe_id_int(params.min_id or params.since_id)) is not None:
+        threads = [t for t in threads if _status_id_int(t[0]) > cursor_int]
+    threads = threads[: params.limit]
+
+    serialized = [
+        await _serialize_conversation(db_session, last, actor_ids, unread)
+        for last, actor_ids, unread in threads
+    ]
+    response = JSONResponse(content=serialized, status_code=200)
+    link_header = pagination.build_link_header(
+        request, [entity["id"] for entity in serialized]
+    )
+    if link_header:
+        response.headers["Link"] = link_header
+    return response
+
+
+@router.post("/api/v1/conversations/{conversation_id}/read", response_model=None)
+async def conversations_read(
+    conversation_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:conversations")),
+) -> JSONResponse:
+    obj = await ids.get_object_by_mastodon_id(db_session, conversation_id)
+    if obj is None or obj.ap_context is None:
+        raise MastodonError(404, "not_found", "conversation not found")
+
+    await db_session.execute(
+        update(models.Notification)
+        .where(
+            models.Notification.notification_type == models.NotificationType.MENTION,
+            models.Notification.inbox_object_id.in_(
+                select(activitypub.models.InboxObject.id).where(
+                    activitypub.models.InboxObject.ap_context == obj.ap_context,
+                )
+            ),
+        )
+        .values(is_new=False)
+        .execution_options(synchronize_session=False)
+    )
+    await db_session.commit()
+
+    threads = await _dm_threads(db_session)
+    match = next((t for t in threads if t[0].ap_context == obj.ap_context), None)
+    if match is None:
+        raise MastodonError(404, "not_found", "conversation not found")
+    last, actor_ids, _ = match
+    return JSONResponse(
+        content=await _serialize_conversation(db_session, last, actor_ids, False),
+        status_code=200,
+    )
 
 
 # --- Single-user degradations ---------------------------------------------------

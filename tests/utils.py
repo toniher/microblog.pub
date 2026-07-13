@@ -204,7 +204,7 @@ def setup_inbox_note(
     cc: list[str] | None = None,
     tags: list[ap.RawObject] | None = None,
     in_reply_to: str | None = None,
-) -> activitypub.models.OutboxObject:
+) -> activitypub.models.InboxObject:
     note_id = uuid4().hex
     note_from_outbox = RemoteObject(
         factories.build_note_object(
