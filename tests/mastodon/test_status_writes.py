@@ -1,3 +1,4 @@
+import io
 import secrets
 from datetime import timedelta
 from uuid import uuid4
@@ -5,6 +6,7 @@ from uuid import uuid4
 import pytest
 import respx
 from fastapi.testclient import TestClient
+from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from activitypub import activitypub as ap
@@ -29,6 +31,12 @@ async def _make_access_token(db_session: AsyncSession, scope: str) -> str:
     db_session.add(token)
     await db_session.commit()
     return token.access_token
+
+
+def _png_bytes(size: tuple[int, int] = (16, 12)) -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGB", size, color=(255, 0, 0)).save(buf, format="PNG")
+    return buf.getvalue()
 
 
 def _build_poll_object(
@@ -511,4 +519,212 @@ async def test_poll_vote_rejects_ended_poll(
         data={"choices[]": "0"},
     )
 
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_statuses_source(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    token = await _make_access_token(async_db_session, "read:statuses write:statuses")
+
+    create_response = client.post(
+        "/api/v1/statuses",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"status": "Original text", "spoiler_text": "cw"},
+    )
+    status_id = create_response.json()["id"]
+
+    response = client.get(
+        f"/api/v1/statuses/{status_id}/source",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data == {"id": status_id, "text": "Original text", "spoiler_text": "cw"}
+
+
+def test_statuses_source_requires_auth(client: TestClient) -> None:
+    response = client.get("/api/v1/statuses/1/source")
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_statuses_source_not_found(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    token = await _make_access_token(async_db_session, "read:statuses")
+    response = client.get(
+        "/api/v1/statuses/999999/source",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_statuses_update_basic(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    # Regression test: Tusky/Fedilab both call GET .../source then
+    # PUT /api/v1/statuses/{id} to edit a post — neither endpoint existed
+    # before, so editing always failed.
+    token = await _make_access_token(async_db_session, "read:statuses write:statuses")
+
+    create_response = client.post(
+        "/api/v1/statuses",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"status": "Original text"},
+    )
+    status_id = create_response.json()["id"]
+    assert create_response.json()["edited_at"] is None
+
+    response = client.put(
+        f"/api/v1/statuses/{status_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        data={
+            "status": "Edited text",
+            "spoiler_text": "now sensitive",
+            "sensitive": "true",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == status_id
+    assert data["content"] == "<p>Edited text</p>\n"
+    assert data["spoiler_text"] == "now sensitive"
+    assert data["sensitive"] is True
+    assert data["edited_at"] is not None
+
+    source_response = client.get(
+        f"/api/v1/statuses/{status_id}/source",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert source_response.json()["text"] == "Edited text"
+
+
+@pytest.mark.asyncio
+async def test_statuses_update_json_body(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    token = await _make_access_token(async_db_session, "write:statuses")
+
+    create_response = client.post(
+        "/api/v1/statuses",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"status": "Original text"},
+    )
+    status_id = create_response.json()["id"]
+
+    response = client.put(
+        f"/api/v1/statuses/{status_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"status": "Edited via JSON"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["content"] == "<p>Edited via JSON</p>\n"
+
+
+@pytest.mark.asyncio
+async def test_statuses_update_without_media_ids_preserves_attachments(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    media_token = await _make_access_token(async_db_session, "write:media")
+    media_response = client.post(
+        "/api/v2/media",
+        headers={"Authorization": f"Bearer {media_token}"},
+        files={"file": ("photo.png", _png_bytes(), "image/png")},
+    )
+    media_id = media_response.json()["id"]
+
+    token = await _make_access_token(async_db_session, "write:statuses")
+    create_response = client.post(
+        "/api/v1/statuses",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"status": "With media", "media_ids[]": [media_id]},
+    )
+    status_id = create_response.json()["id"]
+    assert len(create_response.json()["media_attachments"]) == 1
+
+    response = client.put(
+        f"/api/v1/statuses/{status_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"status": "Edited, media untouched"},
+    )
+
+    assert response.status_code == 200
+    assert len(response.json()["media_attachments"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_statuses_update_replaces_media_ids(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    media_token = await _make_access_token(async_db_session, "write:media")
+    media_response = client.post(
+        "/api/v2/media",
+        headers={"Authorization": f"Bearer {media_token}"},
+        files={"file": ("photo.png", _png_bytes(), "image/png")},
+    )
+    media_id = media_response.json()["id"]
+
+    token = await _make_access_token(async_db_session, "write:statuses")
+    create_response = client.post(
+        "/api/v1/statuses",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"status": "With media", "media_ids[]": [media_id]},
+    )
+    status_id = create_response.json()["id"]
+
+    # An explicitly-empty list only round-trips over JSON: `multipart/form-data`
+    # has no way to distinguish a present-but-empty array from an absent field
+    # (httpx drops a `media_ids[]: []` form field entirely), so clearing every
+    # attachment requires a JSON-body edit.
+    response = client.put(
+        f"/api/v1/statuses/{status_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"status": "No more media", "media_ids": []},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["media_attachments"] == []
+
+
+def test_statuses_update_requires_auth(client: TestClient) -> None:
+    response = client.put("/api/v1/statuses/1", data={"status": "no token"})
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_statuses_update_not_found(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    token = await _make_access_token(async_db_session, "write:statuses")
+    response = client.put(
+        "/api/v1/statuses/999999",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"status": "hi"},
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_statuses_update_requires_status(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    token = await _make_access_token(async_db_session, "write:statuses")
+    create_response = client.post(
+        "/api/v1/statuses",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"status": "Original text"},
+    )
+    status_id = create_response.json()["id"]
+
+    response = client.put(
+        f"/api/v1/statuses/{status_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"status": ""},
+    )
     assert response.status_code == 422

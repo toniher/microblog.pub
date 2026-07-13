@@ -30,6 +30,7 @@ from activitypub.boxes import public_outbox_objects_count
 from app import config
 from app.database import AsyncSession
 from app.mastodon import ids
+from app.utils.datetime import parse_isoformat
 
 # The actor keypair is generated once, during initial setup, and never
 # rotated — its mtime is a reasonable proxy for "when this instance/account
@@ -351,12 +352,18 @@ async def serialize_status(
 
     created_at = obj.ap_published_at or _FALLBACK_CREATED_AT
 
+    # `updated` is only ever set by an edit (send_update in activitypub/boxes.py
+    # for our own statuses, or an incoming Update activity for a cached remote
+    # one) — absent on every freshly-created object.
+    updated_raw = obj.ap_object.get("updated")
+    edited_at = _format_datetime(parse_isoformat(updated_raw)) if updated_raw else None
+
     return {
         "id": status_id,
         "uri": obj.ap_id,
         "url": _as_str(obj.url, obj.ap_id),
         "created_at": _format_datetime(created_at),
-        "edited_at": None,
+        "edited_at": edited_at,
         "account": await serialize_account(db_session, obj.actor),
         "content": _as_str(obj.content),
         "visibility": _VISIBILITY_MAP.get(

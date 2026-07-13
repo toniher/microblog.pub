@@ -5,6 +5,7 @@ import uuid
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import timedelta
+from typing import Any
 from urllib.parse import urlparse
 
 import fastapi
@@ -873,11 +874,22 @@ async def send_vote(
     return vote_id
 
 
+# Sentinel distinguishing "not passed, keep the existing value" from an
+# explicit `None`/falsy override — send_update() is shared by the admin web UI
+# (app/admin.py, only ever changes source/name) and the Mastodon API edit
+# endpoint (app/mastodon/router.py, always resends the full edit form), so the
+# default must mean "unchanged", not "cleared".
+_UNSET = object()
+
+
 async def send_update(
     db_session: AsyncSession,
     ap_id: str,
     source: str,
     name: str | None = None,
+    content_warning: Any = _UNSET,
+    is_sensitive: Any = _UNSET,
+    uploads: Any = _UNSET,
 ) -> str:
     outbox_object = await get_outbox_object_by_ap_id(db_session, ap_id)
     if not outbox_object:
@@ -898,6 +910,34 @@ async def send_update(
     updated = now().replace(microsecond=0).isoformat().replace("+00:00", "Z")
     content, tags, mentioned_actors = await markdownify(db_session, source)
 
+    resolved_content_warning = (
+        outbox_object.summary if content_warning is _UNSET else content_warning
+    )
+    resolved_is_sensitive = (
+        outbox_object.sensitive if is_sensitive is _UNSET else bool(is_sensitive)
+    )
+
+    if uploads is _UNSET:
+        attachments = outbox_object.ap_object.get("attachment") or []
+    else:
+        await db_session.execute(
+            delete(activitypub.models.OutboxObjectAttachment).where(
+                activitypub.models.OutboxObjectAttachment.outbox_object_id
+                == outbox_object.id
+            )
+        )
+        attachments = []
+        for upload, filename, alt_text in uploads or []:
+            attachments.append(upload_to_attachment(upload, filename, alt_text))
+            db_session.add(
+                activitypub.models.OutboxObjectAttachment(
+                    filename=filename,
+                    alt=alt_text,
+                    outbox_object_id=outbox_object.id,
+                    upload_id=upload.id,
+                )
+            )
+
     note = {
         "@context": ap.AS_EXTENDED_CTX,
         "type": outbox_object.ap_type,
@@ -911,10 +951,10 @@ async def send_update(
         "conversation": outbox_object.ap_context,
         "url": outbox_object.url,
         "tag": dedup_tags(tags),
-        "summary": outbox_object.summary,
+        "summary": resolved_content_warning,
         "inReplyTo": outbox_object.in_reply_to,
-        "sensitive": outbox_object.sensitive,
-        "attachment": outbox_object.ap_object.get("attachment") or [],
+        "sensitive": resolved_is_sensitive,
+        "attachment": attachments,
         "updated": updated,
     }
     if outbox_object.ap_type == "Article" and name:

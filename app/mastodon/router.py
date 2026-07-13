@@ -45,6 +45,7 @@ from activitypub.boxes import send_like
 from activitypub.boxes import send_reject
 from activitypub.boxes import send_unblock
 from activitypub.boxes import send_undo
+from activitypub.boxes import send_update
 from activitypub.boxes import send_vote
 from app import config
 from app import models
@@ -645,6 +646,28 @@ async def statuses_show(
     obj = await _get_visible_status_or_404(request, db_session, status_id)
     return JSONResponse(
         content=await serializers.serialize_status(db_session, obj), status_code=200
+    )
+
+
+@router.get("/api/v1/statuses/{status_id}/source", response_model=None)
+async def statuses_source(
+    status_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:statuses")),
+) -> JSONResponse:
+    # Only the owner's own statuses (OutboxObject) can be edited, so this is
+    # meaningless for a cached remote (InboxObject) status.
+    obj = await ids.get_object_by_mastodon_id(db_session, status_id)
+    if obj is None or not isinstance(obj, activitypub.models.OutboxObject):
+        raise MastodonError(404, "not_found", "status not found")
+
+    return JSONResponse(
+        content={
+            "id": status_id,
+            "text": obj.source or "",
+            "spoiler_text": obj.summary or "",
+        },
+        status_code=200,
     )
 
 
@@ -1394,6 +1417,17 @@ class _StatusParams:
             return list(value) if value else []
         return self._form.getlist(f"{key}[]") or self._form.getlist(key)
 
+    def has(self, key: str) -> bool:
+        """Whether `key` was present in the body at all — distinct from being
+        present-but-empty. Used for fields where an edit should only touch
+        the existing value if the client actually sent something for it
+        (e.g. `media_ids`, where absence must mean "leave attachments alone",
+        not "clear them").
+        """
+        if self._json is not None:
+            return key in self._json
+        return f"{key}[]" in self._form or key in self._form
+
     def get_poll_options(self) -> list[str]:
         if self._json is not None:
             options = (self._json.get("poll") or {}).get("options") or []
@@ -1529,6 +1563,66 @@ async def statuses_create(
     assert created is not None
     return JSONResponse(
         content=await serializers.serialize_status(db_session, created),
+        status_code=200,
+    )
+
+
+@router.put("/api/v1/statuses/{status_id}", response_model=None)
+async def statuses_update(
+    status_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:statuses")),
+) -> JSONResponse:
+    obj = await ids.get_object_by_mastodon_id(db_session, status_id)
+    if obj is None or not isinstance(obj, activitypub.models.OutboxObject):
+        raise MastodonError(404, "not_found", "status not found")
+
+    content_type, _, _ = request.headers.get("Content-Type", "").partition(";")
+    if content_type.strip().lower() == "application/json":
+        params = _StatusParams(await request.json(), None)
+    else:
+        params = _StatusParams(None, await request.form())
+
+    content_value = params.get("status")
+    content = str(content_value) if content_value is not None else ""
+    if not content:
+        raise MastodonError(422, "validation_failed", "status is required")
+
+    content_warning_value = params.get("spoiler_text")
+    content_warning = str(content_warning_value) if content_warning_value else None
+    sensitive = params.get_bool("sensitive")
+
+    # `uploads` is only passed to send_update() when `media_ids` was actually
+    # in the request body — its absence must mean "leave attachments alone",
+    # which is send_update()'s default (_UNSET), not "clear them" (None/[]).
+    send_update_kwargs: dict[str, Any] = {}
+    if params.has("media_ids"):
+        uploads = []
+        for media_id in params.get_list("media_ids"):
+            upload = await ids.get_upload_by_mastodon_id(db_session, str(media_id))
+            if upload is None:
+                raise MastodonError(
+                    422, "validation_failed", f"unknown media id {media_id}"
+                )
+            uploads.append(
+                (upload, serializers.synthetic_filename(upload), upload.description)
+            )
+        send_update_kwargs["uploads"] = uploads
+
+    await send_update(
+        db_session,
+        ap_id=obj.ap_id,
+        source=content,
+        content_warning=content_warning,
+        is_sensitive=sensitive,
+        **send_update_kwargs,
+    )
+
+    updated = await ids.get_object_by_mastodon_id(db_session, status_id)
+    assert updated is not None
+    return JSONResponse(
+        content=await serializers.serialize_status(db_session, updated),
         status_code=200,
     )
 
