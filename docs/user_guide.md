@@ -8,6 +8,14 @@ Skimming over the [Overview section of the ActivityPub specification](https://ww
 
 Also, you should know that the **Fediverse** is a common name used to describe all the interconnected/federated instances of servers supporting ActivityPub (like Mastodon, Pleroma, PeerTube, PixelFed...).
 
+## Mastodon client apps
+
+Besides the built-in web UI, you can also use your instance from any Mastodon
+client app (Tusky, Fedilab, Ivory, the official Mastodon app...): enter your
+domain where the app asks for an instance, then log in with your admin
+password. See the dedicated [Mastodon client apps](mastodon_api.md) page for
+what's supported, what isn't, and troubleshooting tips.
+
 ## Configuration
 
 ### Profile

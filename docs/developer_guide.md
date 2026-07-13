@@ -31,6 +31,15 @@ inv -l
 The uploads are stored in the `data/` directory, using a simple content-addressed storage system (file contents hash is BLOB filename).
 Files metadata are stored in the database.
 
+### Mastodon client API
+
+`app/mastodon/` implements a subset of the [Mastodon client REST
+API](https://docs.joinmastodon.org/client/intro/) (OAuth, timelines, statuses,
+notifications, conversations, accounts/social graph, search, media) on top of
+the same ActivityPub data — no separate data model. It's mounted unconditionally
+in `app/main.py`. See the [user-facing docs](mastodon_api.md) for what's
+supported.
+
 ### Emoji assets
 
 Standard unicode emoji are rendered as [Twemoji](https://github.com/jdecked/twemoji)

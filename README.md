@@ -27,6 +27,9 @@ Instances in the wild (this fork or close relatives):
  - Exposes your ActivityPub profile as a minimalist microblog
     - Author notes in Markdown, with code highlighting support
     - Dedicated section for articles/blog posts (enabled when the first article is posted)
+ - Mastodon client API compatibility
+    - Log in from apps like [Tusky](https://tusky.app/) or [Fedilab](https://fedilab.app/) using your admin password
+    - Read/post/interact, notifications, direct messages, search — no separate account, same actor as the web UI
  - Lightweight
     - Uses SQLite, and Python 3.12 (3.10+ supported)
     - Can be deployed on small VPS
