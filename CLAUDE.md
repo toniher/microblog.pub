@@ -17,6 +17,12 @@ Pleroma, PeerTube, PixelFed…) and doubles as an IndieWeb citizen.
   articles/blog section. Mostly server-rendered HTML/CSS with minimal JS.
 - **IndieWeb**: IndieAuth (OAuth2), Micropub, sends/receives Webmentions,
   Microformats markup, RSS/Atom/JSON feeds.
+- **Mastodon client API**: a subset of the Mastodon client REST API (`app/mastodon/`)
+  layered on the same ActivityPub data — OAuth2 app registration/login, timelines,
+  statuses (read/write/interactions), notifications, conversations (DMs), social
+  graph, search, media uploads. Lets existing Mastodon apps (Tusky, Fedilab…) act
+  as another client for the same single actor. See `docs/mastodon_api.md` for the
+  user-facing feature matrix.
 - **Privacy-aware**: EXIF stripped from uploads, all remote media proxied,
   outbox access controlled via HTTP signature.
 - **Lightweight & backup-friendly**: SQLite; everything mutable lives in `data/`
@@ -38,6 +44,13 @@ templates, Alembic migrations, background workers for federation traffic.
   - `source.py` — Markdown→HTML, hashtag/mention extraction
   - `uploads.py`, `media.py` — attachment storage, thumbnails, blurhash, proxy
   - `utils/` — datetime, url, highlight, microformats, opengraph, facepile, stats…
+  - `mastodon/` — Mastodon-compatible client REST API, mounted unconditionally in
+    `main.py`: `router.py` (timelines/statuses/notifications/conversations/social
+    graph/search/media), `oauth.py` (adapts `indieauth.py`'s OAuth2 server rather
+    than forking one), `serializers.py`/`entities.py` (AP object → Mastodon JSON),
+    `ids.py` (timestamp-prefixed numeric ids so Mastodon's id-ordering contract
+    holds across the merged inbox/outbox), `pagination.py` (`Link` header +
+    `max_id`/`since_id`/`min_id`), `scopes.py`, `errors.py`
 - `activitypub/` — the AP domain library (being **modularized** out of `app/`, see below)
   - `activitypub.py` — AP constants, `RawObject`, `ME` actor object, `fetch()`/collection parsing
   - `actor.py`, `ap_object.py` — actor + object models (pydantic v2 + SQLAlchemy)
@@ -46,7 +59,8 @@ templates, Alembic migrations, background workers for federation traffic.
   - `models.py` — SQLAlchemy ORM models (Outbox/Inbox/Follower/Following/Upload…)
   - `tests/` — AP-focused tests + `factories.py` (factory-boy)
 - `alembic/` — schema migrations (`alembic/versions/`, excluded from black/mypy)
-- `tests/` — app/integration tests; `tests/conftest.py` provides the DB + TestClient fixtures
+- `tests/` — app/integration tests; `tests/conftest.py` provides the DB + TestClient
+  fixtures; `tests/mastodon/` covers the Mastodon client API surface
 - `data/` — runtime state (gitignored); `tests.toml` is the test config
 - `templates/`, `static/`, `scss/` — server-rendered UI assets
 - `tasks.py` — `invoke` task runner (lint, tests, migrations, scss, workers…)
@@ -89,7 +103,7 @@ make config       # configuration wizard
 ```
 
 Testing notes:
-- Test suite runs against an in-memory SQLite DB; ~69 tests, ~30s.
+- Test suite runs against an in-memory SQLite DB; ~225 tests, ~110s.
 - `activitypub/tests/test_actor.py` does real-network retries (~20s) — when running
   the whole suite ad hoc, pass `--timeout=60` (pytest-timeout) so a slow/hung test
   is killed instead of stalling the run.
