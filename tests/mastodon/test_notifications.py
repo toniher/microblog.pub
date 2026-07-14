@@ -1,3 +1,4 @@
+import base64
 import re
 import secrets
 from datetime import datetime
@@ -12,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from activitypub import activitypub as ap
 from activitypub import boxes
 from activitypub.ap_object import ObjectType
+from app import config
 from app import models
 from app.mastodon import ids
 from tests.utils import setup_remote_actor
@@ -327,12 +329,23 @@ async def test_notification_requests_are_always_empty(
     assert merged_response.json() == {"merged": True}
 
 
+def _decode_proxied_media_url(proxied_url: str) -> str:
+    # BASE_URL + "/proxy/media/{expires}/{sig}/" + base64(original_url)
+    encoded = proxied_url.rstrip("/").rsplit("/", 1)[-1]
+    padded = encoded + "=" * (-len(encoded) % 4)
+    return base64.urlsafe_b64decode(padded).decode()
+
+
 @pytest.mark.asyncio
 async def test_notifications_list_serializes_actor_string_media_fields(
     client: TestClient,
     async_db_session: AsyncSession,
     respx_mock: respx.MockRouter,
 ) -> None:
+    # icon/image given as a bare string (not the usual {"type": "Image",
+    # "url": ...} object) must still resolve correctly — and, like every
+    # other remote media URL, get proxied rather than leaking the raw
+    # remote URL to the client.
     ra = setup_remote_actor(respx_mock, base_url="https://example.com")
     ra.ap_actor["icon"] = "https://example.com/media/avatar.jpg"
     ra.ap_actor["image"] = "https://example.com/media/header.jpg"
@@ -354,5 +367,13 @@ async def test_notifications_list_serializes_actor_string_media_fields(
 
     assert response.status_code == 200
     account = response.json()[0]["account"]
-    assert account["avatar_static"] == "https://example.com/media/avatar.jpg"
-    assert account["header"] == "https://example.com/media/header.jpg"
+    assert account["avatar_static"].startswith(f"{config.BASE_URL}/proxy/media/")
+    assert account["header"].startswith(f"{config.BASE_URL}/proxy/media/")
+    assert (
+        _decode_proxied_media_url(account["avatar_static"])
+        == "https://example.com/media/avatar.jpg"
+    )
+    assert (
+        _decode_proxied_media_url(account["header"])
+        == "https://example.com/media/header.jpg"
+    )
