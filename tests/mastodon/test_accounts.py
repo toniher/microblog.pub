@@ -177,6 +177,46 @@ async def test_accounts_relationships(
     assert data[remote_id]["followed_by"] is True
 
 
+def test_accounts_index_requires_auth(client: TestClient) -> None:
+    response = client.get(f"/api/v1/accounts?id[]={ids.LOCAL_ACTOR_ID}")
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_accounts_index_owner(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    token = await _make_access_token(async_db_session, "read:accounts")
+
+    response = client.get(
+        f"/api/v1/accounts?id[]={ids.LOCAL_ACTOR_ID}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["id"] == ids.LOCAL_ACTOR_ID
+    assert data[0]["username"] == config.USERNAME
+
+
+@pytest.mark.asyncio
+async def test_accounts_index_unknown_id_silently_skipped(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    token = await _make_access_token(async_db_session, "read:accounts")
+
+    response = client.get(
+        f"/api/v1/accounts?id[]=999999&id[]={ids.LOCAL_ACTOR_ID}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["id"] == ids.LOCAL_ACTOR_ID
+
+
 def test_accounts_familiar_followers_requires_auth(client: TestClient) -> None:
     response = client.get("/api/v1/accounts/familiar_followers?id[]=0")
     assert response.status_code == 401

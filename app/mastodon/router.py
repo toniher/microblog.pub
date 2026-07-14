@@ -271,6 +271,31 @@ async def accounts_verify_credentials(
     return JSONResponse(content=account, status_code=200)
 
 
+@router.get("/api/v1/accounts", response_model=None)
+async def accounts_index(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:accounts")),
+) -> JSONResponse:
+    # Mastodon's "view multiple profiles" endpoint (GET /api/v1/accounts?
+    # id[]=1&id[]=2) — mastodon-ios fetches this when loading a profile,
+    # including the signed-in user's own. Unknown ids are silently skipped
+    # rather than 404ing the whole batch.
+    raw_ids = request.query_params.getlist("id[]") or request.query_params.getlist("id")
+
+    accounts = []
+    for raw_id in raw_ids:
+        if raw_id == ids.LOCAL_ACTOR_ID:
+            accounts.append(await serializers.serialize_owner_account(db_session))
+            continue
+
+        actor = await ids.get_account_by_mastodon_id(db_session, raw_id)
+        if actor is not None:
+            accounts.append(await serializers.serialize_account(db_session, actor))
+
+    return JSONResponse(content=accounts, status_code=200)
+
+
 def _serialize_relationship(
     account_id: str,
     actor: activitypub.models.Actor | None,
