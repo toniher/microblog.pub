@@ -1093,9 +1093,7 @@ async def _serialize_notification(
     result = {
         "id": str(notification.id),
         "type": mastodon_type,
-        "created_at": created_at.replace(tzinfo=timezone.utc)
-        .isoformat()
-        .replace("+00:00", "Z"),
+        "created_at": serializers.format_datetime(created_at),
         "account": await serializers.serialize_account(db_session, notification.actor),
     }
 

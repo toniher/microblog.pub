@@ -1,4 +1,7 @@
+import re
 import secrets
+from datetime import datetime
+from datetime import timezone
 
 import pytest
 import respx
@@ -116,6 +119,38 @@ async def test_notifications_list_marks_as_read(
         )
     ).one()
     assert refreshed.is_new is False
+
+
+@pytest.mark.asyncio
+async def test_notifications_list_formats_created_at_with_millisecond_precision(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    # Plain `datetime.isoformat()` emits 6-digit microseconds whenever they're
+    # non-zero (the common case for real timestamps), which strict RFC3339
+    # clients (e.g. Ice Cubes) fail to decode — silently dropping every
+    # notification in the response. Pin to exactly 3 fractional digits.
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    follower = setup_remote_actor_as_follower(ra)
+    assert follower.actor is not None
+
+    notif = models.Notification(
+        notification_type=models.NotificationType.NEW_FOLLOWER,
+        actor_id=follower.actor.id,
+        created_at=datetime(2024, 1, 1, 12, 0, 0, 123456, tzinfo=timezone.utc),
+    )
+    async_db_session.add(notif)
+    await async_db_session.commit()
+
+    token = await _make_access_token(async_db_session, "read:notifications")
+    response = client.get(
+        "/api/v1/notifications", headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 200
+    created_at = response.json()[0]["created_at"]
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z", created_at)
 
 
 @pytest.mark.asyncio

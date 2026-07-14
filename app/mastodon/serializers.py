@@ -38,7 +38,7 @@ from app.utils.datetime import parse_isoformat
 _FALLBACK_CREATED_AT = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 
-def _format_datetime(dt: datetime) -> str:
+def format_datetime(dt: datetime) -> str:
     """Format a datetime the way the Mastodon API does: RFC3339 with
     millisecond precision and a ``Z`` suffix (``2024-01-01T00:00:00.000Z``).
 
@@ -132,7 +132,7 @@ async def serialize_account(
         "bot": actor.ap_type == "Service",
         "discoverable": True,
         "group": False,
-        "created_at": _format_datetime(created_at),
+        "created_at": format_datetime(created_at),
         "note": _as_str(actor.summary),
         # `actor.url` can be a Link dict/list on some servers; coerce to a
         # string, falling back to the actor's id.
@@ -231,7 +231,7 @@ def serialize_poll(obj: AnyboxObject, status_id: str) -> dict | None:
     return {
         "id": status_id,
         "expires_at": (
-            _format_datetime(obj.poll_end_time) if obj.poll_end_time else None
+            format_datetime(obj.poll_end_time) if obj.poll_end_time else None
         ),
         "expired": obj.is_poll_ended,
         "multiple": not obj.is_one_of_poll,
@@ -356,13 +356,13 @@ async def serialize_status(
     # for our own statuses, or an incoming Update activity for a cached remote
     # one) — absent on every freshly-created object.
     updated_raw = obj.ap_object.get("updated")
-    edited_at = _format_datetime(parse_isoformat(updated_raw)) if updated_raw else None
+    edited_at = format_datetime(parse_isoformat(updated_raw)) if updated_raw else None
 
     return {
         "id": status_id,
         "uri": obj.ap_id,
         "url": _as_str(obj.url, obj.ap_id),
-        "created_at": _format_datetime(created_at),
+        "created_at": format_datetime(created_at),
         "edited_at": edited_at,
         "account": await serialize_account(db_session, obj.actor),
         "content": _as_str(obj.content),
