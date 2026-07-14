@@ -18,6 +18,7 @@ from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import Request
 from fastapi import UploadFile as FastAPIUploadFile
+from loguru import logger
 from sqlalchemy import delete
 from sqlalchemy import select
 from sqlalchemy import update
@@ -1153,6 +1154,13 @@ async def notifications_list(
         for notif in notifications
         if (entity := await _serialize_notification(db_session, notif)) is not None
     ]
+    logger.info(
+        "notifications_list: query returned "
+        f"{len(notifications)} row(s) "
+        f"types={[n.notification_type for n in notifications]} "
+        f"without_actor={sum(1 for n in notifications if n.actor is None)}, "
+        f"serialized {len(serialized)}"
+    )
 
     # Mirror the existing HTML notifications page (app/admin.py): viewing
     # marks them read.
