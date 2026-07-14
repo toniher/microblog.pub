@@ -395,6 +395,24 @@ async def accounts_lookup(
     )
 
 
+@router.get("/api/v1/accounts/familiar_followers", response_model=None)
+async def accounts_familiar_followers(
+    request: Request,
+    token_info: AccessTokenInfo = Depends(require_scope("read:accounts")),
+) -> JSONResponse:
+    # This must be registered before /api/v1/accounts/{account_id} — otherwise
+    # that route swallows this path (account_id="familiar_followers") and 404s,
+    # which is what clients like Ice Cubes see when loading a profile, in turn
+    # blanking the whole profile view including the account's own statuses.
+    # Single-user instance: there's no concept of mutual/familiar followers.
+    raw_ids = request.query_params.getlist("id[]") or request.query_params.getlist("id")
+
+    return JSONResponse(
+        content=[{"id": raw_id, "accounts": []} for raw_id in raw_ids],
+        status_code=200,
+    )
+
+
 @router.get("/api/v1/accounts/{account_id}", response_model=None)
 async def accounts_show(
     account_id: str,

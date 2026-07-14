@@ -177,6 +177,33 @@ async def test_accounts_relationships(
     assert data[remote_id]["followed_by"] is True
 
 
+def test_accounts_familiar_followers_requires_auth(client: TestClient) -> None:
+    response = client.get("/api/v1/accounts/familiar_followers?id[]=0")
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_accounts_familiar_followers(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    # Regression test: /api/v1/accounts/{account_id} is registered with a
+    # dynamic path and previously swallowed this route (account_id=
+    # "familiar_followers"), 404ing here instead of matching this handler.
+    token = await _make_access_token(async_db_session, "read:accounts")
+
+    response = client.get(
+        "/api/v1/accounts/familiar_followers?id[]=0&id[]=1",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data == [
+        {"id": "0", "accounts": []},
+        {"id": "1", "accounts": []},
+    ]
+
+
 def test_accounts_lookup_owner_bare_username(client: TestClient) -> None:
     response = client.get(f"/api/v1/accounts/lookup?acct={config.USERNAME}")
     assert response.status_code == 200
