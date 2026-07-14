@@ -133,7 +133,11 @@ async def oauth_token(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
 ) -> JSONResponse:
-    form_data = await request.form()
+    content_type, _, _ = request.headers.get("Content-Type", "").partition(";")
+    if content_type.strip().lower() == "application/json":
+        form_data = await request.json()
+    else:
+        form_data = await request.form()
     grant_type = str(form_data.get("grant_type", "authorization_code"))
 
     def _opt(key: str) -> str | None:

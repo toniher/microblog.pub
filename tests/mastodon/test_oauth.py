@@ -196,6 +196,37 @@ async def test_oauth_token_pkce_s256_valid(
 
 
 @pytest.mark.asyncio
+async def test_oauth_token_accepts_json_body(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    # Some Mastodon clients (e.g. Ice Cubes) POST the token exchange as
+    # application/json rather than form-encoded.
+    await _register_client(async_db_session)
+
+    authorize_response = _authorize(
+        client,
+        client_id="mastodon-client",
+        redirect_uri="https://client.example/callback",
+    )
+    code = _extract_code(authorize_response.headers["refresh"])
+
+    token_response = client.post(
+        "/oauth/token",
+        json={
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": "https://client.example/callback",
+            "client_id": "mastodon-client",
+        },
+    )
+
+    assert token_response.status_code == 200
+    data = token_response.json()
+    assert "access_token" in data
+    assert data["token_type"] == "Bearer"
+
+
+@pytest.mark.asyncio
 async def test_oauth_token_pkce_wrong_verifier_rejected(
     client: TestClient, async_db_session: AsyncSession
 ) -> None:
