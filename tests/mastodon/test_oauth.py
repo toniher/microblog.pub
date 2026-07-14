@@ -91,6 +91,41 @@ def test_apps_create_returns_application_shape(client: TestClient) -> None:
     assert data["vapid_key"] == ""
 
 
+def test_apps_create_accepts_json_body(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/apps",
+        json={
+            "client_name": "Ice Cubes",
+            "redirect_uris": "icecubesapp://oauth",
+            "scopes": "read write follow push",
+            "website": "https://apps.apple.com/app/ice-cubes",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "Ice Cubes"
+    assert data["redirect_uri"] == "icecubesapp://oauth"
+    assert "client_id" in data
+    assert "client_secret" in data
+
+
+def test_apps_create_accepts_json_body_with_redirect_uris_array(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/api/v1/apps",
+        json={
+            "client_name": "Ice Cubes",
+            "redirect_uris": ["icecubesapp://oauth"],
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["redirect_uri"] == "icecubesapp://oauth"
+
+
 def test_apps_create_requires_client_name(client: TestClient) -> None:
     response = client.post(
         "/api/v1/apps",

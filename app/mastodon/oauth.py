@@ -40,7 +40,11 @@ async def apps_create(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
 ) -> JSONResponse:
-    form_data = await request.form()
+    content_type, _, _ = request.headers.get("Content-Type", "").partition(";")
+    if content_type.strip().lower() == "application/json":
+        form_data = await request.json()
+    else:
+        form_data = await request.form()
 
     client_name = str(form_data.get("client_name", "")).strip()
     if not client_name:
@@ -49,11 +53,18 @@ async def apps_create(
     raw_redirect_uris = form_data.get("redirect_uris")
     if not raw_redirect_uris:
         raise MastodonError(422, "validation_failed", "redirect_uris is required")
-    redirect_uris_str = str(raw_redirect_uris)
+    redirect_uris_str = (
+        " ".join(raw_redirect_uris)
+        if isinstance(raw_redirect_uris, list)
+        else str(raw_redirect_uris)
+    )
     redirect_uris = redirect_uris_str.split()
 
     website = form_data.get("website")
-    scopes = str(form_data.get("scopes", "read"))
+    scopes = form_data.get("scopes", "read")
+    if isinstance(scopes, list):
+        scopes = " ".join(scopes)
+    scopes = str(scopes)
 
     client = models.OAuthClient(
         client_name=client_name,
