@@ -295,6 +295,38 @@ async def test_accounts_statuses_owner(
     assert ids.encode_outbox_id(outbox_object) in returned_ids
 
 
+@pytest.mark.asyncio
+async def test_accounts_statuses_owner_includes_own_boosts(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    # Regression test: the owner's own boosts are stored as an OutboxObject
+    # with ap_type="Announce", but this endpoint's owner-branch query used to
+    # hardcode ["Note", "Article", "Question"], silently excluding them from
+    # the owner's own profile (unlike a remote actor's, which already
+    # included "Announce").
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    follower = setup_remote_actor_as_follower(ra)
+    remote_note = RemoteObject(
+        factories.build_note_object(from_remote_actor=ra, content="From afar"),
+        ra,
+    )
+    inbox_object = factories.InboxObjectFactory.from_remote_object(
+        remote_note, follower.actor
+    )
+
+    await boxes.send_announce(async_db_session, inbox_object.ap_id)
+
+    response = client.get(f"/api/v1/accounts/{ids.LOCAL_ACTOR_ID}/statuses")
+
+    assert response.status_code == 200
+    reblogged_uris = [
+        status["reblog"]["uri"] for status in response.json() if status["reblog"]
+    ]
+    assert inbox_object.ap_id in reblogged_uris
+
+
 def test_accounts_statuses_remote_actor(
     client: TestClient, respx_mock: respx.MockRouter
 ) -> None:

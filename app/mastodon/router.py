@@ -496,9 +496,10 @@ async def accounts_statuses(
             select(activitypub.models.OutboxObject)
             .where(
                 activitypub.models.OutboxObject.is_deleted.is_(False),
-                activitypub.models.OutboxObject.ap_type.in_(
-                    ["Note", "Article", "Question"]
-                ),
+                # Must include "Announce" — otherwise the owner's own boosts
+                # never appear on their own profile, unlike a remote actor's
+                # (below), which already lists it.
+                activitypub.models.OutboxObject.ap_type.in_(_TIMELINE_OBJECT_TYPES),
                 activitypub.models.OutboxObject.visibility.in_(allowed_visibility),
             )
             .options(
@@ -543,9 +544,7 @@ async def accounts_statuses(
         .where(
             activitypub.models.InboxObject.ap_actor_id == actor.ap_id,
             activitypub.models.InboxObject.is_deleted.is_(False),
-            activitypub.models.InboxObject.ap_type.in_(
-                ["Note", "Article", "Question", "Announce"]
-            ),
+            activitypub.models.InboxObject.ap_type.in_(_TIMELINE_OBJECT_TYPES),
             activitypub.models.InboxObject.visibility.in_(allowed_visibility),
         )
         .options(joinedload(activitypub.models.InboxObject.actor))
