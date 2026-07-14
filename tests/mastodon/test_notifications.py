@@ -1,4 +1,8 @@
+import base64
+import re
 import secrets
+from datetime import datetime
+from datetime import timezone
 
 import pytest
 import respx
@@ -9,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from activitypub import activitypub as ap
 from activitypub import boxes
 from activitypub.ap_object import ObjectType
+from app import config
 from app import models
 from app.mastodon import ids
 from tests.utils import setup_remote_actor
@@ -116,6 +121,38 @@ async def test_notifications_list_marks_as_read(
         )
     ).one()
     assert refreshed.is_new is False
+
+
+@pytest.mark.asyncio
+async def test_notifications_list_formats_created_at_with_millisecond_precision(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    # Plain `datetime.isoformat()` emits 6-digit microseconds whenever they're
+    # non-zero (the common case for real timestamps), which strict RFC3339
+    # clients (e.g. Ice Cubes) fail to decode — silently dropping every
+    # notification in the response. Pin to exactly 3 fractional digits.
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    follower = setup_remote_actor_as_follower(ra)
+    assert follower.actor is not None
+
+    notif = models.Notification(
+        notification_type=models.NotificationType.NEW_FOLLOWER,
+        actor_id=follower.actor.id,
+        created_at=datetime(2024, 1, 1, 12, 0, 0, 123456, tzinfo=timezone.utc),
+    )
+    async_db_session.add(notif)
+    await async_db_session.commit()
+
+    token = await _make_access_token(async_db_session, "read:notifications")
+    response = client.get(
+        "/api/v1/notifications", headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 200
+    created_at = response.json()[0]["created_at"]
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z", created_at)
 
 
 @pytest.mark.asyncio
@@ -246,11 +283,69 @@ async def test_notifications_type_filters(
 
 
 @pytest.mark.asyncio
+async def test_notifications_policy_get_and_put_accept_everything(
+    client: TestClient,
+    async_db_session: AsyncSession,
+) -> None:
+    token = await _make_access_token(async_db_session, "read write")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    get_response = client.get("/api/v2/notifications/policy", headers=headers)
+    assert get_response.status_code == 200
+    policy = get_response.json()
+    assert policy["for_not_following"] == "accept"
+    assert policy["summary"] == {
+        "pending_requests_count": 0,
+        "pending_notifications_count": 0,
+    }
+
+    put_response = client.put(
+        "/api/v2/notifications/policy",
+        headers=headers,
+        json={"for_not_following": "drop"},
+    )
+    assert put_response.status_code == 200
+    assert put_response.json()["for_not_following"] == "accept"
+
+
+@pytest.mark.asyncio
+async def test_notification_requests_are_always_empty(
+    client: TestClient,
+    async_db_session: AsyncSession,
+) -> None:
+    # Also guards route-registration order: `requests`/`requests/merged` must
+    # not be swallowed by the `/api/v1/notifications/{notification_id}` route.
+    token = await _make_access_token(async_db_session, "read:notifications")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    requests_response = client.get("/api/v1/notifications/requests", headers=headers)
+    assert requests_response.status_code == 200
+    assert requests_response.json() == []
+
+    merged_response = client.get(
+        "/api/v1/notifications/requests/merged", headers=headers
+    )
+    assert merged_response.status_code == 200
+    assert merged_response.json() == {"merged": True}
+
+
+def _decode_proxied_media_url(proxied_url: str) -> str:
+    # BASE_URL + "/proxy/media/{expires}/{sig}/" + base64(original_url)
+    encoded = proxied_url.rstrip("/").rsplit("/", 1)[-1]
+    padded = encoded + "=" * (-len(encoded) % 4)
+    return base64.urlsafe_b64decode(padded).decode()
+
+
+@pytest.mark.asyncio
 async def test_notifications_list_serializes_actor_string_media_fields(
     client: TestClient,
     async_db_session: AsyncSession,
     respx_mock: respx.MockRouter,
 ) -> None:
+    # icon/image given as a bare string (not the usual {"type": "Image",
+    # "url": ...} object) must still resolve correctly — and, like every
+    # other remote media URL, get proxied rather than leaking the raw
+    # remote URL to the client.
     ra = setup_remote_actor(respx_mock, base_url="https://example.com")
     ra.ap_actor["icon"] = "https://example.com/media/avatar.jpg"
     ra.ap_actor["image"] = "https://example.com/media/header.jpg"
@@ -272,5 +367,13 @@ async def test_notifications_list_serializes_actor_string_media_fields(
 
     assert response.status_code == 200
     account = response.json()[0]["account"]
-    assert account["avatar_static"] == "https://example.com/media/avatar.jpg"
-    assert account["header"] == "https://example.com/media/header.jpg"
+    assert account["avatar_static"].startswith(f"{config.BASE_URL}/proxy/media/")
+    assert account["header"].startswith(f"{config.BASE_URL}/proxy/media/")
+    assert (
+        _decode_proxied_media_url(account["avatar_static"])
+        == "https://example.com/media/avatar.jpg"
+    )
+    assert (
+        _decode_proxied_media_url(account["header"])
+        == "https://example.com/media/header.jpg"
+    )

@@ -1474,7 +1474,13 @@ async def serve_proxy_media(
     # Decode the base64-encoded URL
     url = base64.urlsafe_b64decode(encoded_url).decode()
     check_url(url)
-    media.verify_proxied_media_sig(exp, url, sig)
+    try:
+        media.verify_proxied_media_sig(exp, url, sig)
+    except media.InvalidProxySignatureError:
+        # A signed proxy link is only valid for media.EXPIRY_LENGTH days —
+        # a client holding onto one for longer (e.g. a cached old status)
+        # gets a clean 404 instead of an unhandled 500.
+        return PlainTextResponse(status_code=404)
 
     proxy_client = httpx.AsyncClient(
         # Redirects are followed manually in _proxy_get so each hop is
@@ -1537,7 +1543,13 @@ async def serve_proxy_media_resized(
     # Decode the base64-encoded URL
     url = base64.urlsafe_b64decode(encoded_url).decode()
     check_url(url)
-    media.verify_proxied_media_sig(exp, url, sig)
+    try:
+        media.verify_proxied_media_sig(exp, url, sig)
+    except media.InvalidProxySignatureError:
+        # A signed proxy link is only valid for media.EXPIRY_LENGTH days —
+        # a client holding onto one for longer (e.g. a cached old status)
+        # gets a clean 404 instead of an unhandled 500.
+        return PlainTextResponse(status_code=404)
 
     if (cached_resp := _RESIZED_CACHE.get((url, size))) and is_webp_supported:
         resized_content, resized_mimetype, resp_headers = cached_resp

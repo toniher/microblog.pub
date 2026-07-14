@@ -177,6 +177,73 @@ async def test_accounts_relationships(
     assert data[remote_id]["followed_by"] is True
 
 
+def test_accounts_index_requires_auth(client: TestClient) -> None:
+    response = client.get(f"/api/v1/accounts?id[]={ids.LOCAL_ACTOR_ID}")
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_accounts_index_owner(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    token = await _make_access_token(async_db_session, "read:accounts")
+
+    response = client.get(
+        f"/api/v1/accounts?id[]={ids.LOCAL_ACTOR_ID}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["id"] == ids.LOCAL_ACTOR_ID
+    assert data[0]["username"] == config.USERNAME
+
+
+@pytest.mark.asyncio
+async def test_accounts_index_unknown_id_silently_skipped(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    token = await _make_access_token(async_db_session, "read:accounts")
+
+    response = client.get(
+        f"/api/v1/accounts?id[]=999999&id[]={ids.LOCAL_ACTOR_ID}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["id"] == ids.LOCAL_ACTOR_ID
+
+
+def test_accounts_familiar_followers_requires_auth(client: TestClient) -> None:
+    response = client.get("/api/v1/accounts/familiar_followers?id[]=0")
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_accounts_familiar_followers(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    # Regression test: /api/v1/accounts/{account_id} is registered with a
+    # dynamic path and previously swallowed this route (account_id=
+    # "familiar_followers"), 404ing here instead of matching this handler.
+    token = await _make_access_token(async_db_session, "read:accounts")
+
+    response = client.get(
+        "/api/v1/accounts/familiar_followers?id[]=0&id[]=1",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data == [
+        {"id": "0", "accounts": []},
+        {"id": "1", "accounts": []},
+    ]
+
+
 def test_accounts_lookup_owner_bare_username(client: TestClient) -> None:
     response = client.get(f"/api/v1/accounts/lookup?acct={config.USERNAME}")
     assert response.status_code == 200
@@ -226,6 +293,38 @@ async def test_accounts_statuses_owner(
     assert response.status_code == 200
     returned_ids = [status["id"] for status in response.json()]
     assert ids.encode_outbox_id(outbox_object) in returned_ids
+
+
+@pytest.mark.asyncio
+async def test_accounts_statuses_owner_includes_own_boosts(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    # Regression test: the owner's own boosts are stored as an OutboxObject
+    # with ap_type="Announce", but this endpoint's owner-branch query used to
+    # hardcode ["Note", "Article", "Question"], silently excluding them from
+    # the owner's own profile (unlike a remote actor's, which already
+    # included "Announce").
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    follower = setup_remote_actor_as_follower(ra)
+    remote_note = RemoteObject(
+        factories.build_note_object(from_remote_actor=ra, content="From afar"),
+        ra,
+    )
+    inbox_object = factories.InboxObjectFactory.from_remote_object(
+        remote_note, follower.actor
+    )
+
+    await boxes.send_announce(async_db_session, inbox_object.ap_id)
+
+    response = client.get(f"/api/v1/accounts/{ids.LOCAL_ACTOR_ID}/statuses")
+
+    assert response.status_code == 200
+    reblogged_uris = [
+        status["reblog"]["uri"] for status in response.json() if status["reblog"]
+    ]
+    assert inbox_object.ap_id in reblogged_uris
 
 
 def test_accounts_statuses_remote_actor(

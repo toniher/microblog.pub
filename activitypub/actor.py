@@ -181,6 +181,13 @@ class Actor:
             return BASE_URL + "/static/nopic.png"
 
     @property
+    def proxied_image_url(self) -> str:
+        if self.image_url:
+            return media.proxied_media_url(self.image_url)
+        else:
+            return BASE_URL + "/static/nopic.png"
+
+    @property
     def tags(self) -> list[ap.RawObject]:
         return ap.as_list(self.ap_actor.get("tag", []))
 

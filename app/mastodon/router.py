@@ -18,6 +18,7 @@ from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import Request
 from fastapi import UploadFile as FastAPIUploadFile
+from loguru import logger
 from sqlalchemy import delete
 from sqlalchemy import select
 from sqlalchemy import update
@@ -270,6 +271,31 @@ async def accounts_verify_credentials(
     return JSONResponse(content=account, status_code=200)
 
 
+@router.get("/api/v1/accounts", response_model=None)
+async def accounts_index(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:accounts")),
+) -> JSONResponse:
+    # Mastodon's "view multiple profiles" endpoint (GET /api/v1/accounts?
+    # id[]=1&id[]=2) — mastodon-ios fetches this when loading a profile,
+    # including the signed-in user's own. Unknown ids are silently skipped
+    # rather than 404ing the whole batch.
+    raw_ids = request.query_params.getlist("id[]") or request.query_params.getlist("id")
+
+    accounts = []
+    for raw_id in raw_ids:
+        if raw_id == ids.LOCAL_ACTOR_ID:
+            accounts.append(await serializers.serialize_owner_account(db_session))
+            continue
+
+        actor = await ids.get_account_by_mastodon_id(db_session, raw_id)
+        if actor is not None:
+            accounts.append(await serializers.serialize_account(db_session, actor))
+
+    return JSONResponse(content=accounts, status_code=200)
+
+
 def _serialize_relationship(
     account_id: str,
     actor: activitypub.models.Actor | None,
@@ -394,6 +420,24 @@ async def accounts_lookup(
     )
 
 
+@router.get("/api/v1/accounts/familiar_followers", response_model=None)
+async def accounts_familiar_followers(
+    request: Request,
+    token_info: AccessTokenInfo = Depends(require_scope("read:accounts")),
+) -> JSONResponse:
+    # This must be registered before /api/v1/accounts/{account_id} — otherwise
+    # that route swallows this path (account_id="familiar_followers") and 404s,
+    # which is what clients like Ice Cubes see when loading a profile, in turn
+    # blanking the whole profile view including the account's own statuses.
+    # Single-user instance: there's no concept of mutual/familiar followers.
+    raw_ids = request.query_params.getlist("id[]") or request.query_params.getlist("id")
+
+    return JSONResponse(
+        content=[{"id": raw_id, "accounts": []} for raw_id in raw_ids],
+        status_code=200,
+    )
+
+
 @router.get("/api/v1/accounts/{account_id}", response_model=None)
 async def accounts_show(
     account_id: str,
@@ -452,9 +496,10 @@ async def accounts_statuses(
             select(activitypub.models.OutboxObject)
             .where(
                 activitypub.models.OutboxObject.is_deleted.is_(False),
-                activitypub.models.OutboxObject.ap_type.in_(
-                    ["Note", "Article", "Question"]
-                ),
+                # Must include "Announce" — otherwise the owner's own boosts
+                # never appear on their own profile, unlike a remote actor's
+                # (below), which already lists it.
+                activitypub.models.OutboxObject.ap_type.in_(_TIMELINE_OBJECT_TYPES),
                 activitypub.models.OutboxObject.visibility.in_(allowed_visibility),
             )
             .options(
@@ -499,9 +544,7 @@ async def accounts_statuses(
         .where(
             activitypub.models.InboxObject.ap_actor_id == actor.ap_id,
             activitypub.models.InboxObject.is_deleted.is_(False),
-            activitypub.models.InboxObject.ap_type.in_(
-                ["Note", "Article", "Question", "Announce"]
-            ),
+            activitypub.models.InboxObject.ap_type.in_(_TIMELINE_OBJECT_TYPES),
             activitypub.models.InboxObject.visibility.in_(allowed_visibility),
         )
         .options(joinedload(activitypub.models.InboxObject.actor))
@@ -1092,9 +1135,7 @@ async def _serialize_notification(
     result = {
         "id": str(notification.id),
         "type": mastodon_type,
-        "created_at": created_at.replace(tzinfo=timezone.utc)
-        .isoformat()
-        .replace("+00:00", "Z"),
+        "created_at": serializers.format_datetime(created_at),
         "account": await serializers.serialize_account(db_session, notification.actor),
     }
 
@@ -1153,6 +1194,13 @@ async def notifications_list(
         for notif in notifications
         if (entity := await _serialize_notification(db_session, notif)) is not None
     ]
+    logger.info(
+        "notifications_list: query returned "
+        f"{len(notifications)} row(s) "
+        f"types={[n.notification_type for n in notifications]} "
+        f"without_actor={sum(1 for n in notifications if n.actor is None)}, "
+        f"serialized {len(serialized)}"
+    )
 
     # Mirror the existing HTML notifications page (app/admin.py): viewing
     # marks them read.
@@ -1168,6 +1216,60 @@ async def notifications_list(
     if link_header:
         response.headers["Link"] = link_header
     return response
+
+
+# Notification requests (filtered-notifications queue, Mastodon 4.3+): this
+# server never filters notifications, so the queue is always empty and the
+# policy is always "accept everything" — but the endpoints must exist (200,
+# not 404) or clients that fetch them alongside the main list (Ice Cubes
+# among them) fail to render notifications at all. Must be registered before
+# `/api/v1/notifications/{notification_id}` below, since Starlette matches
+# GET routes in registration order and that route would otherwise swallow
+# these static paths (e.g. "requests" as notification_id).
+
+
+def _notification_policy_content() -> dict[str, Any]:
+    return {
+        "for_not_following": "accept",
+        "for_not_followers": "accept",
+        "for_new_accounts": "accept",
+        "for_private_mentions": "accept",
+        "for_limited_accounts": "accept",
+        "summary": {
+            "pending_requests_count": 0,
+            "pending_notifications_count": 0,
+        },
+    }
+
+
+@router.get("/api/v2/notifications/policy", response_model=None)
+async def notifications_policy_get(
+    token_info: AccessTokenInfo = Depends(require_scope("read:notifications")),
+) -> JSONResponse:
+    return JSONResponse(content=_notification_policy_content(), status_code=200)
+
+
+@router.put("/api/v2/notifications/policy", response_model=None)
+async def notifications_policy_put(
+    token_info: AccessTokenInfo = Depends(require_scope("write:notifications")),
+) -> JSONResponse:
+    # No filtering is implemented, so there is nothing to persist — echo the
+    # fixed accept-all policy back.
+    return JSONResponse(content=_notification_policy_content(), status_code=200)
+
+
+@router.get("/api/v1/notifications/requests/merged", response_model=None)
+async def notification_requests_merged(
+    token_info: AccessTokenInfo = Depends(require_scope("read:notifications")),
+) -> JSONResponse:
+    return JSONResponse(content={"merged": True}, status_code=200)
+
+
+@router.get("/api/v1/notifications/requests", response_model=None)
+async def notification_requests_index(
+    token_info: AccessTokenInfo = Depends(require_scope("read:notifications")),
+) -> JSONResponse:
+    return JSONResponse(content=[], status_code=200)
 
 
 @router.get("/api/v1/notifications/{notification_id}", response_model=None)
