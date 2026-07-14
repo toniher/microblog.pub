@@ -1,4 +1,4 @@
-FROM python:3.12-slim as python-base
+FROM python:3.12-slim AS python-base
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     POETRY_HOME="/opt/poetry" \
@@ -8,7 +8,7 @@ ENV PYTHONUNBUFFERED=1 \
     VENV_PATH="/opt/venv/.venv"
 ENV PATH="$POETRY_HOME/bin:$VENV_PATH/bin:$PATH"
 
-FROM python-base as builder-base
+FROM python-base AS builder-base
 RUN apt-get update
 RUN apt-get install -y --no-install-recommends curl build-essential gcc libffi-dev libssl-dev libxml2-dev libxslt1-dev zlib1g-dev libxslt-dev gcc libjpeg-dev zlib1g-dev libwebp-dev
 # rustc is needed to compile Python packages
@@ -19,7 +19,7 @@ WORKDIR $PYSETUP_PATH
 COPY poetry.lock pyproject.toml ./
 RUN poetry install --only main
 
-FROM python-base as production
+FROM python-base AS production
 RUN apt-get update
 RUN apt-get install -y --no-install-recommends libjpeg-dev libxslt1-dev libxml2-dev libxslt-dev
 RUN groupadd --gid 1000 microblogpub \
