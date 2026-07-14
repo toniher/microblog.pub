@@ -246,6 +246,53 @@ async def test_notifications_type_filters(
 
 
 @pytest.mark.asyncio
+async def test_notifications_policy_get_and_put_accept_everything(
+    client: TestClient,
+    async_db_session: AsyncSession,
+) -> None:
+    token = await _make_access_token(async_db_session, "read write")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    get_response = client.get("/api/v2/notifications/policy", headers=headers)
+    assert get_response.status_code == 200
+    policy = get_response.json()
+    assert policy["for_not_following"] == "accept"
+    assert policy["summary"] == {
+        "pending_requests_count": 0,
+        "pending_notifications_count": 0,
+    }
+
+    put_response = client.put(
+        "/api/v2/notifications/policy",
+        headers=headers,
+        json={"for_not_following": "drop"},
+    )
+    assert put_response.status_code == 200
+    assert put_response.json()["for_not_following"] == "accept"
+
+
+@pytest.mark.asyncio
+async def test_notification_requests_are_always_empty(
+    client: TestClient,
+    async_db_session: AsyncSession,
+) -> None:
+    # Also guards route-registration order: `requests`/`requests/merged` must
+    # not be swallowed by the `/api/v1/notifications/{notification_id}` route.
+    token = await _make_access_token(async_db_session, "read:notifications")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    requests_response = client.get("/api/v1/notifications/requests", headers=headers)
+    assert requests_response.status_code == 200
+    assert requests_response.json() == []
+
+    merged_response = client.get(
+        "/api/v1/notifications/requests/merged", headers=headers
+    )
+    assert merged_response.status_code == 200
+    assert merged_response.json() == {"merged": True}
+
+
+@pytest.mark.asyncio
 async def test_notifications_list_serializes_actor_string_media_fields(
     client: TestClient,
     async_db_session: AsyncSession,

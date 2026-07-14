@@ -53,6 +53,10 @@ instead of crashing:
 
 - **Lists, filters, suggestions, mutes, the directory, and trends** — always
   empty.
+- **Notification requests / policy** — this server never filters notifications,
+  so the filtered-notifications queue (`/api/v1/notifications/requests`) is
+  always empty and the policy (`/api/v2/notifications/policy`) always reports
+  "accept everything"; nothing is held back for approval.
 - **Push notifications** — there's no `/api/v1/push` endpoint; apps fall back to
   polling. If your client shows a "notifications unavailable" toggle for this
   instance, that's expected.

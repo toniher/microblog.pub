@@ -1170,6 +1170,60 @@ async def notifications_list(
     return response
 
 
+# Notification requests (filtered-notifications queue, Mastodon 4.3+): this
+# server never filters notifications, so the queue is always empty and the
+# policy is always "accept everything" — but the endpoints must exist (200,
+# not 404) or clients that fetch them alongside the main list (Ice Cubes
+# among them) fail to render notifications at all. Must be registered before
+# `/api/v1/notifications/{notification_id}` below, since Starlette matches
+# GET routes in registration order and that route would otherwise swallow
+# these static paths (e.g. "requests" as notification_id).
+
+
+def _notification_policy_content() -> dict[str, Any]:
+    return {
+        "for_not_following": "accept",
+        "for_not_followers": "accept",
+        "for_new_accounts": "accept",
+        "for_private_mentions": "accept",
+        "for_limited_accounts": "accept",
+        "summary": {
+            "pending_requests_count": 0,
+            "pending_notifications_count": 0,
+        },
+    }
+
+
+@router.get("/api/v2/notifications/policy", response_model=None)
+async def notifications_policy_get(
+    token_info: AccessTokenInfo = Depends(require_scope("read:notifications")),
+) -> JSONResponse:
+    return JSONResponse(content=_notification_policy_content(), status_code=200)
+
+
+@router.put("/api/v2/notifications/policy", response_model=None)
+async def notifications_policy_put(
+    token_info: AccessTokenInfo = Depends(require_scope("write:notifications")),
+) -> JSONResponse:
+    # No filtering is implemented, so there is nothing to persist — echo the
+    # fixed accept-all policy back.
+    return JSONResponse(content=_notification_policy_content(), status_code=200)
+
+
+@router.get("/api/v1/notifications/requests/merged", response_model=None)
+async def notification_requests_merged(
+    token_info: AccessTokenInfo = Depends(require_scope("read:notifications")),
+) -> JSONResponse:
+    return JSONResponse(content={"merged": True}, status_code=200)
+
+
+@router.get("/api/v1/notifications/requests", response_model=None)
+async def notification_requests_index(
+    token_info: AccessTokenInfo = Depends(require_scope("read:notifications")),
+) -> JSONResponse:
+    return JSONResponse(content=[], status_code=200)
+
+
 @router.get("/api/v1/notifications/{notification_id}", response_model=None)
 async def notifications_show(
     notification_id: str,
