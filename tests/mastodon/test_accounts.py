@@ -1,5 +1,6 @@
 import secrets
 
+import httpx
 import pytest
 import respx
 from fastapi.testclient import TestClient
@@ -349,6 +350,81 @@ def test_accounts_statuses_remote_actor(
     assert response.status_code == 200
     returned_ids = [status["id"] for status in response.json()]
     assert ids.encode_inbox_id(inbox_object) in returned_ids
+
+
+def test_accounts_statuses_non_followed_actor_backfills_from_outbox(
+    client: TestClient, respx_mock: respx.MockRouter
+) -> None:
+    # Regression test: an actor we've never followed (nor who follows us) has
+    # no InboxObject cached locally, so this used to silently return an empty
+    # list even though the actor has posts. We should backfill on demand.
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    actor = factories.ActorFactory.from_remote_actor(ra)
+
+    note = factories.build_note_object(from_remote_actor=ra, content="From a stranger")
+    create_activity = factories.build_create_activity(note)
+    respx_mock.get(ra.ap_id + "/outbox").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "@context": ap.AS_EXTENDED_CTX,
+                "id": ra.ap_id + "/outbox",
+                "type": "OrderedCollection",
+                "totalItems": 1,
+                "orderedItems": [create_activity],
+            },
+        )
+    )
+
+    # setup_remote_actor's actor mock matches the bare host with no path
+    # constraint, so it would otherwise shadow any route registered after it
+    # for the activity fetch below (respx matches in registration order).
+    # Re-mock it in place with a side effect that also serves the activity.
+    def _serve_actor_or_activity(request: httpx.Request) -> httpx.Response:
+        if str(request.url) == create_activity["id"]:
+            return httpx.Response(200, json=create_activity)
+        return httpx.Response(200, json=ra.ap_actor)
+
+    respx_mock.get(ra.ap_id).mock(side_effect=_serve_actor_or_activity)
+
+    response = client.get(f"/api/v1/accounts/{ids.encode_account_id(actor)}/statuses")
+
+    assert response.status_code == 200
+    returned_uris = [status["uri"] for status in response.json()]
+    assert note["id"] in returned_uris
+
+
+def test_accounts_statuses_non_followed_actor_backfill_is_throttled(
+    client: TestClient, respx_mock: respx.MockRouter
+) -> None:
+    # A client polling a stranger's profile repeatedly shouldn't trigger a
+    # live outbox fetch on every request.
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    actor = factories.ActorFactory.from_remote_actor(ra)
+    # Re-declaring the same route without immediately chaining .mock() would
+    # reset it to unconfigured, so re-supply the same empty-collection body
+    # setup_remote_actor already installed, purely to get a handle for
+    # call_count below.
+    outbox_route = respx_mock.get(ra.ap_id + "/outbox").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "@context": ap.AS_EXTENDED_CTX,
+                "id": ra.ap_id + "/outbox",
+                "type": "OrderedCollection",
+                "totalItems": 0,
+                "orderedItems": [],
+            },
+        )
+    )
+
+    url = f"/api/v1/accounts/{ids.encode_account_id(actor)}/statuses"
+    first = client.get(url)
+    second = client.get(url)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert outbox_route.call_count == 1
 
 
 def test_accounts_statuses_unknown_actor_404s(client: TestClient) -> None:

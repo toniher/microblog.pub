@@ -46,6 +46,11 @@ class Actor(Base, BaseActor):
         Boolean, nullable=False, default=False, server_default="0"
     )
 
+    # Last time we tried to backfill this actor's outbox on demand (e.g. a
+    # Mastodon client viewing a non-followed actor's profile). Throttles
+    # repeat live fetches from the same actor across requests.
+    outbox_backfilled_at = Column(DateTime(timezone=True), nullable=True)
+
     @property
     def is_from_db(self) -> bool:
         return True

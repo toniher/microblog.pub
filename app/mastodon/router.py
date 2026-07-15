@@ -9,6 +9,7 @@ graph + search surface.
 """
 
 from datetime import datetime
+from datetime import timedelta
 from datetime import timezone
 from typing import Any
 from typing import cast
@@ -36,6 +37,7 @@ from activitypub.boxes import AnyboxObject
 from activitypub.boxes import ReplyTreeNode
 from activitypub.boxes import get_anybox_object_by_ap_id
 from activitypub.boxes import get_replies_tree
+from activitypub.boxes import prefetch_actor_outbox
 from activitypub.boxes import save_object_to_inbox
 from activitypub.boxes import send_accept
 from activitypub.boxes import send_announce
@@ -62,6 +64,8 @@ from app.mastodon import serializers
 from app.mastodon.errors import MastodonError
 from app.mastodon.scopes import require_scope
 from app.uploads import save_upload
+from app.utils.datetime import as_utc
+from app.utils.datetime import now
 from app.utils.emoji import EMOJIS
 
 router = APIRouter()
@@ -539,34 +543,63 @@ async def accounts_statuses(
         # We don't track pins on a remote actor's own posts.
         return JSONResponse(content=[], status_code=200)
 
-    query = (
-        select(activitypub.models.InboxObject)
-        .where(
-            activitypub.models.InboxObject.ap_actor_id == actor.ap_id,
-            activitypub.models.InboxObject.is_deleted.is_(False),
-            activitypub.models.InboxObject.ap_type.in_(_TIMELINE_OBJECT_TYPES),
-            activitypub.models.InboxObject.visibility.in_(allowed_visibility),
+    def _build_query() -> Any:
+        query = (
+            select(activitypub.models.InboxObject)
+            .where(
+                activitypub.models.InboxObject.ap_actor_id == actor.ap_id,
+                activitypub.models.InboxObject.is_deleted.is_(False),
+                activitypub.models.InboxObject.ap_type.in_(_TIMELINE_OBJECT_TYPES),
+                activitypub.models.InboxObject.visibility.in_(allowed_visibility),
+            )
+            .options(joinedload(activitypub.models.InboxObject.actor))
+            .order_by(activitypub.models.InboxObject.id.desc())
+            .limit(params.limit)
         )
-        .options(joinedload(activitypub.models.InboxObject.actor))
-        .order_by(activitypub.models.InboxObject.id.desc())
-        .limit(params.limit)
-    )
-    if exclude_replies:
-        query = query.where(
-            activitypub.models.InboxObject.is_hidden_from_stream.is_(False)
-        )
-    if params.max_id:
-        decoded = ids.decode_object_id_for_source(params.max_id, ids.ObjectSource.INBOX)
-        if decoded is not None:
-            query = query.where(activitypub.models.InboxObject.id < decoded)
-    cursor = params.min_id or params.since_id
-    if cursor:
-        decoded = ids.decode_object_id_for_source(cursor, ids.ObjectSource.INBOX)
-        if decoded is not None:
-            query = query.where(activitypub.models.InboxObject.id > decoded)
+        if exclude_replies:
+            query = query.where(
+                activitypub.models.InboxObject.is_hidden_from_stream.is_(False)
+            )
+        if params.max_id:
+            decoded = ids.decode_object_id_for_source(
+                params.max_id, ids.ObjectSource.INBOX
+            )
+            if decoded is not None:
+                query = query.where(activitypub.models.InboxObject.id < decoded)
+        cursor = params.min_id or params.since_id
+        if cursor:
+            decoded = ids.decode_object_id_for_source(cursor, ids.ObjectSource.INBOX)
+            if decoded is not None:
+                query = query.where(activitypub.models.InboxObject.id > decoded)
+        return query
 
-    items = (await db_session.scalars(query)).unique().all()
+    items = (await db_session.scalars(_build_query())).unique().all()
+
+    # We only cache a remote actor's posts as they arrive in our inbox (via a
+    # follow or a reply/boost from someone we follow). For an actor we've
+    # never interacted with, that means nothing to show here. Best-effort
+    # backfill their outbox on demand (throttled) so clients like Tusky/Ice
+    # Cubes don't render a broken-looking empty profile.
+    if not items and _should_backfill_outbox(actor):
+        try:
+            await prefetch_actor_outbox(db_session, actor)
+            await db_session.commit()
+        except Exception:
+            logger.exception(f"Failed to backfill outbox for {actor.ap_id}")
+            await db_session.rollback()
+        else:
+            items = (await db_session.scalars(_build_query())).unique().all()
+
     return await _respond_with_status_list(request, db_session, items)
+
+
+_OUTBOX_BACKFILL_TTL = timedelta(hours=1)
+
+
+def _should_backfill_outbox(actor: activitypub.models.Actor) -> bool:
+    if actor.outbox_backfilled_at is None:
+        return True
+    return now() - as_utc(actor.outbox_backfilled_at) > _OUTBOX_BACKFILL_TTL
 
 
 async def _paginated_actor_list(

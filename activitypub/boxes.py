@@ -2625,7 +2625,7 @@ async def save_to_inbox(
 
                     # Pre-fetch the latest activities
                     try:
-                        await _prefetch_actor_outbox(db_session, actor)
+                        await prefetch_actor_outbox(db_session, actor)
                     except Exception:
                         logger.exception(f"Failed to prefetch outbox for {actor.ap_id}")
                 elif activity_ro.ap_type == "Reject":
@@ -2686,7 +2686,7 @@ async def save_to_inbox(
     await db_session.commit()
 
 
-async def _prefetch_actor_outbox(
+async def prefetch_actor_outbox(
     db_session: AsyncSession,
     actor: activitypub.models.Actor,
 ) -> None:
@@ -2712,7 +2712,9 @@ async def _prefetch_actor_outbox(
         if saved >= 5:
             break
 
-    # commit is performed by the called
+    actor.outbox_backfilled_at = now()
+
+    # commit is performed by the caller
 
 
 async def save_object_to_inbox(
