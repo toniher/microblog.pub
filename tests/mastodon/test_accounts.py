@@ -427,6 +427,81 @@ def test_accounts_statuses_non_followed_actor_backfill_is_throttled(
     assert outbox_route.call_count == 1
 
 
+def test_accounts_statuses_backfill_races_concurrent_writer(
+    client: TestClient,
+    respx_mock: respx.MockRouter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Regression test: two clients (or a concurrent backfill and a normal
+    # inbox delivery) can both see "not cached yet" for the same post and
+    # both try to save it, so the loser's INSERT hits inbox.ap_id's unique
+    # constraint. That used to crash the whole request with a
+    # PendingRollbackError, because the exception handler logged
+    # `actor.ap_id` -- an ORM attribute access that can trigger a reload --
+    # before rolling back the now-broken session. Simulate the race by
+    # forcing prefetch's "already saved?" check to say no even though a row
+    # with the same ap_id already exists.
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    actor = factories.ActorFactory.from_remote_actor(ra)
+
+    note = factories.build_note_object(from_remote_actor=ra, content="Raced post")
+    create_activity = factories.build_create_activity(note)
+    respx_mock.get(ra.ap_id + "/outbox").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "@context": ap.AS_EXTENDED_CTX,
+                "id": ra.ap_id + "/outbox",
+                "type": "OrderedCollection",
+                "totalItems": 1,
+                "orderedItems": [create_activity],
+            },
+        )
+    )
+
+    def _serve_actor_or_activity(request: httpx.Request) -> httpx.Response:
+        if str(request.url) == create_activity["id"]:
+            return httpx.Response(200, json=create_activity)
+        return httpx.Response(200, json=ra.ap_actor)
+
+    respx_mock.get(ra.ap_id).mock(side_effect=_serve_actor_or_activity)
+
+    # The "concurrent writer" that already saved this exact post.
+    existing = factories.InboxObjectFactory.from_remote_object(
+        RemoteObject(note, ra), actor
+    )
+
+    async def _always_missing(db_session, ap_id):
+        return None
+
+    monkeypatch.setattr(boxes, "get_inbox_object_by_ap_id", _always_missing)
+
+    response = client.get(f"/api/v1/accounts/{ids.encode_account_id(actor)}/statuses")
+
+    assert response.status_code == 200
+    returned_ids = [status["id"] for status in response.json()]
+    assert ids.encode_inbox_id(existing) in returned_ids
+
+
+def test_accounts_statuses_backfill_failure_does_not_crash(
+    client: TestClient, respx_mock: respx.MockRouter
+) -> None:
+    # Regression test: a failed backfill attempt (bad remote response, or a
+    # concurrent writer racing us to save the same post) used to crash with a
+    # PendingRollbackError because the exception handler logged actor.ap_id
+    # -- an ORM attribute access -- before rolling back the broken session.
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    actor = factories.ActorFactory.from_remote_actor(ra)
+    respx_mock.get(ra.ap_id + "/outbox").mock(
+        return_value=httpx.Response(200, json={"no": "type field"})
+    )
+
+    response = client.get(f"/api/v1/accounts/{ids.encode_account_id(actor)}/statuses")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
 def test_accounts_statuses_unknown_actor_404s(client: TestClient) -> None:
     response = client.get("/api/v1/accounts/999999/statuses")
     assert response.status_code == 404

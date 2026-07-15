@@ -543,11 +543,17 @@ async def accounts_statuses(
         # We don't track pins on a remote actor's own posts.
         return JSONResponse(content=[], status_code=200)
 
+    # Captured once up front: a failed backfill attempt below rolls back the
+    # session, which expires every loaded ORM object (including `actor`), so
+    # any later attribute access would need an unawaited implicit reload and
+    # crash with MissingGreenlet in this async session.
+    actor_ap_id = actor.ap_id
+
     def _build_query() -> Any:
         query = (
             select(activitypub.models.InboxObject)
             .where(
-                activitypub.models.InboxObject.ap_actor_id == actor.ap_id,
+                activitypub.models.InboxObject.ap_actor_id == actor_ap_id,
                 activitypub.models.InboxObject.is_deleted.is_(False),
                 activitypub.models.InboxObject.ap_type.in_(_TIMELINE_OBJECT_TYPES),
                 activitypub.models.InboxObject.visibility.in_(allowed_visibility),
@@ -585,10 +591,15 @@ async def accounts_statuses(
             await prefetch_actor_outbox(db_session, actor)
             await db_session.commit()
         except Exception:
-            logger.exception(f"Failed to backfill outbox for {actor.ap_id}")
+            # A concurrent request (multiple clients polling the same
+            # not-yet-cached profile) or a normal incoming delivery may have
+            # raced us and already saved the same post — rollback first,
+            # since the session is unusable until we do, then re-query
+            # either way: on a unique-constraint failure the post is already
+            # there under the other writer's commit.
             await db_session.rollback()
-        else:
-            items = (await db_session.scalars(_build_query())).unique().all()
+            logger.exception(f"Failed to backfill outbox for {actor_ap_id}")
+        items = (await db_session.scalars(_build_query())).unique().all()
 
     return await _respond_with_status_list(request, db_session, items)
 
