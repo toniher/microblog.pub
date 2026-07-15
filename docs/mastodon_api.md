@@ -38,8 +38,10 @@ credentials rather than a separate account system.
   groups them, with mark-as-read support.
 - **Notifications** — follows, favourites, reblogs, mentions, moves; read
   state, per-type filtering, clear/dismiss.
-- **Accounts & social graph** — profile lookup, your own and remote actors'
-  statuses/followers/following, follow/unfollow, block/unblock, mute/unmute,
+- **Accounts & social graph** — profile lookup (including the batch
+  `/api/v1/accounts?id[]=...` form some clients use), your own and remote
+  actors' statuses/followers/following (boosts included in your own profile,
+  same as everyone else's), follow/unfollow, block/unblock, mute/unmute,
   personal notes on an account, and incoming follow request approve/reject.
 - **Search** (`/api/v2/search`) — accounts, statuses, and hashtags.
 - **Media uploads**, including descriptions/alt text.
@@ -51,8 +53,8 @@ things a single-user server has no data for. These degrade gracefully (an empty
 list, or a harmless no-op) rather than erroring, so clients render an empty state
 instead of crashing:
 
-- **Lists, filters, suggestions, mutes, the directory, and trends** — always
-  empty.
+- **Lists, filters, suggestions, mutes, the directory, trends, and familiar
+  followers** — always empty.
 - **Notification requests / policy** — this server never filters notifications,
   so the filtered-notifications queue (`/api/v1/notifications/requests`) is
   always empty and the policy (`/api/v2/notifications/policy`) always reports
