@@ -56,6 +56,44 @@ def test_accounts_show_remote_actor(
     assert data["acct"] == "toto@example.com"
 
 
+def test_accounts_show_remote_actor_fetches_counts(
+    client: TestClient, respx_mock: respx.MockRouter
+) -> None:
+    # Regression: a non-followed/never-interacted-with actor's profile used
+    # to always show 0 posts/followers/following, even though the remote
+    # actor exposes real totals on their AP collections.
+    #
+    # Must be registered before `setup_remote_actor`'s own mock for the bare
+    # actor URL: respx matches routes in registration order, and a route for
+    # a path-less URL matches any path under that host, so it would
+    # otherwise shadow these more specific ones.
+    respx_mock.get("https://example.com/followers").mock(
+        return_value=httpx.Response(
+            200, json={"type": "OrderedCollection", "totalItems": 12}
+        )
+    )
+    respx_mock.get("https://example.com/following").mock(
+        return_value=httpx.Response(
+            200, json={"type": "OrderedCollection", "totalItems": 34}
+        )
+    )
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    follower = setup_remote_actor_as_follower(ra)
+
+    response = client.get(f"/api/v1/accounts/{ids.encode_account_id(follower.actor)}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["followers_count"] == 12
+    assert data["following_count"] == 34
+
+    # A second view within the throttle window must not refetch.
+    call_count_after_first_view = respx_mock.calls.call_count
+    response = client.get(f"/api/v1/accounts/{ids.encode_account_id(follower.actor)}")
+    assert response.json()["followers_count"] == 12
+    assert respx_mock.calls.call_count == call_count_after_first_view
+
+
 def test_accounts_show_not_found(client: TestClient) -> None:
     response = client.get("/api/v1/accounts/999999")
     assert response.status_code == 404

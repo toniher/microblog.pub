@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 import activitypub.models
 from activitypub.actor import fetch_actor
+from activitypub.actor import refresh_actor_counts
 from activitypub.actor import save_actor
 from activitypub.tests import factories
 
@@ -70,6 +71,79 @@ async def test_save_actor_recovers_from_concurrent_insert_race(
     assert (
         await async_db_session.execute(select(func.count(activitypub.models.Actor.id)))
     ).scalar_one() == 1
+
+
+@pytest.mark.asyncio
+async def test_refresh_actor_counts(respx_mock) -> None:
+    ra = factories.RemoteActorFactory(
+        base_url="https://example.com",
+        username="toto",
+        public_key="pk",
+    )
+    actor_in_db = activitypub.models.Actor(
+        ap_id=ra.ap_id,
+        ap_actor=ra.ap_actor,
+        ap_type=ra.ap_type,
+        handle="@toto@example.com",
+    )
+
+    respx_mock.get(f"{ra.ap_id}/followers").mock(
+        return_value=httpx.Response(
+            200, json={"type": "OrderedCollection", "totalItems": 12}
+        )
+    )
+    respx_mock.get(f"{ra.ap_id}/following").mock(
+        return_value=httpx.Response(
+            200, json={"type": "OrderedCollection", "totalItems": 34}
+        )
+    )
+    respx_mock.get(f"{ra.ap_id}/outbox").mock(
+        return_value=httpx.Response(
+            200, json={"type": "OrderedCollection", "totalItems": 56}
+        )
+    )
+
+    await refresh_actor_counts(actor_in_db)
+
+    assert actor_in_db.followers_count == 12
+    assert actor_in_db.following_count == 34
+    assert actor_in_db.statuses_count == 56
+    assert actor_in_db.counts_refreshed_at is not None
+
+
+@pytest.mark.asyncio
+async def test_refresh_actor_counts_tolerates_fetch_failure(respx_mock) -> None:
+    # Regression: some remote actors 404/403 their followers/following
+    # collections, or omit totalItems entirely. A failure on one collection
+    # must not prevent the others from being cached, nor crash the caller.
+    ra = factories.RemoteActorFactory(
+        base_url="https://example.com",
+        username="toto",
+        public_key="pk",
+    )
+    actor_in_db = activitypub.models.Actor(
+        ap_id=ra.ap_id,
+        ap_actor=ra.ap_actor,
+        ap_type=ra.ap_type,
+        handle="@toto@example.com",
+    )
+
+    respx_mock.get(f"{ra.ap_id}/followers").mock(return_value=httpx.Response(404))
+    respx_mock.get(f"{ra.ap_id}/following").mock(
+        return_value=httpx.Response(200, json={"type": "OrderedCollection"})
+    )
+    respx_mock.get(f"{ra.ap_id}/outbox").mock(
+        return_value=httpx.Response(
+            200, json={"type": "OrderedCollection", "totalItems": 56}
+        )
+    )
+
+    await refresh_actor_counts(actor_in_db)
+
+    assert actor_in_db.followers_count is None
+    assert actor_in_db.following_count is None
+    assert actor_in_db.statuses_count == 56
+    assert actor_in_db.counts_refreshed_at is not None
 
 
 def test_sqlalchemy_factory(db: Session) -> None:

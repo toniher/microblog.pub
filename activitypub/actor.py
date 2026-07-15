@@ -196,6 +196,10 @@ class Actor:
     def followers_collection_id(self) -> str | None:
         return self.ap_actor.get("followers")
 
+    @property
+    def following_collection_id(self) -> str | None:
+        return self.ap_actor.get("following")
+
     @cached_property
     def attachments(self) -> list[ap.RawObject]:
         return ap.as_list(self.ap_actor.get("attachment", []))
@@ -337,6 +341,36 @@ async def fetch_actor(
         return await save_actor(db_session, ap_actor)
     else:
         raise ap.ObjectNotFoundError(actor_id)
+
+
+async def refresh_actor_counts(actor: "ActorModel") -> None:
+    """Best-effort refresh of a remote actor's followers/following/posts
+    counts from their AP collections.
+
+    We only cache a remote actor's own posts/social graph as they actually
+    reach our inbox (a follow, a reply/boost from someone we follow), so
+    unlike our own counts these can't be derived from local data — fetch
+    each collection's root and read its ``totalItems``, without paginating
+    through the actual members.
+    """
+    for attr, collection_id in (
+        ("followers_count", actor.followers_collection_id),
+        ("following_count", actor.following_collection_id),
+        ("statuses_count", actor.outbox_url),
+    ):
+        if not collection_id:
+            continue
+        try:
+            collection = await ap.fetch(collection_id)
+        except Exception:
+            logger.exception(f"Failed to fetch {collection_id} for {actor.ap_id}")
+            continue
+
+        total_items = collection.get("totalItems")
+        if isinstance(total_items, int):
+            setattr(actor, attr, total_items)
+
+    actor.counts_refreshed_at = now()
 
 
 async def list_actors(db_session: AsyncSession, limit: int = 100) -> list["ActorModel"]:

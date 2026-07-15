@@ -111,9 +111,11 @@ async def serialize_account(
         acct = f"{actor.preferred_username}@{urlparse(actor.ap_id).netloc}"
         created_at = actor.created_at or _FALLBACK_CREATED_AT
         locked = bool(actor.ap_actor.get("manuallyApprovesFollowers", False))
-        # We don't fetch a remote actor's own follower/following/statuses
-        # counts live — 0 is an honest "unknown", not a stale guess.
-        followers_count = following_count = statuses_count = 0
+        # Cached on demand from the actor's own AP collections (see
+        # `refresh_actor_counts`) — 0 until the first refresh happens.
+        followers_count = actor.followers_count or 0
+        following_count = actor.following_count or 0
+        statuses_count = actor.statuses_count or 0
     else:
         account_id = ids.LOCAL_ACTOR_ID
         acct = actor.preferred_username

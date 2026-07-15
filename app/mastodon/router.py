@@ -32,6 +32,7 @@ from activitypub import activitypub as ap
 from activitypub.actor import RemoteActor
 from activitypub.actor import fetch_actor
 from activitypub.actor import get_actors_metadata
+from activitypub.actor import refresh_actor_counts
 from activitypub.ap_object import RemoteObject
 from activitypub.boxes import AnyboxObject
 from activitypub.boxes import ReplyTreeNode
@@ -457,6 +458,14 @@ async def accounts_show(
     if actor is None:
         raise MastodonError(404, "not_found", "account not found")
 
+    if _should_refresh_counts(actor):
+        try:
+            await refresh_actor_counts(actor)
+            await db_session.commit()
+        except Exception:
+            await db_session.rollback()
+            logger.exception(f"Failed to refresh counts for {actor.ap_id}")
+
     return JSONResponse(
         content=await serializers.serialize_account(db_session, actor),
         status_code=200,
@@ -611,6 +620,15 @@ def _should_backfill_outbox(actor: activitypub.models.Actor) -> bool:
     if actor.outbox_backfilled_at is None:
         return True
     return now() - as_utc(actor.outbox_backfilled_at) > _OUTBOX_BACKFILL_TTL
+
+
+_ACTOR_COUNTS_TTL = timedelta(hours=1)
+
+
+def _should_refresh_counts(actor: activitypub.models.Actor) -> bool:
+    if actor.counts_refreshed_at is None:
+        return True
+    return now() - as_utc(actor.counts_refreshed_at) > _ACTOR_COUNTS_TTL
 
 
 async def _paginated_actor_list(

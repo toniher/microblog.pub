@@ -51,6 +51,14 @@ class Actor(Base, BaseActor):
     # repeat live fetches from the same actor across requests.
     outbox_backfilled_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Cached from the actor's followers/following/outbox collections (we
+    # never store a remote actor's own social graph/posts otherwise). Null
+    # means "never fetched"; the Mastodon API serializer falls back to 0.
+    followers_count = Column(Integer, nullable=True)
+    following_count = Column(Integer, nullable=True)
+    statuses_count = Column(Integer, nullable=True)
+    counts_refreshed_at = Column(DateTime(timezone=True), nullable=True)
+
     @property
     def is_from_db(self) -> bool:
         return True
