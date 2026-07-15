@@ -43,6 +43,9 @@ credentials rather than a separate account system.
   actors' statuses/followers/following (boosts included in your own profile,
   same as everyone else's), follow/unfollow, block/unblock, mute/unmute,
   personal notes on an account, and incoming follow request approve/reject.
+  Opening a remote actor you don't follow yet backfills their recent posts and
+  follower/following/post counts on demand (fetched and cached, throttled), so
+  their profile isn't empty on first view.
 - **Search** (`/api/v2/search`) — accounts, statuses, and hashtags.
 - **Media uploads**, including descriptions/alt text.
 
