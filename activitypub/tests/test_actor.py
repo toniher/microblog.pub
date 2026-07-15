@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 import activitypub.models
 from activitypub.actor import fetch_actor
+from activitypub.actor import save_actor
 from activitypub.tests import factories
 
 
@@ -44,6 +45,31 @@ async def test_fetch_actor(async_db_session: AsyncSession, respx_mock) -> None:
     ).scalar_one() == 1
     assert respx.calls.call_count == 2
     await async_db_session.close()
+
+
+@pytest.mark.asyncio
+async def test_save_actor_recovers_from_concurrent_insert_race(
+    async_db_session: AsyncSession,
+) -> None:
+    # Regression test: two concurrent requests can both see "actor not in DB
+    # yet" for the same not-yet-cached actor (e.g. two clients backfilling
+    # the same first-time-seen account's outbox at once), so the loser's
+    # INSERT hits actor.ap_id's unique constraint. save_actor should recover
+    # by returning the winner's row instead of surfacing the IntegrityError.
+    ra = factories.RemoteActorFactory(
+        base_url="https://example.com",
+        username="toto",
+        public_key="pk",
+    )
+
+    winner = await save_actor(async_db_session, ra.ap_actor)
+
+    loser = await save_actor(async_db_session, ra.ap_actor)
+
+    assert loser.id == winner.id
+    assert (
+        await async_db_session.execute(select(func.count(activitypub.models.Actor.id)))
+    ).scalar_one() == 1
 
 
 def test_sqlalchemy_factory(db: Session) -> None:

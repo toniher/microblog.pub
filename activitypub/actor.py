@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 import httpx
 from loguru import logger
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
 import activitypub.models
@@ -246,14 +247,31 @@ async def save_actor(db_session: AsyncSession, ap_actor: ap.RawObject) -> "Actor
     if ap_type := ap_actor.get("type") not in ap.ACTOR_TYPES:
         raise ValueError(f"Invalid type {ap_type} for actor {ap_actor}")
 
+    ap_id = ap.get_id(ap_actor["id"])
     actor = activitypub.models.Actor(
-        ap_id=ap.get_id(ap_actor["id"]),
+        ap_id=ap_id,
         ap_actor=ap_actor,
         ap_type=ap.as_list(ap_actor["type"])[0],
         handle=_handle(ap_actor),
     )
-    db_session.add(actor)
-    await db_session.flush()
+    try:
+        # Isolated in a SAVEPOINT: a concurrent request may be inserting the
+        # same not-yet-cached actor at the same time (e.g. two clients
+        # polling a first-time-seen account together). If we lose the race,
+        # only this insert needs undoing, not whatever the caller has
+        # already flushed earlier in the same transaction.
+        async with db_session.begin_nested():
+            db_session.add(actor)
+            await db_session.flush()
+    except IntegrityError:
+        return (
+            await db_session.scalars(
+                select(activitypub.models.Actor).where(
+                    activitypub.models.Actor.ap_id == ap_id,
+                )
+            )
+        ).one()
+
     await db_session.refresh(actor)
     return actor
 
