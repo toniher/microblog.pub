@@ -1,6 +1,7 @@
 """Actions related to the AP inbox/outbox."""
 
 import datetime
+import time
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass
@@ -2686,14 +2687,26 @@ async def save_to_inbox(
     await db_session.commit()
 
 
+_PREFETCH_TIME_BUDGET_SECONDS = 8.0
+
+
 async def prefetch_actor_outbox(
     db_session: AsyncSession,
     actor: activitypub.models.Actor,
 ) -> None:
-    """Try to fetch some notes to fill the stream"""
-    saved = 0
+    """Try to fetch some notes to fill the stream.
+
+    Bounded by a time budget rather than a fixed post count: each post costs
+    its own sequential remote round-trip (fetch the activity, sometimes the
+    object), so a hard count cap either wastes the budget on a fast server or
+    blocks the caller for far too long on a slow one.
+    """
+    started_at = time.monotonic()
     outbox = await ap.parse_collection(actor.outbox_url, limit=20)
     for activity in outbox[:20]:
+        if time.monotonic() - started_at > _PREFETCH_TIME_BUDGET_SECONDS:
+            break
+
         activity_id = ap.get_id(activity)
         raw_activity = await ap.fetch(activity_id)
         if ap.as_list(raw_activity["type"])[0] == "Create":
@@ -2706,11 +2719,6 @@ async def prefetch_actor_outbox(
 
             if not saved_inbox_object.in_reply_to:
                 saved_inbox_object.is_hidden_from_stream = False
-
-            saved += 1
-
-        if saved >= 5:
-            break
 
     actor.outbox_backfilled_at = now()
 
