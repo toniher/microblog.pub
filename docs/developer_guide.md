@@ -40,6 +40,27 @@ the same ActivityPub data — no separate data model. It's mounted unconditional
 in `app/main.py`. See the [user-facing docs](mastodon_api.md) for what's
 supported.
 
+### Database migrations
+
+Schema changes are managed with [Alembic](https://alembic.sqlalchemy.org/) migrations
+under `alembic/versions/`. This fork's history includes all migrations from
+[upstream tinyBlogPub/microblog.pub](https://github.com/tinyBlogPub/microblog.pub)
+up to `a209f0333f5a` (*Add oauth refresh token support*, 2022-12-18), plus the
+following migrations added only in this fork:
+
+| Revision | Date | Description |
+| --- | --- | --- |
+| `6aafc8f7dd54` | 2026-07-11 | Add `upload.description` (alt text for uploaded media). |
+| `bd38c89e83de` | 2026-07-15 | Add `actor.outbox_backfilled_at`, tracking when a remote actor's outbox was last backfilled on demand. |
+| `33d3ae2dedac` | 2026-07-15 | Add `actor.followers_count`, `actor.following_count`, `actor.statuses_count`, and `actor.counts_refreshed_at`, caching remote actor counts instead of re-fetching them on every request. |
+
+Running `poetry run inv migrate-db` (or `inv update`, see [Updating](install.md#updating))
+applies any migration not yet present in your local database, regardless of
+whether it originated upstream or in this fork. If you ever move a `data/` SQLite
+file between an upstream checkout and this fork (or vice versa), check `alembic_version`
+in the database against the table above to confirm the schema is compatible before
+running the app.
+
 ### Emoji assets
 
 Standard unicode emoji are rendered as [Twemoji](https://github.com/jdecked/twemoji)

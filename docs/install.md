@@ -229,6 +229,12 @@ git pull
 poetry run inv update
 ```
 
+This fork carries a few Alembic migrations beyond upstream (e.g. caching remote
+actor follower/following/post counts, on-demand outbox backfill tracking, upload
+descriptions). See the [developer guide](developer_guide.md#database-migrations)
+for the full list — useful if you're moving a database between this fork and
+upstream, or just want to know what changed under the hood.
+
 ## Reverse proxy
 
 You will also want to setup a reverse proxy like NGINX, see [uvicorn documentation](https://www.uvicorn.org/deployment/#running-behind-nginx):
