@@ -81,10 +81,9 @@ def negotiate_locale(accept_language: str | None) -> str:
 
 
 def resolve_locale(request: Request) -> str:
-    """Public pages negotiate `Accept-Language`; the admin UI always uses
-    the instance's configured `language_code`."""
-    if request.url.path.startswith("/admin"):
-        return config.LANGUAGE_CODE
+    """Negotiate the visitor's `Accept-Language` header against the available
+    locales, for both public and admin pages, falling back to the instance's
+    configured `language_code`."""
     return negotiate_locale(request.headers.get("accept-language"))
 
 

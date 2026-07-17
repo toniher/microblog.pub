@@ -27,10 +27,11 @@ Pleroma, PeerTube, PixelFed…) and doubles as an IndieWeb citizen.
   outbox access controlled via HTTP signature.
 - **Lightweight & backup-friendly**: SQLite; everything mutable lives in `data/`
   (config, uploads, secrets, the DB).
-- **Localizable interface**: gettext-based i18n (public pages negotiate a visitor's
-  `Accept-Language`, `/admin` follows the instance's `language_code`). Bundled
-  locales: `en`, `ca`, `es`, `fr`, `it`, `ro`. See `app/i18n.py` and "Translations /
-  i18n" in `docs/developer_guide.md`.
+- **Localizable interface**: gettext-based i18n. Both public and `/admin` pages
+  negotiate the visitor's `Accept-Language` against the available locales, falling
+  back to the instance's configured `language_code`. Bundled locales: `en`, `ca`,
+  `es`, `fr`, `it`, `ro`. See `app/i18n.py` and "Translations / i18n" in
+  `docs/developer_guide.md`.
 
 ## Architecture
 
@@ -44,10 +45,10 @@ templates, Alembic migrations, background workers for federation traffic.
   - `database.py` — sync `engine` + async `async_engine`/`async_session`, `Base`
   - `templates.py` — `render_template()` helper (incl. per-request locale/gettext
     wiring), HTML sanitization allow-lists, locale-aware date filters
-  - `i18n.py` — gettext locale resolution/negotiation (`Accept-Language` for public
-    pages, instance `language_code` for `/admin`), catalog loading; catalogs live
-    under `app/translations/<locale>/LC_MESSAGES/` (`.po` tracked, `.mo` gitignored,
-    compiled via `inv compile-translations`)
+  - `i18n.py` — gettext locale resolution/negotiation (`Accept-Language`, for both
+    public and `/admin` pages, falling back to the instance `language_code`),
+    catalog loading; catalogs live under `app/translations/<locale>/LC_MESSAGES/`
+    (`.po` tracked, `.mo` gitignored, compiled via `inv compile-translations`)
   - `httpsig.py`, `ldsig.py`, `key.py` — signature signing/verification, keypair
   - `indieauth.py`, `micropub.py`, `webmentions.py`, `webfinger.py` — IndieWeb + discovery
   - `source.py` — Markdown→HTML, hashtag/mention extraction

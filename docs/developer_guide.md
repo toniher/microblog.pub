@@ -99,9 +99,10 @@ via [Babel](https://babel.pocoo.org/) for translations. Catalogs live under
 `app/translations/<locale>/LC_MESSAGES/messages.po`, with the extraction template at
 `app/translations/messages.pot`. Which language is shown is controlled by the
 `language_code` setting in `data/profile.toml` (see [Installation](install.md)):
-public pages negotiate the visitor's `Accept-Language` header against the locales
-available on the instance, falling back to `language_code`; the admin UI (`/admin`)
-always renders in `language_code`, since there's only one admin.
+both public pages and the admin UI (`/admin`) negotiate the visitor's
+`Accept-Language` header against the locales available on the instance, falling
+back to `language_code` when no match is found (e.g. no header sent, or none of
+the requested languages are available).
 
 Bundled locales: `en` (source strings), `ca` (Catalan), `es` (Spanish), `fr` (French),
 `it` (Italian), and `ro` (Romanian). Corrections and new locales are welcome — see

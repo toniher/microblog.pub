@@ -60,13 +60,20 @@ def test_public_page_falls_back_for_unavailable_locale(
     assert "Skip to content" in response.text
 
 
-def test_admin_route_ignores_accept_language(
+def test_admin_route_negotiates_accept_language(
     client: TestClient, db: Session, fr_catalog: None
 ) -> None:
-    # The admin UI always renders in the instance's configured `language_code`,
-    # regardless of the visitor's `Accept-Language` header.
+    # The admin UI negotiates `Accept-Language` the same way public pages do.
     response = client.get("/admin/login", headers={"Accept-Language": "fr"})
+    assert response.status_code == 200
+    assert 'lang="fr"' in response.text
+    assert "Passer au contenu" in response.text
+
+
+def test_admin_route_falls_back_to_language_code_by_default(
+    client: TestClient, db: Session, fr_catalog: None
+) -> None:
+    response = client.get("/admin/login")
     assert response.status_code == 200
     assert 'lang="en"' in response.text
     assert "Skip to content" in response.text
-    assert "Passer au contenu" not in response.text

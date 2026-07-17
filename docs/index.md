@@ -16,9 +16,9 @@ citizen.
   - Dedicated section for articles/blog posts (enabled when the first article is posted)
 - [Mastodon client API](mastodon_api.md) compatibility — log in from apps like
   Tusky or Fedilab to read, post, and interact without touching the web UI
-- Localizable interface — public pages follow a visitor's browser language
-  (falling back to the instance default); bundled translations: English, Catalan,
-  Spanish, French, Italian, Romanian (see [Developer guide](developer_guide.md#translations-i18n))
+- Localizable interface — public and admin pages both follow a visitor's browser
+  language, falling back to the instance default; bundled translations: English,
+  Catalan, Spanish, French, Italian, Romanian (see [Developer guide](developer_guide.md#translations-i18n))
 - Lightweight
   - Uses SQLite, and Python 3.12 (3.10+ supported)
   - Can be deployed on a small VPS
