@@ -1,18 +1,23 @@
 {% macro filters(current_path, filter_by=None) %}
 <nav class="flexbox box" hx-boost="true" hx-indicator="body">
 <ul>
-    <li>Filter by</li>
+    <li>{{ _("Filter by") }}</li>
 {% for ap_type in ["Note", "Article", "Page", "Question", "Like", "Announce", "Follow"] %}
     <li><a href="{{ current_path }}?filter_by={{ ap_type }}" {% if filter_by == ap_type %}class="active"{% endif %}>
-        {{ ap_type }}
+        {{ _(ap_type) }}
         </a>
     </li>
 {% endfor %}
 {% if filter_by %}
     <li>
-        <a href="{{ current_path }}">Reset filter</a>
+        <a href="{{ current_path }}">{{ _("Reset filter") }}</a>
     </li>
 {% endif %}
 </ul>
 </nav>
 {% endmacro %}
+{# `_(ap_type)` above is a dynamic lookup, which `pybabel extract` cannot see
+   statically. These calls exist only so extraction picks up each label. #}
+{% if False %}
+    {{ _("Note") }}{{ _("Article") }}{{ _("Page") }}{{ _("Question") }}{{ _("Like") }}{{ _("Announce") }}{{ _("Follow") }}
+{% endif %}

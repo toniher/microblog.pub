@@ -1,8 +1,8 @@
-{%- import "components/actor.html" as actor_component -%}
+{%- import "components/actor.html" as actor_component with context -%}
 {% extends "layout.html" %}
 
 {% block head %}
-<title>{{ local_actor.display_name }}'s followers</title>
+<title>{% trans name=local_actor.display_name %}{{ name }}'s followers{% endtrans %}</title>
 <meta name="robots" content="noindex, nofollow">
 {% endblock %}
 
@@ -22,13 +22,13 @@
 {% set x_more = followers_count - followers | length %}
 {% if x_more > 0 %}
 <div class="box">
-    <p>And {{ x_more }} more.</p>
+    <p>{% trans count=x_more %}And {{ count }} more.{% pluralize %}And {{ count }} more.{% endtrans %}</p>
 </div>
 {% endif %}
 
 {% if is_admin %}
 <div class="box">
-    <p><a href="{{ url_for("admin_inbox") }}?filter_by=Follow">Manage followers</a></p>
+    <p><a href="{{ url_for("admin_inbox") }}?filter_by=Follow">{{ _("Manage followers") }}</a></p>
 </div>
 {% endif %}
 

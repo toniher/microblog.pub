@@ -30,6 +30,9 @@ Instances in the wild (this fork or close relatives):
  - Mastodon client API compatibility
     - Log in from apps like [Tusky](https://tusky.app/) or [Fedilab](https://fedilab.app/) using your admin password
     - Read/post/interact, notifications, direct messages, search — no separate account, same actor as the web UI
+ - Localizable interface
+    - Public pages follow a visitor's browser language (falling back to the instance default); the admin UI always uses the instance's configured language
+    - Bundled translations: English, Catalan, Spanish, French, Italian, Romanian
  - Lightweight
     - Uses SQLite, and Python 3.12 (3.10+ supported)
     - Can be deployed on small VPS

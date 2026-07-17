@@ -299,16 +299,23 @@ def verify_csrf_token(
     csrf_token: str = Form(),
     redirect_url: str | None = Form(None),
 ) -> None:
-    please_try_again = "please try again"
+    # Local import: app.i18n imports app.config, so importing at module level
+    # here would be circular.
+    from app.i18n import gettext_default
+
+    please_try_again = gettext_default("please try again")
     if redirect_url:
-        please_try_again = f'<a href="{redirect_url}">please try again</a>'
+        please_try_again = f'<a href="{redirect_url}">{please_try_again}</a>'
     try:
         csrf_serializer.loads(csrf_token, max_age=CONFIG.csrf_token_exp)
     except (itsdangerous.BadData, itsdangerous.SignatureExpired):
         logger.exception("Failed to verify CSRF token")
         raise HTTPException(
             status_code=403,
-            detail=f"The security token has expired, {please_try_again}",
+            detail=gettext_default(
+                "The security token has expired, %(please_try_again)s"
+            )
+            % {"please_try_again": please_try_again},
         )
     return None
 

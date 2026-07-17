@@ -3,7 +3,7 @@
 {% extends "layout.html" %}
 
 {% block head %}
-<title>Interact from your instance</title>
+<title>{{ _("Interact from your instance") }}</title>
 <meta name="robots" content="noindex, nofollow">
 {% endblock %}
 
@@ -11,7 +11,7 @@
 {% include "header.html" %}
 
 <div class="box">
-    <h2>Interact with this object</h2>
+    <h2>{{ _("Interact with this object") }}</h2>
 </div>
 
 {{ utils.display_object(outbox_object) }}
@@ -21,7 +21,7 @@
         {{ hidden_inputs.embed_csrf_token(csrf_token) }}
         <input type="text" name="profile" placeholder="you@instance.tld" autofocus>
         <input type="hidden" name="ap_id" value="{{ outbox_object.ap_id }}">
-        <input type="submit" value="interact from your instance">
+        <input type="submit" value="{{ _("interact from your instance") }}">
     </form>
 </div>
 

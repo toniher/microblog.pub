@@ -133,6 +133,12 @@ The default value is `en`. It is used for the `lang` attribute of the generated 
 (which helps screen readers and translation tools) and as the suggested default when
 [setting a per-note language](#authoring-notes).
 
+It also controls which language the **interface** (buttons, labels, messages) is shown
+in: the admin UI (`/admin`) always uses `language_code`, while public pages will use a
+visitor's browser language instead, if a translation is available for it, falling back
+to `language_code` otherwise. See the [developer guide](developer_guide.md#translations-i18n)
+for how translations are added.
+
 ### Schema.org microdata
 
 By default, the generated HTML only carries [microformats2](https://microformats.org/wiki/microformats2)

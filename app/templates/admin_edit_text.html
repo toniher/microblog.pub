@@ -3,7 +3,7 @@
 {% extends "layout.html" %}
 
 {% block head %}
-<title>{{ local_actor.display_name }} - New</title>
+<title>{{ _("%(name)s - New", name=local_actor.display_name) }}</title>
 {% endblock %}
 
 {% block content %}
@@ -16,7 +16,7 @@
 
     {% if outbox_object.ap_type == "Article" %}
     <p>
-        <input type="text" class="width-95" name="name" placeholder="Title" value="{{ outbox_object.name }}">
+        <input type="text" class="width-95" name="name" placeholder="{{ _("Title") }}" value="{{ outbox_object.name }}">
     </p>
     {% endif %}
 
@@ -41,7 +41,7 @@
     {% endif %}
 
     <p>
-        <input type="submit" value="Submit">
+        <input type="submit" value="{{ _("Submit") }}">
     </p>
 </form>
 </div>

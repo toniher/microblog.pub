@@ -1,7 +1,7 @@
 {% macro attachment_wrapper(attachment, is_sensitive) %}
   {% if is_sensitive %}
   <div class="attachment-wrapper">
-      <label for="{{attachment.proxied_url}}" class="label-btn show-hide-sensitive-btn">show/hide sensitive content</label>
+      <label for="{{attachment.proxied_url}}" class="label-btn show-hide-sensitive-btn">{{ _("show/hide sensitive content") }}</label>
       <div>
           <div class="sensitive-attachment">
             <input class="sensitive-attachment-state" type="checkbox" id="{{attachment.proxied_url}}" aria-hidden="true">

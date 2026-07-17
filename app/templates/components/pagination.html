@@ -1,7 +1,7 @@
 {% macro pagination(current_path, next_cursor=None, filter_by=None) %}
 {% if next_cursor %}
 <div class="box" hx-boost="true" hx-indicator="body">
-    <p><a href="{{ current_path }}?cursor={{ next_cursor }}{% if filter_by %}&filter_by={{ filter_by }}{% endif %}">See more</a></p>
+    <p><a href="{{ current_path }}?cursor={{ next_cursor }}{% if filter_by %}&filter_by={{ filter_by }}{% endif %}">{{ _("See more") }}</a></p>
 </div>
 {% endif %}
 {% endmacro %}

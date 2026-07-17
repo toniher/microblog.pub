@@ -43,6 +43,10 @@ check-config:
 compile-scss:
 	-docker run --rm --volume `pwd`/data:/app/data --volume microblogpub_static:/app/app/static microblogpub-server inv compile-scss
 
+.PHONY: compile-translations
+compile-translations:
+	-docker run --rm --volume `pwd`/data:/app/data --volume microblogpub_static:/app/app/static microblogpub-server inv compile-translations
+
 .PHONY: import-mastodon-following-accounts 
 import-mastodon-following-accounts:
 	-docker run --rm --volume `pwd`/data:/app/data --volume microblogpub_static:/app/app/static microblogpub-server inv import-mastodon-following-accounts $(path)

@@ -1,0 +1,811 @@
+# Romanian translations for PROJECT.
+# Copyright (C) 2026 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2026-07-17 21:46+0200\n"
+"PO-Revision-Date: 2026-07-17 22:20+0200\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: ro\n"
+"Language-Team: ro <LL@li.org>\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100 > 0 && n%100 < 20)) ? 1 : 2);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: app/admin.py:1263 app/admin.py:1282 app/admin.py:1390
+msgid "Error: object must have a content"
+msgstr "Eroare: conținutul este obligatoriu"
+
+#: app/admin.py:1270
+msgid "Error: invalid language code"
+msgstr "Eroare: cod de limbă invalid"
+
+#: app/admin.py:1304
+msgid "Error: Unable to process upload"
+msgstr "Eroare: nu s-a putut procesa încărcarea"
+
+#: app/config.py:306
+msgid "please try again"
+msgstr "încercați din nou"
+
+#: app/config.py:315
+#, python-format
+msgid "The security token has expired, %(please_try_again)s"
+msgstr "Jetonul de securitate a expirat, %(please_try_again)s"
+
+#: app/templates/admin_direct_messages.html:6
+#, python-format
+msgid "%(name)s - Direct messages"
+msgstr "%(name)s - Mesaje directe"
+
+#: app/templates/admin_direct_messages.html:15
+#, python-format
+msgid "With %(actors)s"
+msgstr "Cu %(actors)s"
+
+#: app/templates/admin_edit_text.html:6 app/templates/admin_new.html:7
+#, python-format
+msgid "%(name)s - New"
+msgstr "%(name)s - Nou"
+
+#: app/templates/admin_edit_text.html:19 app/templates/admin_new.html:48
+#: app/templates/admin_new_post.html:53
+msgid "Title"
+msgstr "Titlu"
+
+#: app/templates/admin_edit_text.html:44
+msgid "Submit"
+msgstr "Trimite"
+
+#: app/templates/admin_inbox.html:9
+#, python-format
+msgid "%(name)s - Inbox"
+msgstr "%(name)s - Mesaje primite"
+
+#: app/templates/admin_inbox.html:20
+msgid "start following people in the lookup section"
+msgstr "începeți să urmăriți persoane în secțiunea de căutare"
+
+#: app/templates/admin_inbox.html:21
+#, python-format
+msgid "Nothing to see yet, %(link)s."
+msgstr "Nimic de văzut încă, %(link)s."
+
+#: app/templates/admin_inbox.html:28 app/templates/admin_profile.html:17
+#: app/templates/index.html:34
+msgid "shared"
+msgstr "a distribuit"
+
+#: app/templates/admin_inbox.html:37 app/templates/notifications.html:16
+msgid "followed you"
+msgstr "v-a urmărit"
+
+#: app/templates/admin_inbox.html:42
+msgid "liked one of your posts"
+msgstr "a apreciat una dintre publicațiile dvs."
+
+#: app/templates/admin_new.html:13 app/templates/admin_new_post.html:16
+msgid "In reply to:"
+msgstr "Ca răspuns la:"
+
+#: app/templates/admin_new.html:31 app/templates/admin_new_post.html:36
+#: app/templates/components/filters.html:22 app/templates/object.html:18
+msgid "Note"
+msgstr "Notă"
+
+#: app/templates/admin_new.html:31 app/templates/admin_new_post.html:36
+#: app/templates/components/filters.html:22
+msgid "Article"
+msgstr "Articol"
+
+#: app/templates/admin_new.html:31 app/templates/admin_new_post.html:36
+#: app/templates/components/filters.html:22
+msgid "Question"
+msgstr "Sondaj"
+
+#: app/templates/admin_new.html:59 app/templates/admin_new_post.html:64
+msgid "Hey!"
+msgstr "Salut!"
+
+#: app/templates/admin_new.html:64 app/templates/admin_new_post.html:71
+msgid "single choice"
+msgstr "răspuns unic"
+
+#: app/templates/admin_new.html:65 app/templates/admin_new_post.html:72
+msgid "multiple choices"
+msgstr "răspunsuri multiple"
+
+#: app/templates/admin_new.html:70 app/templates/admin_new_post.html:77
+msgid "ends in 5 minutes"
+msgstr "se termină în 5 minute"
+
+#: app/templates/admin_new.html:71 app/templates/admin_new_post.html:78
+msgid "ends in 30 minutes"
+msgstr "se termină în 30 de minute"
+
+#: app/templates/admin_new.html:72 app/templates/admin_new_post.html:79
+msgid "ends in 1 hour"
+msgstr "se termină într-o oră"
+
+#: app/templates/admin_new.html:73 app/templates/admin_new_post.html:80
+msgid "ends in 6 hours"
+msgstr "se termină în 6 ore"
+
+#: app/templates/admin_new.html:74 app/templates/admin_new_post.html:81
+msgid "ends in 1 day"
+msgstr "se termină într-o zi"
+
+#: app/templates/admin_new.html:79 app/templates/admin_new_post.html:86
+#, python-format
+msgid "Option %(n)s, leave empty to disable"
+msgstr "Opțiunea %(n)s, lăsați gol pentru a o dezactiva"
+
+#: app/templates/admin_new.html:85 app/templates/admin_new_post.html:92
+msgid "content warning (will mark the post as sensitive)"
+msgstr "avertisment de conținut (va marca publicația ca sensibilă)"
+
+#: app/templates/admin_new.html:88 app/templates/admin_new_post.html:95
+#, python-format
+msgid "language code (optional, e.g. %(lang)s)"
+msgstr "cod de limbă (opțional, de ex. %(lang)s)"
+
+#: app/templates/admin_new.html:88 app/templates/admin_new_post.html:95
+msgid "BCP 47 language code, e.g. en or pt-BR"
+msgstr "cod de limbă BCP 47, de ex. en sau pt-BR"
+
+#: app/templates/admin_new.html:91 app/templates/admin_new_post.html:98
+msgid "Mark attachment(s) as sensitive"
+msgstr "Marchează atașamentele ca fiind sensibile"
+
+#: app/templates/admin_new.html:99 app/templates/admin_new_post.html:106
+msgid "Publish"
+msgstr "Publică"
+
+#: app/templates/admin_new_post.html:10
+#, python-format
+msgid "%(name)s - New Post"
+msgstr "%(name)s - Publicație nouă"
+
+#: app/templates/admin_outbox.html:10
+#, python-format
+msgid "%(name)s - Outbox"
+msgstr "%(name)s - Mesaje trimise"
+
+#: app/templates/admin_outbox.html:21
+msgid "You shared"
+msgstr "Ați distribuit"
+
+#: app/templates/admin_outbox.html:28
+msgid "You liked"
+msgstr "Ați apreciat"
+
+#: app/templates/admin_outbox.html:35
+msgid "You followed"
+msgstr "Ați urmărit"
+
+#: app/templates/admin_profile.html:31
+#: app/templates/components/pagination.html:4
+msgid "See more"
+msgstr "Vezi mai mult"
+
+#: app/templates/articles.html:4
+#, python-format
+msgid "%(name)s's articles"
+msgstr "Articolele lui %(name)s"
+
+#: app/templates/custom_page.html:10 app/templates/index.html:11
+msgid "ActivityPub profile"
+msgstr "Profil ActivityPub"
+
+#: app/templates/custom_page.html:13 app/templates/index.html:6
+#: app/templates/index.html:14 app/templates/layout.html:9
+#: app/templates/layout.html:10 app/templates/layout.html:11
+#: app/templates/object.html:17
+#, python-format
+msgid "%(name)s's microblog"
+msgstr "Microblogul lui %(name)s"
+
+#: app/templates/custom_page.html:14 app/templates/index.html:15
+msgid "Homepage"
+msgstr "Pagina principală"
+
+#: app/templates/followers.html:5
+#, python-format
+msgid "%(name)s's followers"
+msgstr "Urmăritorii lui %(name)s"
+
+#: app/templates/followers.html:25 app/templates/following.html:25
+#, python-format
+msgid "And %(count)s more."
+msgid_plural "And %(count)s more."
+msgstr[0] "Și încă %(count)s."
+msgstr[1] "Și încă %(count)s."
+msgstr[2] "Și încă %(count)s."
+
+#: app/templates/followers.html:31
+msgid "Manage followers"
+msgstr "Gestionează urmăritorii"
+
+#: app/templates/following.html:5
+#, python-format
+msgid "%(name)s's follows"
+msgstr "Urmăriri ale lui %(name)s"
+
+#: app/templates/following.html:31
+msgid "Manage follows"
+msgstr "Gestionează urmăririle"
+
+#: app/templates/components/filters.html:22 app/templates/header.html:9
+msgid "Follow"
+msgstr "Urmărește"
+
+#: app/templates/header.html:44
+msgid "Notes"
+msgstr "Note"
+
+#: app/templates/header.html:46
+msgid "Articles"
+msgstr "Articole"
+
+#: app/templates/header.html:49
+msgid "Followers"
+msgstr "Urmăritori"
+
+#: app/templates/header.html:52
+msgid "Following"
+msgstr "Urmăriri"
+
+#: app/templates/index.html:46
+msgid "Previous"
+msgstr "Anterior"
+
+#: app/templates/index.html:50
+msgid "Next"
+msgstr "Următor"
+
+#: app/templates/index.html:58
+msgid "write your first note"
+msgstr "scrieți prima dvs. notă"
+
+#: app/templates/index.html:59
+#, python-format
+msgid "Nothing here yet — %(link)s."
+msgstr "Nimic aici încă — %(link)s."
+
+#: app/templates/index.html:61
+msgid "Nothing to see here yet!"
+msgstr "Nimic de văzut aici încă!"
+
+#: app/templates/indieauth_flow.html:20
+#, python-format
+msgid "wants you to login%(as_who)s with the following redirect URI: <code>%(uri)s</code>."
+msgstr "dorește să vă autentificați%(as_who)s cu următorul URI de redirecționare: <code>%(uri)s</code>."
+
+#: app/templates/indieauth_flow.html:26
+msgid "Scopes"
+msgstr "Domenii"
+
+#: app/templates/indieauth_flow.html:41 app/templates/login.html:16
+msgid "login"
+msgstr "autentificare"
+
+#: app/templates/layout.html:17
+msgid "Skip to content"
+msgstr "Sari la conținut"
+
+#: app/templates/layout.html:29
+msgid "Public"
+msgstr "Public"
+
+#: app/templates/layout.html:30
+msgid "New"
+msgstr "Nou"
+
+#: app/templates/layout.html:31
+msgid "Stream"
+msgstr "Flux"
+
+#: app/templates/layout.html:32
+msgid "Inbox"
+msgstr "Mesaje primite"
+
+#: app/templates/layout.html:32
+msgid "Outbox"
+msgstr "Mesaje trimise"
+
+#: app/templates/layout.html:33
+msgid "DMs"
+msgstr "MD"
+
+#: app/templates/layout.html:34
+msgid "Notifications"
+msgstr "Notificări"
+
+#: app/templates/layout.html:35 app/templates/lookup.html:16
+msgid "Lookup"
+msgstr "Căutare"
+
+#: app/templates/layout.html:36
+msgid "Bookmarks"
+msgstr "Favorite"
+
+#: app/templates/layout.html:37
+msgid "Logout"
+msgstr "Deconectare"
+
+#: app/templates/layout.html:55
+#, python-format
+msgid "Powered by %(mbp)s and %(ap)s."
+msgstr "Susținut de %(mbp)s și %(ap)s."
+
+#: app/templates/login.html:10
+msgid "Invalid password."
+msgstr "Parolă invalidă."
+
+#: app/templates/login.html:15
+msgid "password"
+msgstr "parolă"
+
+#: app/templates/lookup.html:12
+msgid "Interact with an ActivityPub object via its URL or look for a user using <i>@user@domain.tld</i>"
+msgstr "Interacționați cu un obiect ActivityPub prin URL-ul său sau căutați un utilizator folosind <i>@utilizator@domeniu.tld</i>"
+
+#: app/templates/lookup.html:28
+msgid "The remote object is unavailable."
+msgstr "Obiectul de la distanță nu este disponibil."
+
+#: app/templates/lookup.html:30
+msgid "Missing permissions to fetch the remote object."
+msgstr "Lipsesc permisiunile pentru a prelua obiectul de la distanță."
+
+#: app/templates/lookup.html:32
+msgid "Lookup timed out, please try refreshing the page."
+msgstr "Căutarea a expirat, încercați să reîmprospătați pagina."
+
+#: app/templates/lookup.html:34
+msgid "Unexpected error, please check the logs and report an issue if needed."
+msgstr "Eroare neașteptată, verificați jurnalele și raportați o problemă dacă este necesar."
+
+#: app/templates/notifications.html:7
+#, python-format
+msgid "%(name)s - Notifications"
+msgstr "%(name)s - Notificări"
+
+#: app/templates/notifications.html:19
+msgid "sent a follow request"
+msgstr "a trimis o cerere de urmărire"
+
+#: app/templates/notifications.html:23
+msgid "unfollowed you"
+msgstr "nu vă mai urmărește"
+
+#: app/templates/notifications.html:26
+msgid "accepted your follow request"
+msgstr "a acceptat cererea dvs. de urmărire"
+
+#: app/templates/notifications.html:29
+msgid "rejected your follow request"
+msgstr "a respins cererea dvs. de urmărire"
+
+#: app/templates/components/actor.html:64 app/templates/notifications.html:32
+msgid "blocked you"
+msgstr "v-a blocat"
+
+#: app/templates/notifications.html:35
+msgid "unblocked you"
+msgstr "v-a deblocat"
+
+#: app/templates/notifications.html:38
+msgid "was blocked"
+msgstr "a fost blocat"
+
+#: app/templates/notifications.html:41
+msgid "was unblocked"
+msgstr "a fost deblocat"
+
+#: app/templates/notifications.html:47
+msgid "has moved to"
+msgstr "s-a mutat la"
+
+#: app/templates/notifications.html:54
+msgid "liked a post"
+msgstr "a apreciat o publicație"
+
+#: app/templates/notifications.html:57
+msgid "unliked a post"
+msgstr "nu mai apreciază o publicație"
+
+#: app/templates/notifications.html:60
+msgid "shared a post"
+msgstr "a distribuit o publicație"
+
+#: app/templates/notifications.html:63
+msgid "unshared a post"
+msgstr "nu mai distribuie o publicație"
+
+#: app/templates/notifications.html:66
+msgid "mentioned you"
+msgstr "v-a menționat"
+
+#: app/templates/notifications.html:73
+#, python-format
+msgid "new webmention from %(source)s"
+msgstr "webmention nou de la %(source)s"
+
+#: app/templates/notifications.html:81
+#, python-format
+msgid "updated webmention from %(source)s"
+msgstr "webmention actualizat de la %(source)s"
+
+#: app/templates/notifications.html:89
+#, python-format
+msgid "deleted webmention from %(source)s"
+msgstr "webmention șters de la %(source)s"
+
+#: app/templates/object.html:11
+#, python-format
+msgid "%(name)s: \"%(excerpt)s\""
+msgstr "%(name)s: „%(excerpt)s”"
+
+#: app/templates/redirect.html:4
+#: app/templates/redirect_to_remote_instance.html:4
+#, python-format
+msgid "%(name)s's microblog - Redirect"
+msgstr "Microblogul lui %(name)s - Redirecționare"
+
+#: app/templates/redirect.html:12
+#, python-format
+msgid "You are being redirected to: %(link)s"
+msgstr "Sunteți redirecționat către: %(link)s"
+
+#: app/templates/redirect_to_remote_instance.html:12
+#, python-format
+msgid "You are being redirected to your instance: %(link)s"
+msgstr "Sunteți redirecționat către instanța dvs.: %(link)s"
+
+#: app/templates/remote_follow.html:5
+#, python-format
+msgid "Remote follow %(name)s"
+msgstr "Urmărire la distanță %(name)s"
+
+#: app/templates/remote_follow.html:13
+#, python-format
+msgid "Follow %(name)s"
+msgstr "Urmărește-l pe %(name)s"
+
+#: app/templates/remote_follow.html:15
+msgid "ActivityPub"
+msgstr "ActivityPub"
+
+#: app/templates/remote_follow.html:16
+msgid ""
+"If you have an ActivityPub account (e.g. Mastodon, Pleroma...), you can follow\n"
+"me to receive my posts on your home feed."
+msgstr ""
+"Dacă aveți un cont ActivityPub (de ex. Mastodon, Pleroma...), mă puteți urmări\n"
+"pentru a primi publicațiile mele în fluxul dvs. principal."
+
+#: app/templates/remote_follow.html:19
+msgid "What's your account?"
+msgstr "Care este contul dvs.?"
+
+#: app/templates/components/admin_buttons.html:44
+#: app/templates/remote_follow.html:23
+msgid "follow"
+msgstr "urmărește"
+
+#: app/templates/remote_follow.html:26
+msgid "RSS"
+msgstr "RSS"
+
+#: app/templates/remote_follow.html:27
+msgid "You can also follow me using the following <a href=\"/feed.json\">RSS Feed</a>."
+msgstr "De asemenea, mă puteți urmări folosind următorul <a href=\"/feed.json\">flux RSS</a>."
+
+#: app/templates/remote_interact.html:6
+msgid "Interact from your instance"
+msgstr "Interacționează din instanța dvs."
+
+#: app/templates/remote_interact.html:14
+msgid "Interact with this object"
+msgstr "Interacționează cu acest obiect"
+
+#: app/templates/remote_interact.html:24 app/templates/utils.html:234
+msgid "interact from your instance"
+msgstr "interacționează din instanța dvs."
+
+#: app/templates/utils.html:42
+#, python-format
+msgid ""
+"in reply to <a href=\"%(href)s\" title=\"%(href)s\" rel=\"nofollow\">\n"
+"        this object\n"
+"    </a>"
+msgstr ""
+"ca răspuns la <a href=\"%(href)s\" title=\"%(href)s\" rel=\"nofollow\">\n"
+"        acest obiect\n"
+"    </a>"
+
+#: app/templates/utils.html:55 app/templates/utils.html:228
+msgid "permalink"
+msgstr "permalink"
+
+#: app/templates/utils.html:115
+#, python-format
+msgid ""
+"in reply to <a href=\"%(href)s\" title=\"%(title)s\" rel=\"nofollow\">\n"
+"            this object\n"
+"        </a>"
+msgstr ""
+"ca răspuns la <a href=\"%(href)s\" title=\"%(title)s\" rel=\"nofollow\">\n"
+"            acest obiect\n"
+"        </a>"
+
+#: app/templates/utils.html:126
+#, python-format
+msgid ""
+"On %(start)s\n"
+"            (ends %(end)s)"
+msgstr ""
+"Pe %(start)s\n"
+"            (se termină pe %(end)s)"
+
+#: app/templates/utils.html:135
+msgid "Location"
+msgstr "Locație"
+
+#: app/templates/utils.html:187
+msgid "you voted for this answer"
+msgstr "ați votat acest răspuns"
+
+#: app/templates/utils.html:194
+#, python-format
+msgid "%(count)s vote"
+msgid_plural "%(count)s votes"
+msgstr[0] "%(count)s vot"
+msgstr[1] "%(count)s voturi"
+msgstr[2] "%(count)s de voturi"
+
+#: app/templates/utils.html:206
+msgid "vote"
+msgstr "votează"
+
+#: app/templates/utils.html:248
+msgid "ended"
+msgstr "s-a încheiat"
+
+#: app/templates/utils.html:248
+msgid "ends"
+msgstr "se încheie"
+
+#: app/templates/utils.html:255
+#, python-format
+msgid "%(count)s voter"
+msgid_plural "%(count)s voters"
+msgstr[0] "%(count)s votant"
+msgstr[1] "%(count)s votanți"
+msgstr[2] "%(count)s de votanți"
+
+#: app/templates/utils.html:267
+#, python-format
+msgid "<strong>%(count)s</strong> like"
+msgid_plural "<strong>%(count)s</strong> likes"
+msgstr[0] "<strong>%(count)s</strong> apreciere"
+msgstr[1] "<strong>%(count)s</strong> aprecieri"
+msgstr[2] "<strong>%(count)s</strong> de aprecieri"
+
+#: app/templates/utils.html:273
+#, python-format
+msgid "<strong>%(count)s</strong> share"
+msgid_plural "<strong>%(count)s</strong> shares"
+msgstr[0] "<strong>%(count)s</strong> distribuire"
+msgstr[1] "<strong>%(count)s</strong> distribuiri"
+msgstr[2] "<strong>%(count)s</strong> de distribuiri"
+
+#: app/templates/utils.html:279
+#, python-format
+msgid "<strong>%(count)s</strong> webmention"
+msgid_plural "<strong>%(count)s</strong> webmentions"
+msgstr[0] "<strong>%(count)s</strong> webmention"
+msgstr[1] "<strong>%(count)s</strong> webmentions"
+msgstr[2] "<strong>%(count)s</strong> de webmentions"
+
+#: app/templates/utils.html:288
+#, python-format
+msgid "<strong>%(count)s</strong> reply"
+msgid_plural "<strong>%(count)s</strong> replies"
+msgstr[0] "<strong>%(count)s</strong> răspuns"
+msgstr[1] "<strong>%(count)s</strong> răspunsuri"
+msgstr[2] "<strong>%(count)s</strong> de răspunsuri"
+
+#: app/templates/utils.html:322
+msgid "unlike"
+msgstr "anulează aprecierea"
+
+#: app/templates/utils.html:339
+msgid "unshare"
+msgstr "anulează distribuirea"
+
+#: app/templates/utils.html:370
+msgid "Likes"
+msgstr "Aprecieri"
+
+#: app/templates/utils.html:379 app/templates/utils.html:396
+#, python-format
+msgid "and %(count)s more."
+msgid_plural "and %(count)s more."
+msgstr[0] "și încă %(count)s."
+msgstr[1] "și încă %(count)s."
+msgstr[2] "și încă %(count)s."
+
+#: app/templates/utils.html:387
+msgid "Shares"
+msgstr "Distribuiri"
+
+#: app/templates/utils.html:404
+msgid "Webmentions"
+msgstr "Webmentions"
+
+#: app/templates/components/actor.html:18
+msgid "new"
+msgstr "nou"
+
+#: app/templates/components/actor.html:67
+msgid "already following"
+msgstr "deja urmărit"
+
+#: app/templates/components/actor.html:68
+msgid "unfollow"
+msgstr "nu mai urmări"
+
+#: app/templates/components/actor.html:74
+msgid "follow request rejected"
+msgstr "cerere de urmărire respinsă"
+
+#: app/templates/components/actor.html:79
+msgid "follow request sent"
+msgstr "cerere de urmărire trimisă"
+
+#: app/templates/components/actor.html:80
+msgid "undo follow"
+msgstr "anulează urmărirea"
+
+#: app/templates/components/actor.html:86
+msgid "follows you"
+msgstr "vă urmărește"
+
+#: app/templates/components/actor.html:95
+#, python-format
+msgid "has moved to %(target)s"
+msgstr "s-a mutat la %(target)s"
+
+#: app/templates/components/actor.html:99
+msgid "blocked"
+msgstr "blocat"
+
+#: app/templates/components/actor.html:116
+msgid "accepted"
+msgstr "acceptat"
+
+#: app/templates/components/actor.html:118
+msgid "rejected"
+msgstr "respins"
+
+#: app/templates/components/actor.html:127
+msgid "remote profile"
+msgstr "profil la distanță"
+
+#: app/templates/components/admin_buttons.html:8
+msgid "block"
+msgstr "blochează"
+
+#: app/templates/components/admin_buttons.html:17
+msgid "unblock"
+msgstr "deblochează"
+
+#: app/templates/components/admin_buttons.html:26
+msgid "hide shares"
+msgstr "ascunde distribuirile"
+
+#: app/templates/components/admin_buttons.html:35
+msgid "show shares"
+msgstr "arată distribuirile"
+
+#: app/templates/components/admin_buttons.html:53
+msgid "accept follow"
+msgstr "acceptă urmărirea"
+
+#: app/templates/components/admin_buttons.html:62
+msgid "reject follow"
+msgstr "respinge urmărirea"
+
+#: app/templates/components/admin_buttons.html:71
+msgid "like"
+msgstr "apreciază"
+
+#: app/templates/components/admin_buttons.html:80
+msgid "bookmark"
+msgstr "adaugă la favorite"
+
+#: app/templates/components/admin_buttons.html:89
+msgid "unbookmark"
+msgstr "elimină din favorite"
+
+#: app/templates/components/admin_buttons.html:98
+msgid "pin"
+msgstr "fixează"
+
+#: app/templates/components/admin_buttons.html:107
+msgid "unpin"
+msgstr "anulează fixarea"
+
+#: app/templates/components/admin_buttons.html:114
+msgid "edit"
+msgstr "editează"
+
+#: app/templates/components/admin_buttons.html:123
+msgid "delete"
+msgstr "șterge"
+
+#: app/templates/components/admin_buttons.html:132
+#: app/templates/components/admin_buttons.html:141
+msgid "local delete"
+msgstr "șterge local"
+
+#: app/templates/components/admin_buttons.html:150
+msgid "share"
+msgstr "distribuie"
+
+#: app/templates/components/admin_buttons.html:159
+msgid "undo"
+msgstr "anulează"
+
+#: app/templates/components/admin_buttons.html:166
+msgid "reply"
+msgstr "răspunde"
+
+#: app/templates/components/admin_buttons.html:174
+msgid "direct message"
+msgstr "mesaj direct"
+
+#: app/templates/components/admin_buttons.html:181
+msgid "mention"
+msgstr "menționează"
+
+#: app/templates/components/admin_buttons.html:188
+msgid "profile"
+msgstr "profil"
+
+#: app/templates/components/admin_buttons.html:196
+msgid "expand"
+msgstr "extinde"
+
+#: app/templates/components/attachments.html:4
+msgid "show/hide sensitive content"
+msgstr "arată/ascunde conținutul sensibil"
+
+#: app/templates/components/filters.html:4
+msgid "Filter by"
+msgstr "Filtrează după"
+
+#: app/templates/components/filters.html:13
+msgid "Reset filter"
+msgstr "Resetează filtrul"
+
+#: app/templates/components/filters.html:22
+msgid "Page"
+msgstr "Pagină"
+
+#: app/templates/components/filters.html:22
+msgid "Like"
+msgstr "Apreciere"
+
+#: app/templates/components/filters.html:22
+msgid "Announce"
+msgstr "Distribuire"
+

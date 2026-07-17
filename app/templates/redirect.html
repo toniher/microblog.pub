@@ -1,14 +1,15 @@
 {% extends "layout.html" %}
 
 {% block head %}
-<title>{{ local_actor.display_name }}'s microblog - Redirect</title>
+<title>{{ _("%(name)s's microblog - Redirect", name=local_actor.display_name) }}</title>
 {% endblock %}
 
 {% block content %}
 {% include "header.html" %}
 
 <div class="box">
-    <p>You are being redirected to: <a href="{{ url }}">{{ url }}</a></p>
+    {% set url_link %}<a href="{{ url }}">{{ url }}</a>{% endset %}
+    <p>{% trans link=url_link|safe %}You are being redirected to: {{ link }}{% endtrans %}</p>
 </div>
 
 {% endblock %}

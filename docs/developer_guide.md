@@ -92,6 +92,38 @@ the actively maintained continuation of the original `twitter/twemoji` project
 (abandoned after the Twitter/X acquisition). The release tag is pinned in
 `tasks.py:download_twemoji` — bump it there when a newer Twemoji release is needed.
 
+### Translations / i18n
+
+The UI (public pages and the admin UI) uses [gettext](https://www.gnu.org/software/gettext/)
+via [Babel](https://babel.pocoo.org/) for translations. Catalogs live under
+`app/translations/<locale>/LC_MESSAGES/messages.po`, with the extraction template at
+`app/translations/messages.pot`. Which language is shown is controlled by the
+`language_code` setting in `data/profile.toml` (see [Installation](install.md)):
+public pages negotiate the visitor's `Accept-Language` header against the locales
+available on the instance, falling back to `language_code`; the admin UI (`/admin`)
+always renders in `language_code`, since there's only one admin.
+
+Bundled locales: `en` (source strings), `ca` (Catalan), `es` (Spanish), `fr` (French),
+`it` (Italian), and `ro` (Romanian). Corrections and new locales are welcome — see
+below.
+
+To add or update a translation:
+
+```bash
+poetry run inv extract-messages          # (re)generate app/translations/messages.pot
+poetry run inv init-translation <locale>  # create a new app/translations/<locale>/LC_MESSAGES/messages.po
+poetry run inv update-translations        # merge new/changed msgids into all existing .po files
+poetry run inv compile-translations       # compile .po -> .mo (also runs automatically as part of `inv update`)
+```
+
+Edit the generated `.po` file's `msgstr` entries with a gettext-aware editor (e.g.
+[Poedit](https://poedit.net/)) or by hand, then run `compile-translations` to produce
+the `.mo` file the app actually loads at runtime (`.mo` files are build artifacts and
+are gitignored). A `data/translations/<locale>/LC_MESSAGES/messages.mo` — following the
+same `data/`-over-`app/` override convention used for templates — takes precedence over
+the bundled one, letting an instance ship a custom or newer translation without
+touching the checkout.
+
 ## Installation
 
 Running a local version requires:

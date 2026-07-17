@@ -1,0 +1,803 @@
+# Catalan translations for PROJECT.
+# Copyright (C) 2026 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2026-07-17 21:46+0200\n"
+"PO-Revision-Date: 2026-07-17 22:19+0200\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: ca\n"
+"Language-Team: ca <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: app/admin.py:1263 app/admin.py:1282 app/admin.py:1390
+msgid "Error: object must have a content"
+msgstr "Error: el contingut és obligatori"
+
+#: app/admin.py:1270
+msgid "Error: invalid language code"
+msgstr "Error: codi d'idioma no vàlid"
+
+#: app/admin.py:1304
+msgid "Error: Unable to process upload"
+msgstr "Error: no s'ha pogut processar la pujada"
+
+#: app/config.py:306
+msgid "please try again"
+msgstr "torneu-ho a provar"
+
+#: app/config.py:315
+#, python-format
+msgid "The security token has expired, %(please_try_again)s"
+msgstr "El testimoni de seguretat ha caducat, %(please_try_again)s"
+
+#: app/templates/admin_direct_messages.html:6
+#, python-format
+msgid "%(name)s - Direct messages"
+msgstr "%(name)s - Missatges directes"
+
+#: app/templates/admin_direct_messages.html:15
+#, python-format
+msgid "With %(actors)s"
+msgstr "Amb %(actors)s"
+
+#: app/templates/admin_edit_text.html:6 app/templates/admin_new.html:7
+#, python-format
+msgid "%(name)s - New"
+msgstr "%(name)s - Nou"
+
+#: app/templates/admin_edit_text.html:19 app/templates/admin_new.html:48
+#: app/templates/admin_new_post.html:53
+msgid "Title"
+msgstr "Títol"
+
+#: app/templates/admin_edit_text.html:44
+msgid "Submit"
+msgstr "Envia"
+
+#: app/templates/admin_inbox.html:9
+#, python-format
+msgid "%(name)s - Inbox"
+msgstr "%(name)s - Safata d'entrada"
+
+#: app/templates/admin_inbox.html:20
+msgid "start following people in the lookup section"
+msgstr "comenceu a seguir gent a la secció de cerca"
+
+#: app/templates/admin_inbox.html:21
+#, python-format
+msgid "Nothing to see yet, %(link)s."
+msgstr "Encara no hi ha res, %(link)s."
+
+#: app/templates/admin_inbox.html:28 app/templates/admin_profile.html:17
+#: app/templates/index.html:34
+msgid "shared"
+msgstr "ha compartit"
+
+#: app/templates/admin_inbox.html:37 app/templates/notifications.html:16
+msgid "followed you"
+msgstr "us ha començat a seguir"
+
+#: app/templates/admin_inbox.html:42
+msgid "liked one of your posts"
+msgstr "li ha agradat una de les vostres publicacions"
+
+#: app/templates/admin_new.html:13 app/templates/admin_new_post.html:16
+msgid "In reply to:"
+msgstr "En resposta a:"
+
+#: app/templates/admin_new.html:31 app/templates/admin_new_post.html:36
+#: app/templates/components/filters.html:22 app/templates/object.html:18
+msgid "Note"
+msgstr "Nota"
+
+#: app/templates/admin_new.html:31 app/templates/admin_new_post.html:36
+#: app/templates/components/filters.html:22
+msgid "Article"
+msgstr "Article"
+
+#: app/templates/admin_new.html:31 app/templates/admin_new_post.html:36
+#: app/templates/components/filters.html:22
+msgid "Question"
+msgstr "Pregunta"
+
+#: app/templates/admin_new.html:59 app/templates/admin_new_post.html:64
+msgid "Hey!"
+msgstr "Ei!"
+
+#: app/templates/admin_new.html:64 app/templates/admin_new_post.html:71
+msgid "single choice"
+msgstr "opció única"
+
+#: app/templates/admin_new.html:65 app/templates/admin_new_post.html:72
+msgid "multiple choices"
+msgstr "opcions múltiples"
+
+#: app/templates/admin_new.html:70 app/templates/admin_new_post.html:77
+msgid "ends in 5 minutes"
+msgstr "acaba d'aquí a 5 minuts"
+
+#: app/templates/admin_new.html:71 app/templates/admin_new_post.html:78
+msgid "ends in 30 minutes"
+msgstr "acaba d'aquí a 30 minuts"
+
+#: app/templates/admin_new.html:72 app/templates/admin_new_post.html:79
+msgid "ends in 1 hour"
+msgstr "acaba d'aquí a 1 hora"
+
+#: app/templates/admin_new.html:73 app/templates/admin_new_post.html:80
+msgid "ends in 6 hours"
+msgstr "acaba d'aquí a 6 hores"
+
+#: app/templates/admin_new.html:74 app/templates/admin_new_post.html:81
+msgid "ends in 1 day"
+msgstr "acaba d'aquí a 1 dia"
+
+#: app/templates/admin_new.html:79 app/templates/admin_new_post.html:86
+#, python-format
+msgid "Option %(n)s, leave empty to disable"
+msgstr "Opció %(n)s, deixeu-la buida per desactivar-la"
+
+#: app/templates/admin_new.html:85 app/templates/admin_new_post.html:92
+msgid "content warning (will mark the post as sensitive)"
+msgstr "avís de contingut (marcarà la publicació com a sensible)"
+
+#: app/templates/admin_new.html:88 app/templates/admin_new_post.html:95
+#, python-format
+msgid "language code (optional, e.g. %(lang)s)"
+msgstr "codi d'idioma (opcional, p. ex. %(lang)s)"
+
+#: app/templates/admin_new.html:88 app/templates/admin_new_post.html:95
+msgid "BCP 47 language code, e.g. en or pt-BR"
+msgstr "codi d'idioma BCP 47, p. ex. en o pt-BR"
+
+#: app/templates/admin_new.html:91 app/templates/admin_new_post.html:98
+msgid "Mark attachment(s) as sensitive"
+msgstr "Marca els adjunts com a sensibles"
+
+#: app/templates/admin_new.html:99 app/templates/admin_new_post.html:106
+msgid "Publish"
+msgstr "Publica"
+
+#: app/templates/admin_new_post.html:10
+#, python-format
+msgid "%(name)s - New Post"
+msgstr "%(name)s - Publicació nova"
+
+#: app/templates/admin_outbox.html:10
+#, python-format
+msgid "%(name)s - Outbox"
+msgstr "%(name)s - Safata de sortida"
+
+#: app/templates/admin_outbox.html:21
+msgid "You shared"
+msgstr "Heu compartit"
+
+#: app/templates/admin_outbox.html:28
+msgid "You liked"
+msgstr "Us ha agradat"
+
+#: app/templates/admin_outbox.html:35
+msgid "You followed"
+msgstr "Heu seguit"
+
+#: app/templates/admin_profile.html:31
+#: app/templates/components/pagination.html:4
+msgid "See more"
+msgstr "Veure'n més"
+
+#: app/templates/articles.html:4
+#, python-format
+msgid "%(name)s's articles"
+msgstr "Articles de %(name)s"
+
+#: app/templates/custom_page.html:10 app/templates/index.html:11
+msgid "ActivityPub profile"
+msgstr "Perfil d'ActivityPub"
+
+#: app/templates/custom_page.html:13 app/templates/index.html:6
+#: app/templates/index.html:14 app/templates/layout.html:9
+#: app/templates/layout.html:10 app/templates/layout.html:11
+#: app/templates/object.html:17
+#, python-format
+msgid "%(name)s's microblog"
+msgstr "Microblog de %(name)s"
+
+#: app/templates/custom_page.html:14 app/templates/index.html:15
+msgid "Homepage"
+msgstr "Pàgina d'inici"
+
+#: app/templates/followers.html:5
+#, python-format
+msgid "%(name)s's followers"
+msgstr "Seguidors de %(name)s"
+
+#: app/templates/followers.html:25 app/templates/following.html:25
+#, python-format
+msgid "And %(count)s more."
+msgid_plural "And %(count)s more."
+msgstr[0] "I %(count)s més."
+msgstr[1] "I %(count)s més."
+
+#: app/templates/followers.html:31
+msgid "Manage followers"
+msgstr "Gestiona els seguidors"
+
+#: app/templates/following.html:5
+#, python-format
+msgid "%(name)s's follows"
+msgstr "Seguits per %(name)s"
+
+#: app/templates/following.html:31
+msgid "Manage follows"
+msgstr "Gestiona els seguits"
+
+#: app/templates/components/filters.html:22 app/templates/header.html:9
+msgid "Follow"
+msgstr "Segueix"
+
+#: app/templates/header.html:44
+msgid "Notes"
+msgstr "Notes"
+
+#: app/templates/header.html:46
+msgid "Articles"
+msgstr "Articles"
+
+#: app/templates/header.html:49
+msgid "Followers"
+msgstr "Seguidors"
+
+#: app/templates/header.html:52
+msgid "Following"
+msgstr "Seguint"
+
+#: app/templates/index.html:46
+msgid "Previous"
+msgstr "Anterior"
+
+#: app/templates/index.html:50
+msgid "Next"
+msgstr "Següent"
+
+#: app/templates/index.html:58
+msgid "write your first note"
+msgstr "escriviu la vostra primera nota"
+
+#: app/templates/index.html:59
+#, python-format
+msgid "Nothing here yet — %(link)s."
+msgstr "Encara no hi ha res — %(link)s."
+
+#: app/templates/index.html:61
+msgid "Nothing to see here yet!"
+msgstr "Encara no hi ha res per veure!"
+
+#: app/templates/indieauth_flow.html:20
+#, python-format
+msgid "wants you to login%(as_who)s with the following redirect URI: <code>%(uri)s</code>."
+msgstr "vol que inicieu sessió%(as_who)s amb l'URI de redirecció següent: <code>%(uri)s</code>."
+
+#: app/templates/indieauth_flow.html:26
+msgid "Scopes"
+msgstr "Àmbits"
+
+#: app/templates/indieauth_flow.html:41 app/templates/login.html:16
+msgid "login"
+msgstr "inicia sessió"
+
+#: app/templates/layout.html:17
+msgid "Skip to content"
+msgstr "Vés al contingut"
+
+#: app/templates/layout.html:29
+msgid "Public"
+msgstr "Públic"
+
+#: app/templates/layout.html:30
+msgid "New"
+msgstr "Nou"
+
+#: app/templates/layout.html:31
+msgid "Stream"
+msgstr "Flux"
+
+#: app/templates/layout.html:32
+msgid "Inbox"
+msgstr "Safata d'entrada"
+
+#: app/templates/layout.html:32
+msgid "Outbox"
+msgstr "Safata de sortida"
+
+#: app/templates/layout.html:33
+msgid "DMs"
+msgstr "MD"
+
+#: app/templates/layout.html:34
+msgid "Notifications"
+msgstr "Notificacions"
+
+#: app/templates/layout.html:35 app/templates/lookup.html:16
+msgid "Lookup"
+msgstr "Cerca"
+
+#: app/templates/layout.html:36
+msgid "Bookmarks"
+msgstr "Preferits"
+
+#: app/templates/layout.html:37
+msgid "Logout"
+msgstr "Tanca la sessió"
+
+#: app/templates/layout.html:55
+#, python-format
+msgid "Powered by %(mbp)s and %(ap)s."
+msgstr "Funciona amb %(mbp)s i %(ap)s."
+
+#: app/templates/login.html:10
+msgid "Invalid password."
+msgstr "Contrasenya no vàlida."
+
+#: app/templates/login.html:15
+msgid "password"
+msgstr "contrasenya"
+
+#: app/templates/lookup.html:12
+msgid "Interact with an ActivityPub object via its URL or look for a user using <i>@user@domain.tld</i>"
+msgstr "Interaccioneu amb un objecte d'ActivityPub mitjançant el seu URL o cerqueu un usuari amb <i>@usuari@domini.tld</i>"
+
+#: app/templates/lookup.html:28
+msgid "The remote object is unavailable."
+msgstr "L'objecte remot no està disponible."
+
+#: app/templates/lookup.html:30
+msgid "Missing permissions to fetch the remote object."
+msgstr "Falten permisos per obtenir l'objecte remot."
+
+#: app/templates/lookup.html:32
+msgid "Lookup timed out, please try refreshing the page."
+msgstr "La cerca ha esgotat el temps d'espera; torneu a carregar la pàgina."
+
+#: app/templates/lookup.html:34
+msgid "Unexpected error, please check the logs and report an issue if needed."
+msgstr "Error inesperat; reviseu els registres i notifiqueu-ho si cal."
+
+#: app/templates/notifications.html:7
+#, python-format
+msgid "%(name)s - Notifications"
+msgstr "%(name)s - Notificacions"
+
+#: app/templates/notifications.html:19
+msgid "sent a follow request"
+msgstr "ha enviat una sol·licitud de seguiment"
+
+#: app/templates/notifications.html:23
+msgid "unfollowed you"
+msgstr "ha deixat de seguir-vos"
+
+#: app/templates/notifications.html:26
+msgid "accepted your follow request"
+msgstr "ha acceptat la vostra sol·licitud de seguiment"
+
+#: app/templates/notifications.html:29
+msgid "rejected your follow request"
+msgstr "ha rebutjat la vostra sol·licitud de seguiment"
+
+#: app/templates/components/actor.html:64 app/templates/notifications.html:32
+msgid "blocked you"
+msgstr "us ha blocat"
+
+#: app/templates/notifications.html:35
+msgid "unblocked you"
+msgstr "us ha desblocat"
+
+#: app/templates/notifications.html:38
+msgid "was blocked"
+msgstr "ha estat blocat"
+
+#: app/templates/notifications.html:41
+msgid "was unblocked"
+msgstr "ha estat desblocat"
+
+#: app/templates/notifications.html:47
+msgid "has moved to"
+msgstr "s'ha traslladat a"
+
+#: app/templates/notifications.html:54
+msgid "liked a post"
+msgstr "li ha agradat una publicació"
+
+#: app/templates/notifications.html:57
+msgid "unliked a post"
+msgstr "ja no li agrada una publicació"
+
+#: app/templates/notifications.html:60
+msgid "shared a post"
+msgstr "ha compartit una publicació"
+
+#: app/templates/notifications.html:63
+msgid "unshared a post"
+msgstr "ha deixat de compartir una publicació"
+
+#: app/templates/notifications.html:66
+msgid "mentioned you"
+msgstr "us ha mencionat"
+
+#: app/templates/notifications.html:73
+#, python-format
+msgid "new webmention from %(source)s"
+msgstr "nova webmention de %(source)s"
+
+#: app/templates/notifications.html:81
+#, python-format
+msgid "updated webmention from %(source)s"
+msgstr "webmention actualitzada de %(source)s"
+
+#: app/templates/notifications.html:89
+#, python-format
+msgid "deleted webmention from %(source)s"
+msgstr "webmention suprimida de %(source)s"
+
+#: app/templates/object.html:11
+#, python-format
+msgid "%(name)s: \"%(excerpt)s\""
+msgstr "%(name)s: «%(excerpt)s»"
+
+#: app/templates/redirect.html:4
+#: app/templates/redirect_to_remote_instance.html:4
+#, python-format
+msgid "%(name)s's microblog - Redirect"
+msgstr "Microblog de %(name)s - Redirecció"
+
+#: app/templates/redirect.html:12
+#, python-format
+msgid "You are being redirected to: %(link)s"
+msgstr "Se us està redirigint a: %(link)s"
+
+#: app/templates/redirect_to_remote_instance.html:12
+#, python-format
+msgid "You are being redirected to your instance: %(link)s"
+msgstr "Se us està redirigint a la vostra instància: %(link)s"
+
+#: app/templates/remote_follow.html:5
+#, python-format
+msgid "Remote follow %(name)s"
+msgstr "Seguiment remot de %(name)s"
+
+#: app/templates/remote_follow.html:13
+#, python-format
+msgid "Follow %(name)s"
+msgstr "Segueix %(name)s"
+
+#: app/templates/remote_follow.html:15
+msgid "ActivityPub"
+msgstr "ActivityPub"
+
+#: app/templates/remote_follow.html:16
+msgid ""
+"If you have an ActivityPub account (e.g. Mastodon, Pleroma...), you can follow\n"
+"me to receive my posts on your home feed."
+msgstr ""
+"Si teniu un compte d'ActivityPub (p. ex. Mastodon, Pleroma...), podeu seguir-me\n"
+"per rebre les meves publicacions al vostre flux principal."
+
+#: app/templates/remote_follow.html:19
+msgid "What's your account?"
+msgstr "Quin és el vostre compte?"
+
+#: app/templates/components/admin_buttons.html:44
+#: app/templates/remote_follow.html:23
+msgid "follow"
+msgstr "segueix"
+
+#: app/templates/remote_follow.html:26
+msgid "RSS"
+msgstr "RSS"
+
+#: app/templates/remote_follow.html:27
+msgid "You can also follow me using the following <a href=\"/feed.json\">RSS Feed</a>."
+msgstr "També podeu seguir-me mitjançant el <a href=\"/feed.json\">canal RSS</a> següent."
+
+#: app/templates/remote_interact.html:6
+msgid "Interact from your instance"
+msgstr "Interacciona des de la vostra instància"
+
+#: app/templates/remote_interact.html:14
+msgid "Interact with this object"
+msgstr "Interacciona amb aquest objecte"
+
+#: app/templates/remote_interact.html:24 app/templates/utils.html:234
+msgid "interact from your instance"
+msgstr "interacciona des de la vostra instància"
+
+#: app/templates/utils.html:42
+#, python-format
+msgid ""
+"in reply to <a href=\"%(href)s\" title=\"%(href)s\" rel=\"nofollow\">\n"
+"        this object\n"
+"    </a>"
+msgstr ""
+"en resposta a <a href=\"%(href)s\" title=\"%(href)s\" rel=\"nofollow\">\n"
+"        aquest objecte\n"
+"    </a>"
+
+#: app/templates/utils.html:55 app/templates/utils.html:228
+msgid "permalink"
+msgstr "enllaç permanent"
+
+#: app/templates/utils.html:115
+#, python-format
+msgid ""
+"in reply to <a href=\"%(href)s\" title=\"%(title)s\" rel=\"nofollow\">\n"
+"            this object\n"
+"        </a>"
+msgstr ""
+"en resposta a <a href=\"%(href)s\" title=\"%(title)s\" rel=\"nofollow\">\n"
+"            aquest objecte\n"
+"        </a>"
+
+#: app/templates/utils.html:126
+#, python-format
+msgid ""
+"On %(start)s\n"
+"            (ends %(end)s)"
+msgstr ""
+"El %(start)s\n"
+"            (acaba el %(end)s)"
+
+#: app/templates/utils.html:135
+msgid "Location"
+msgstr "Ubicació"
+
+#: app/templates/utils.html:187
+msgid "you voted for this answer"
+msgstr "heu votat aquesta resposta"
+
+#: app/templates/utils.html:194
+#, python-format
+msgid "%(count)s vote"
+msgid_plural "%(count)s votes"
+msgstr[0] "%(count)s vot"
+msgstr[1] "%(count)s vots"
+
+#: app/templates/utils.html:206
+msgid "vote"
+msgstr "vota"
+
+#: app/templates/utils.html:248
+msgid "ended"
+msgstr "ha acabat"
+
+#: app/templates/utils.html:248
+msgid "ends"
+msgstr "acaba"
+
+#: app/templates/utils.html:255
+#, python-format
+msgid "%(count)s voter"
+msgid_plural "%(count)s voters"
+msgstr[0] "%(count)s votant"
+msgstr[1] "%(count)s votants"
+
+#: app/templates/utils.html:267
+#, python-format
+msgid "<strong>%(count)s</strong> like"
+msgid_plural "<strong>%(count)s</strong> likes"
+msgstr[0] "<strong>%(count)s</strong> agradament"
+msgstr[1] "<strong>%(count)s</strong> agradaments"
+
+#: app/templates/utils.html:273
+#, python-format
+msgid "<strong>%(count)s</strong> share"
+msgid_plural "<strong>%(count)s</strong> shares"
+msgstr[0] "<strong>%(count)s</strong> compartició"
+msgstr[1] "<strong>%(count)s</strong> comparticions"
+
+#: app/templates/utils.html:279
+#, python-format
+msgid "<strong>%(count)s</strong> webmention"
+msgid_plural "<strong>%(count)s</strong> webmentions"
+msgstr[0] "<strong>%(count)s</strong> webmention"
+msgstr[1] "<strong>%(count)s</strong> webmentions"
+
+#: app/templates/utils.html:288
+#, python-format
+msgid "<strong>%(count)s</strong> reply"
+msgid_plural "<strong>%(count)s</strong> replies"
+msgstr[0] "<strong>%(count)s</strong> resposta"
+msgstr[1] "<strong>%(count)s</strong> respostes"
+
+#: app/templates/utils.html:322
+msgid "unlike"
+msgstr "ja no m'agrada"
+
+#: app/templates/utils.html:339
+msgid "unshare"
+msgstr "deixa de compartir"
+
+#: app/templates/utils.html:370
+msgid "Likes"
+msgstr "M'agrada"
+
+#: app/templates/utils.html:379 app/templates/utils.html:396
+#, python-format
+msgid "and %(count)s more."
+msgid_plural "and %(count)s more."
+msgstr[0] "i %(count)s més."
+msgstr[1] "i %(count)s més."
+
+#: app/templates/utils.html:387
+msgid "Shares"
+msgstr "Comparticions"
+
+#: app/templates/utils.html:404
+msgid "Webmentions"
+msgstr "Webmentions"
+
+#: app/templates/components/actor.html:18
+msgid "new"
+msgstr "nou"
+
+#: app/templates/components/actor.html:67
+msgid "already following"
+msgstr "ja el seguiu"
+
+#: app/templates/components/actor.html:68
+msgid "unfollow"
+msgstr "deixa de seguir"
+
+#: app/templates/components/actor.html:74
+msgid "follow request rejected"
+msgstr "sol·licitud de seguiment rebutjada"
+
+#: app/templates/components/actor.html:79
+msgid "follow request sent"
+msgstr "sol·licitud de seguiment enviada"
+
+#: app/templates/components/actor.html:80
+msgid "undo follow"
+msgstr "desfés el seguiment"
+
+#: app/templates/components/actor.html:86
+msgid "follows you"
+msgstr "us segueix"
+
+#: app/templates/components/actor.html:95
+#, python-format
+msgid "has moved to %(target)s"
+msgstr "s'ha traslladat a %(target)s"
+
+#: app/templates/components/actor.html:99
+msgid "blocked"
+msgstr "blocat"
+
+#: app/templates/components/actor.html:116
+msgid "accepted"
+msgstr "acceptat"
+
+#: app/templates/components/actor.html:118
+msgid "rejected"
+msgstr "rebutjat"
+
+#: app/templates/components/actor.html:127
+msgid "remote profile"
+msgstr "perfil remot"
+
+#: app/templates/components/admin_buttons.html:8
+msgid "block"
+msgstr "bloca"
+
+#: app/templates/components/admin_buttons.html:17
+msgid "unblock"
+msgstr "desbloca"
+
+#: app/templates/components/admin_buttons.html:26
+msgid "hide shares"
+msgstr "amaga les comparticions"
+
+#: app/templates/components/admin_buttons.html:35
+msgid "show shares"
+msgstr "mostra les comparticions"
+
+#: app/templates/components/admin_buttons.html:53
+msgid "accept follow"
+msgstr "accepta el seguiment"
+
+#: app/templates/components/admin_buttons.html:62
+msgid "reject follow"
+msgstr "rebutja el seguiment"
+
+#: app/templates/components/admin_buttons.html:71
+msgid "like"
+msgstr "m'agrada"
+
+#: app/templates/components/admin_buttons.html:80
+msgid "bookmark"
+msgstr "afegeix a preferits"
+
+#: app/templates/components/admin_buttons.html:89
+msgid "unbookmark"
+msgstr "treu de preferits"
+
+#: app/templates/components/admin_buttons.html:98
+msgid "pin"
+msgstr "fixa"
+
+#: app/templates/components/admin_buttons.html:107
+msgid "unpin"
+msgstr "deixa de fixar"
+
+#: app/templates/components/admin_buttons.html:114
+msgid "edit"
+msgstr "edita"
+
+#: app/templates/components/admin_buttons.html:123
+msgid "delete"
+msgstr "suprimeix"
+
+#: app/templates/components/admin_buttons.html:132
+#: app/templates/components/admin_buttons.html:141
+msgid "local delete"
+msgstr "suprimeix localment"
+
+#: app/templates/components/admin_buttons.html:150
+msgid "share"
+msgstr "comparteix"
+
+#: app/templates/components/admin_buttons.html:159
+msgid "undo"
+msgstr "desfés"
+
+#: app/templates/components/admin_buttons.html:166
+msgid "reply"
+msgstr "respon"
+
+#: app/templates/components/admin_buttons.html:174
+msgid "direct message"
+msgstr "missatge directe"
+
+#: app/templates/components/admin_buttons.html:181
+msgid "mention"
+msgstr "menciona"
+
+#: app/templates/components/admin_buttons.html:188
+msgid "profile"
+msgstr "perfil"
+
+#: app/templates/components/admin_buttons.html:196
+msgid "expand"
+msgstr "amplia"
+
+#: app/templates/components/attachments.html:4
+msgid "show/hide sensitive content"
+msgstr "mostra/amaga el contingut sensible"
+
+#: app/templates/components/filters.html:4
+msgid "Filter by"
+msgstr "Filtra per"
+
+#: app/templates/components/filters.html:13
+msgid "Reset filter"
+msgstr "Neteja el filtre"
+
+#: app/templates/components/filters.html:22
+msgid "Page"
+msgstr "Pàgina"
+
+#: app/templates/components/filters.html:22
+msgid "Like"
+msgstr "M'agrada"
+
+#: app/templates/components/filters.html:22
+msgid "Announce"
+msgstr "Compartit"
+

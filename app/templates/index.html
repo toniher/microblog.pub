@@ -1,18 +1,18 @@
 {%- import "utils.html" as utils with context -%}
-{%- import "components/actor.html" as actor_component -%}
+{%- import "components/actor.html" as actor_component with context -%}
 {% extends "layout.html" %}
 
 {% block head %}
-<title>{{ local_actor.display_name }}'s microblog</title>
+<title>{{ _("%(name)s's microblog", name=local_actor.display_name) }}</title>
 <link rel="indieauth-metadata" href="{{ url_for("well_known_authorization_server") }}">
 <link rel="authorization_endpoint" href="{{ url_for("indieauth_authorization_endpoint") }}">
 <link rel="token_endpoint" href="{{ url_for("indieauth_token_endpoint") }}">
 <link rel="micropub" href="{{ url_for("micropub_endpoint") }}">
-<link rel="alternate" href="{{ local_actor.url }}" title="ActivityPub profile"  type="application/activity+json">
+<link rel="alternate" href="{{ local_actor.url }}" title="{{ _("ActivityPub profile") }}"  type="application/activity+json">
 <meta content="profile" property="og:type" />
 <meta content="{{ local_actor.url }}" property="og:url" />
-<meta content="{{ local_actor.display_name }}'s microblog" property="og:site_name" />
-<meta content="Homepage" property="og:title" />
+<meta content="{{ _("%(name)s's microblog", name=local_actor.display_name) }}" property="og:site_name" />
+<meta content="{{ _("Homepage") }}" property="og:title" />
 <meta content="{{ local_actor.summary | html2text | trim }}" property="og:description" />
 <meta content="{{ ICON_URL }}" property="og:image" />
 <meta content="summary" property="twitter:card" />
@@ -31,7 +31,7 @@
     {{ utils.display_object(outbox_object, md_container_prop="blogPost") }}
     {% elif outbox_object.ap_type == "Announce" %}
     <div class="h-entry" id="{{ outbox_object.permalink_id }}">
-        <div class="shared-header"><strong><a class="p-author h-card" href="{{ local_actor.url }}">{{ actor_component.tiny_actor_icon(local_actor) }}  {{ local_actor.display_name | clean_html(local_actor) | safe }}</a></strong> shared <span title="{{ outbox_object.ap_published_at.isoformat() }}">{{ outbox_object.ap_published_at | timeago }}</span></div>
+        <div class="shared-header"><strong><a class="p-author h-card" href="{{ local_actor.url }}">{{ actor_component.tiny_actor_icon(local_actor) }}  {{ local_actor.display_name | clean_html(local_actor) | safe }}</a></strong> {{ _("shared") }} <span title="{{ outbox_object.ap_published_at.isoformat() }}">{{ outbox_object.ap_published_at | timeago }}</span></div>
         <div class="h-cite u-repost-of">
             {{ utils.display_object(outbox_object.relates_to_anybox_object, is_h_entry=False) }}
         </div>
@@ -43,11 +43,11 @@
     {% if has_previous_page or has_next_page %}
         <div class="box" hx-boost="true" hx-indicator="body">
             {% if has_previous_page %}
-            <a href="{{ url_for("index") }}?page={{ current_page - 1 }}">Previous</a>
+            <a href="{{ url_for("index") }}?page={{ current_page - 1 }}">{{ _("Previous") }}</a>
             {% endif %}
 
             {% if has_next_page %}
-            <a href="{{ url_for("index") }}?page={{ current_page + 1 }}">Next</a>
+            <a href="{{ url_for("index") }}?page={{ current_page + 1 }}">{{ _("Next") }}</a>
             {% endif %}
         </div>
     {% endif %}
@@ -55,9 +55,10 @@
 {% else %}
     <div class="empty-state">
         {% if is_admin %}
-        <p>Nothing here yet — <a href="{{ url_for('admin_new') }}">write your first note</a>.</p>
+        {% set new_note_link %}<a href="{{ url_for('admin_new') }}">{{ _("write your first note") }}</a>{% endset %}
+        <p>{% trans link=new_note_link|safe %}Nothing here yet — {{ link }}.{% endtrans %}</p>
         {% else %}
-        <p>Nothing to see here yet!</p>
+        <p>{{ _("Nothing to see here yet!") }}</p>
         {% endif %}
     </div>
 {% endif %}

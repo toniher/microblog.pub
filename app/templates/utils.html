@@ -1,6 +1,6 @@
 {%- import "components/attachments.html" as attachments with context -%}
 {%- import "components/hidden_inputs.html" as hidden_inputs -%}
-{%- import "components/admin_buttons.html" as admin_buttons -%}
+{%- import "components/admin_buttons.html" as admin_buttons with context -%}
 {%- import "components/actor.html" as actor_component with context -%}
 
 {% macro display_og_meta(object) %}
@@ -39,9 +39,9 @@
     </a>
 </div>
 
-    <p class="in-reply-to">in reply to <a href="{{ wm_reply.in_reply_to }}" title="{{ wm_reply.in_reply_to }}" rel="nofollow">
+    <p class="in-reply-to">{% trans href=wm_reply.in_reply_to %}in reply to <a href="{{ href }}" title="{{ href }}" rel="nofollow">
         this object
-    </a></p>
+    </a>{% endtrans %}</p>
 
     <div class="obj-content margin-top-20">
     <div class="e-content">
@@ -52,7 +52,7 @@
     <nav class="flexbox activity-bar margin-top-20" hx-boost="true" hx-indicator="body">
     <ul>
         <li>
-            <div><a href="{{ wm_reply.url }}" rel="nofollow" class="object-permalink u-url u-uid">permalink</a></div>
+            <div><a href="{{ wm_reply.url }}" rel="nofollow" class="object-permalink u-url u-uid">{{ _("permalink") }}</a></div>
         </li>
         <li>
             <time class="dt-published" datetime="{{ wm_reply.published_at.replace(microsecond=0).isoformat() }}" title="{{ wm_reply.published_at.replace(microsecond=0).isoformat() }}">{{ wm_reply.published_at | timeago }}</time>
@@ -111,9 +111,10 @@
     {% endif %}
 
     {% if object.in_reply_to %}
-    <p class="in-reply-to">in reply to <a href="{% if is_admin and object.is_in_reply_to_from_inbox %}{{ url_for("get_lookup") }}?query={% endif %}{{ object.in_reply_to }}" title="{{ object.in_reply_to }}" rel="nofollow">
+    {% set reply_href %}{% if is_admin and object.is_in_reply_to_from_inbox %}{{ url_for("get_lookup") }}?query={% endif %}{{ object.in_reply_to }}{% endset %}
+    <p class="in-reply-to">{% trans href=reply_href, title=object.in_reply_to %}in reply to <a href="{{ href }}" title="{{ title }}" rel="nofollow">
             this object
-        </a></p>
+        </a>{% endtrans %}</p>
     {% endif %}
 
     {% if object.ap_type in ["Article", "Event", "Page"] %}
@@ -122,8 +123,8 @@
 
     {% if object.ap_type == "Event" %}
         {% if object.ap_object.get("endTime") and object.ap_object.get("startTime") %}
-            <p>On {{ object.ap_object.startTime | parse_datetime | format_date }}
-            (ends {{ object.ap_object.endTime | parse_datetime | format_date }})</p>
+            <p>{% trans start=(object.ap_object.startTime | parse_datetime | format_date), end=(object.ap_object.endTime | parse_datetime | format_date) %}On {{ start }}
+            (ends {{ end }}){% endtrans %}</p>
         {% endif %}
     {% endif %}
 
@@ -131,7 +132,7 @@
         {% set loc = object.ap_object.get("location") %}
         {% if loc.type == "Place" and loc.latitude and loc.longitude %}
         <div class="ap-place">
-            <h3>Location</h3>
+            <h3>{{ _("Location") }}</h3>
             {% if loc.name %}{{ loc.name }}{% endif %}
             <span class="h-geo">
                 <data class="p-latitude" value="{{ loc.latitude}}"></data>
@@ -183,14 +184,14 @@
                     {{ item.name | clean_html(object) | safe }}
 
                     {% if object.voted_for_answers and item.name in object.voted_for_answers %}
-                    <span class="muted poll-vote">you voted for this answer</span>
+                    <span class="muted poll-vote">{{ _("you voted for this answer") }}</span>
                     {% endif %}
 
                     {% if can_vote %}
                     </label>
                     {% endif %}
 
-                    <span class="float-right">{{ pct }}% <span class="muted">({{ item.replies.totalItems }} votes)</span></span>
+                    <span class="float-right">{{ pct }}% <span class="muted">({% trans count=item.replies.totalItems %}{{ count }} vote{% pluralize %}{{ count }} votes{% endtrans %})</span></span>
                 </p>
                 <svg class="poll-bar">
                     <line x1="0" y1="10px" x2="{{ pct or 1 }}%" y2="10px"></line>
@@ -202,7 +203,7 @@
 
         {% if can_vote %}
             <p class="form">
-                <input type="submit" value="vote">
+                <input type="submit" value="{{ _("vote") }}">
             </p>
             </form>
         {% endif %}
@@ -224,13 +225,13 @@
     <nav class="flexbox activity-bar" hx-boost="true" hx-indicator="body">
     <ul>
         <li>
-            <div><a href="{{ object.url }}"{% if object.is_from_inbox %} rel="nofollow"{% endif %} class="object-permalink u-url u-uid"{% if ENABLE_MICRODATA %} itemprop="url mainEntityOfPage"{% endif %}>permalink</a></div>
+            <div><a href="{{ object.url }}"{% if object.is_from_inbox %} rel="nofollow"{% endif %} class="object-permalink u-url u-uid"{% if ENABLE_MICRODATA %} itemprop="url mainEntityOfPage"{% endif %}>{{ _("permalink") }}</a></div>
         </li>
 
         {% if object.is_from_outbox and is_object_page and not is_admin and not request.url.path.startswith("/remote_interaction") %}
             <li>
                 <a class="label-btn" href="{{ request.url_for("remote_interaction") }}?ap_id={{ object.ap_id }}">
-                    interact from your instance
+                    {{ _("interact from your instance") }}
                 </a>
             </li>
         {% endif %}
@@ -244,14 +245,14 @@
         {% if object.ap_type == "Question" %}
             {% if object.poll_end_time %}
                 <li>
-                    {% if object.is_poll_ended %}ended{% else %}ends{% endif %}
+                    {% if object.is_poll_ended %}{{ _("ended") }}{% else %}{{ _("ends") }}{% endif %}
                     <time title="{{ object.poll_end_time.replace(microsecond=0).isoformat() }}">
                         {{ object.poll_end_time | timeago }}
                     </time>
                 </li>
             {% endif %}
             <li>
-                {{ object.poll_voters_count }} voters
+                {% trans count=object.poll_voters_count %}{{ count }} voter{% pluralize %}{{ count }} voters{% endtrans %}
             </li>
         {% endif %}
         {% if is_admin %}
@@ -263,27 +264,28 @@
         {% if object.is_from_outbox %}
             {% if object.likes_count %}
             <li>
-                <a href="{{ object.url }}"><strong>{{ object.likes_count }}</strong> like{{ object.likes_count | pluralize }}</a>
+                <a href="{{ object.url }}">{% trans count=object.likes_count %}<strong>{{ count }}</strong> like{% pluralize %}<strong>{{ count }}</strong> likes{% endtrans %}</a>
             </li>
             {% endif %}
 
             {% if object.announces_count %}
             <li>
-                <a href="{{ object.url }}"><strong>{{ object.announces_count }}</strong> share{{ object.announces_count | pluralize }}</a>
+                <a href="{{ object.url }}">{% trans count=object.announces_count %}<strong>{{ count }}</strong> share{% pluralize %}<strong>{{ count }}</strong> shares{% endtrans %}</a>
             </li>
             {% endif %}
 
             {% if object.webmentions_count %}
             <li>
-                <a href="{{ object.url }}"><strong>{{ object.webmentions_count }}</strong> webmention{{ object.webmentions_count | pluralize }}</a>
+                <a href="{{ object.url }}">{% trans count=object.webmentions_count %}<strong>{{ count }}</strong> webmention{% pluralize %}<strong>{{ count }}</strong> webmentions{% endtrans %}</a>
             </li>
             {% endif %}
 
         {% endif %}
 
         {% if (object.is_from_outbox or is_admin) and object.replies_count %}
+        {% set reply_href %}{% if is_admin and not object.is_from_outbox %}{{ url_for("admin_object") }}?ap_id={{ object.ap_id }}{% if object.in_reply_to %}#{{ object.permalink_id }}{% endif %}{% else %}{{ object.url }}{% endif %}{% endset %}
         <li>
-            <a href="{% if is_admin and not object.is_from_outbox %}{{ url_for("admin_object") }}?ap_id={{ object.ap_id }}{% if object.in_reply_to %}#{{ object.permalink_id }}{% endif %}{% else %}{{ object.url }}{% endif %}"><strong>{{ object.replies_count }}</strong> repl{{ object.replies_count | pluralize("y", "ies") }}</a>
+            <a href="{{ reply_href }}">{% trans count=object.replies_count %}<strong>{{ count }}</strong> reply{% pluralize %}<strong>{{ count }}</strong> replies{% endtrans %}</a>
         </li>
         {% endif %}
 
@@ -317,7 +319,7 @@
         {% if not object.is_from_outbox %}
             <li>
                 {% if object.liked_via_outbox_object_ap_id %}
-                    {{ admin_buttons.admin_undo_button(request, csrf_token, object.liked_via_outbox_object_ap_id, "unlike", object.permalink_id) }}
+                    {{ admin_buttons.admin_undo_button(request, csrf_token, object.liked_via_outbox_object_ap_id, _("unlike"), object.permalink_id) }}
                 {% else %}
                     {{ admin_buttons.admin_like_button(request, csrf_token, object.ap_id, object.permalink_id) }}
                 {% endif %}
@@ -334,7 +336,7 @@
             {% if object.visibility in [visibility_enum.PUBLIC, visibility_enum.UNLISTED] %}
             <li>
                 {% if object.announced_via_outbox_object_ap_id %}
-                    {{ admin_buttons.admin_undo_button(request, csrf_token, object.announced_via_outbox_object_ap_id, "unshare") }}
+                    {{ admin_buttons.admin_undo_button(request, csrf_token, object.announced_via_outbox_object_ap_id, _("unshare")) }}
                 {% else %}
                     {{ admin_buttons.admin_announce_button(request, csrf_token, object.ap_id, permalink_id=object.permalink_id) }}
                 {% endif %}
@@ -365,7 +367,7 @@
     {% if likes or shares or webmentions %}
     <div class="public-interactions">
         {% if likes %}
-            <div class="interactions-block">Likes
+            <div class="interactions-block">{{ _("Likes") }}
                 <div class="facepile-wrapper">
                 {% for like in likes %}
                     <a href="{% if is_admin and like.ap_actor_id %}{{ url_for("admin_profile") }}?actor_id={{ like.ap_actor_id }}{% else %}{{ like.url }}{% endif %}" title="{{ like.name }}" rel="noreferrer">
@@ -374,7 +376,7 @@
                 {% endfor %}
                 {% if object.likes_count > likes | length %}
                     <div class="and-x-more">
-                        and {{ object.likes_count - likes | length }} more.
+                        {% trans count=(object.likes_count - likes | length) %}and {{ count }} more.{% pluralize %}and {{ count }} more.{% endtrans %}
                     </div>
                 {% endif %}
                 </div>
@@ -382,7 +384,7 @@
         {% endif %}
 
         {% if shares %}
-            <div class="interactions-block">Shares
+            <div class="interactions-block">{{ _("Shares") }}
                 <div class="facepile-wrapper">
                 {% for share in shares %}
                     <a href="{% if is_admin and share.ap_actor_id %}{{ url_for("admin_profile") }}?actor_id={{ share.ap_actor_id }}{% else %}{{ share.url }}{% endif %}" title="{{ share.name }}" rel="noreferrer">
@@ -391,7 +393,7 @@
                 {% endfor %}
                 {% if object.announces_count > shares | length %}
                     <div class="and-x-more">
-                        and {{ object.announces_count - shares | length }} more.
+                        {% trans count=(object.announces_count - shares | length) %}and {{ count }} more.{% pluralize %}and {{ count }} more.{% endtrans %}
                     </div>
                 {% endif %}
                 </div>
@@ -399,7 +401,7 @@
         {% endif %}
 
         {% if webmentions %}
-            <div class="interactions-block">Webmentions
+            <div class="interactions-block">{{ _("Webmentions") }}
                 <div class="facepile-wrapper">
                 {% for webmention in webmentions %}
                     {% set wm = webmention.as_facepile_item %}

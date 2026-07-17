@@ -5,7 +5,7 @@
     {{ hidden_inputs.embed_csrf_token(csrf_token) }}
     {{ hidden_inputs.embed_redirect_url(request) }}
     <input type="hidden" name="ap_actor_id" value="{{ actor.ap_id }}">
-    <input type="submit" value="block">
+    <input type="submit" value="{{ _("block") }}">
 </form>
 {% endmacro %}
 
@@ -14,7 +14,7 @@
     {{ hidden_inputs.embed_csrf_token(csrf_token) }}
     {{ hidden_inputs.embed_redirect_url(request) }}
     <input type="hidden" name="ap_actor_id" value="{{ actor.ap_id }}">
-    <input type="submit" value="unblock">
+    <input type="submit" value="{{ _("unblock") }}">
 </form>
 {% endmacro %}
 
@@ -23,7 +23,7 @@
     {{ hidden_inputs.embed_csrf_token(csrf_token) }}
     {{ hidden_inputs.embed_redirect_url(request) }}
     <input type="hidden" name="ap_actor_id" value="{{ actor.ap_id }}">
-    <input type="submit" value="hide shares">
+    <input type="submit" value="{{ _("hide shares") }}">
 </form>
 {% endmacro %}
 
@@ -32,7 +32,7 @@
     {{ hidden_inputs.embed_csrf_token(csrf_token) }}
     {{ hidden_inputs.embed_redirect_url(request) }}
     <input type="hidden" name="ap_actor_id" value="{{ actor.ap_id }}">
-    <input type="submit" value="show shares">
+    <input type="submit" value="{{ _("show shares") }}">
 </form>
 {% endmacro %}
 
@@ -41,7 +41,7 @@
     {{ hidden_inputs.embed_csrf_token(csrf_token) }}
     {{ hidden_inputs.embed_redirect_url(request) }}
     <input type="hidden" name="ap_actor_id" value="{{ actor.ap_id }}">
-    <input type="submit" value="follow">
+    <input type="submit" value="{{ _("follow") }}">
 </form>
 {% endmacro %}
 
@@ -50,7 +50,7 @@
     {{ hidden_inputs.embed_csrf_token(csrf_token) }}
     {{ hidden_inputs.embed_redirect_url(request) }}
     <input type="hidden" name="notification_id" value="{{ notif.id }}">
-    <input type="submit" value="accept follow">
+    <input type="submit" value="{{ _("accept follow") }}">
 </form>
 {% endmacro %}
 
@@ -59,7 +59,7 @@
     {{ hidden_inputs.embed_csrf_token(csrf_token) }}
     {{ hidden_inputs.embed_redirect_url(request) }}
     <input type="hidden" name="notification_id" value="{{ notif.id }}">
-    <input type="submit" value="reject follow">
+    <input type="submit" value="{{ _("reject follow") }}">
 </form>
 {% endmacro %}
 
@@ -68,7 +68,7 @@
     {{ hidden_inputs.embed_csrf_token(csrf_token) }}
     {{ hidden_inputs.embed_redirect_url(request, permalink_id) }}
     <input type="hidden" name="ap_object_id" value="{{ ap_object_id }}">
-    <input type="submit" value="like">
+    <input type="submit" value="{{ _("like") }}">
 </form>
 {% endmacro %}
 
@@ -77,7 +77,7 @@
     {{ hidden_inputs.embed_csrf_token(csrf_token) }}
     {{ hidden_inputs.embed_redirect_url(request, permalink_id) }}
     <input type="hidden" name="ap_object_id" value="{{ ap_object_id }}">
-    <input type="submit" value="bookmark">
+    <input type="submit" value="{{ _("bookmark") }}">
 </form>
 {% endmacro %}
 
@@ -86,7 +86,7 @@
     {{ hidden_inputs.embed_csrf_token(csrf_token) }}
     {{ hidden_inputs.embed_redirect_url(request, permalink_id) }}
     <input type="hidden" name="ap_object_id" value="{{ ap_object_id }}">
-    <input type="submit" value="unbookmark">
+    <input type="submit" value="{{ _("unbookmark") }}">
 </form>
 {% endmacro %}
 
@@ -95,7 +95,7 @@
     {{ hidden_inputs.embed_csrf_token(csrf_token) }}
     {{ hidden_inputs.embed_redirect_url(request, permalink_id) }}
     <input type="hidden" name="ap_object_id" value="{{ ap_object_id }}">
-    <input type="submit" value="pin">
+    <input type="submit" value="{{ _("pin") }}">
 </form>
 {% endmacro %}
 
@@ -104,14 +104,14 @@
     {{ hidden_inputs.embed_csrf_token(csrf_token) }}
     {{ hidden_inputs.embed_redirect_url(request, permalink_id) }}
     <input type="hidden" name="ap_object_id" value="{{ ap_object_id }}">
-    <input type="submit" value="unpin">
+    <input type="submit" value="{{ _("unpin") }}">
 </form>
 {% endmacro %}
 
 {% macro admin_edit_button(request, csrf_token, ap_object) %}
 <form action="{{ request.url_for("admin_edit_text", public_id=ap_object.public_id) }}" class="object-edit-form" method="GET">
     {{ hidden_inputs.embed_csrf_token(csrf_token) }}
-    <input type="submit" value="edit">
+    <input type="submit" value="{{ _("edit") }}">
 </form>
 {% endmacro %}
 
@@ -120,7 +120,7 @@
     {{ hidden_inputs.embed_csrf_token(csrf_token) }}
     <input type="hidden" name="redirect_url" value="{% if request.url.path.endswith("/" + ap_object.public_id) or (request.url.path == "/admin/object" and request.query_params.ap_id.endswith("/" + ap_object.public_id)) %}{{ request.base_url}}{% else %}{{ request.url }}{% endif %}">
     <input type="hidden" name="ap_object_id" value="{{ ap_object.ap_id }}">
-    <input type="submit" value="delete">
+    <input type="submit" value="{{ _("delete") }}">
 </form>
 {% endmacro %}
 
@@ -129,7 +129,7 @@
     {{ hidden_inputs.embed_csrf_token(csrf_token) }}
     {{ hidden_inputs.embed_redirect_url(request, permalink_id) }}
     <input type="hidden" name="ap_object_id" value="{{ ap_object_id }}">
-    <input type="submit" value="local delete">
+    <input type="submit" value="{{ _("local delete") }}">
 </form>
 {% endmacro %}
 
@@ -138,7 +138,7 @@
     {{ hidden_inputs.embed_csrf_token(csrf_token) }}
     {{ hidden_inputs.embed_redirect_url(request, permalink_id) }}
     <input type="hidden" name="webmention_id" value="{{ webmention_id }}">
-    <input type="submit" value="local delete">
+    <input type="submit" value="{{ _("local delete") }}">
 </form>
 {% endmacro %}
 
@@ -147,23 +147,23 @@
     {{ hidden_inputs.embed_csrf_token(csrf_token) }}
     {{ hidden_inputs.embed_redirect_url(request, permalink_id) }}
     <input type="hidden" name="ap_object_id" value="{{ ap_object_id }}">
-    <input type="submit" value="share">
+    <input type="submit" value="{{ _("share") }}">
 </form>
 {% endmacro %}
 
-{% macro admin_undo_button(request, csrf_token, ap_object_id, action="undo", permalink_id=None) %}
+{% macro admin_undo_button(request, csrf_token, ap_object_id, action=None, permalink_id=None) %}
 <form action="{{ request.url_for("admin_actions_undo") }}" method="POST">
     {{ hidden_inputs.embed_csrf_token(csrf_token) }}
     {{ hidden_inputs.embed_redirect_url(request, permalink_id) }}
     <input type="hidden" name="ap_object_id" value="{{ ap_object_id }}">
-    <input type="submit" value="{{ action }}">
+    <input type="submit" value="{{ action if action else _("undo") }}">
 </form>
 {% endmacro %}
 
 {% macro admin_reply_button(request, csrf_token, ap_object_id) %}
 <form action="{{ BASE_URL }}/admin/new"  method="GET">
 <input type="hidden" name="in_reply_to" value="{{ ap_object_id }}">
-<button type="submit">reply</button>
+<button type="submit">{{ _("reply") }}</button>
 </form>
 {% endmacro %}
 
@@ -171,21 +171,21 @@
 <form action="{{ BASE_URL }}/admin/new"  method="GET">
 <input type="hidden" name="with_content" value="{{ actor_handle }}">
 <input type="hidden" name="with_visibility" value="DIRECT">
-<button type="submit">direct message</button>
+<button type="submit">{{ _("direct message") }}</button>
 </form>
 {% endmacro %}
 
 {% macro admin_mention_button(request, csrf_token, actor_handle) %}
 <form action="{{ BASE_URL }}/admin/new"  method="GET">
 <input type="hidden" name="with_content" value="{{ actor_handle }}">
-<button type="submit">mention</button>
+<button type="submit">{{ _("mention") }}</button>
 </form>
 {% endmacro %}
 
 {% macro admin_profile_button(request, csrf_token, ap_actor_id) %}
 <form action="{{ request.url_for("admin_profile") }}"  method="GET">
 <input type="hidden" name="actor_id" value="{{ ap_actor_id }}">
-<button type="submit">profile</button>
+<button type="submit">{{ _("profile") }}</button>
 </form>
 {% endmacro %}
 
@@ -193,6 +193,6 @@
 {# TODO turn these into a regular link and append permalink ID if it's a reply #}
 <form action="{{ request.url_for("admin_object") }}"  method="GET">
 <input type="hidden" name="ap_id" value="{{ ap_object.ap_id }}">
-<button type="submit">expand</button>
+<button type="submit">{{ _("expand") }}</button>
 </form>
 {% endmacro %}

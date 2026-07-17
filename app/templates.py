@@ -8,11 +8,15 @@ from urllib.parse import urlparse
 import bleach
 import emoji
 import html2text
-import humanize
+import jinja2
+from babel.dates import format_date
+from babel.dates import format_datetime
+from babel.dates import format_timedelta
 from bs4 import BeautifulSoup  # type: ignore
 from dateutil.parser import parse
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
+from jinja2.runtime import Context as Jinja2Context
 from loguru import logger
 from sqlalchemy import func
 from sqlalchemy import select
@@ -24,6 +28,7 @@ from activitypub.actor import LOCAL_ACTOR
 from activitypub.ap_object import Attachment
 from activitypub.ap_object import Object
 from app import config
+from app import i18n
 from app import models
 from app.config import BASE_URL
 from app.config import CUSTOM_FOOTER
@@ -45,6 +50,12 @@ _templates = Jinja2Templates(
 # Starlette >=0.35 no longer accepts Jinja env options as kwargs; set them on the env.
 _templates.env.trim_blocks = True
 _templates.env.lstrip_blocks = True
+# Enables {% trans %}/{% pluralize %} and a `_`/`gettext`/`ngettext` global.
+# Real translations are installed per-request in `render_template` (below); this
+# only provides safe no-op defaults for anything rendered outside a request
+# (there is none today, but it keeps the env usable standalone).
+_templates.env.add_extension("jinja2.ext.i18n")
+_templates.env.install_null_translations(newstyle=True)  # type: ignore[attr-defined]
 
 
 H2T = html2text.HTML2Text()
@@ -96,6 +107,9 @@ async def render_template(
     is_admin = False
     is_admin = is_current_user_admin(request)
 
+    locale = i18n.resolve_locale(request)
+    jinja_gettext, jinja_ngettext = i18n.get_jinja_i18n_callables(locale)
+
     return _templates.TemplateResponse(
         request,
         template,
@@ -107,6 +121,17 @@ async def render_template(
             "csrf_token": generate_csrf_token(),
             "highlight_css": HIGHLIGHT_CSS,
             "visibility_enum": ap.VisibilityEnum,
+            # Per-request i18n: these context values shadow the environment
+            # globals installed by `install_null_translations` above, which
+            # is what makes this race-free across concurrent requests (no
+            # mutation of shared env state). Also overrides the module-level
+            # `LANGUAGE_CODE` Jinja global so `<html lang>` reflects the
+            # locale actually rendered for this request.
+            "LANGUAGE_CODE": locale,
+            "LOCALE": locale,
+            "gettext": jinja_gettext,
+            "ngettext": jinja_ngettext,
+            "_": jinja_gettext,
             "notifications_count": (
                 await db_session.scalar(
                     select(func.count(models.Notification.id)).where(
@@ -350,11 +375,17 @@ def _clean_html_wm(html: str) -> str:
     )
 
 
-def _timeago(original_dt: datetime) -> str:
+@jinja2.pass_context
+def _timeago(context: Jinja2Context, original_dt: datetime) -> str:
     dt = original_dt
     if dt.tzinfo:
         dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
-    return humanize.naturaltime(dt, when=now().replace(tzinfo=None))
+    # Negative delta (dt before the reference time) formats as "... ago";
+    # positive delta (dt after it) formats as "in ...".
+    delta = dt - now().replace(tzinfo=None)
+    return format_timedelta(
+        delta, add_direction=True, locale=context.get("LOCALE", config.LANGUAGE_CODE)
+    )
 
 
 def _has_media_type(attachment: Attachment, media_type_prefix: str) -> bool:
@@ -363,8 +394,18 @@ def _has_media_type(attachment: Attachment, media_type_prefix: str) -> bool:
     return False
 
 
-def _format_date(dt: datetime) -> str:
-    return dt.strftime("%b %d, %Y, %H:%M")
+@jinja2.pass_context
+def _format_date(context: Jinja2Context, dt: datetime) -> str:
+    return format_datetime(
+        dt, format="medium", locale=context.get("LOCALE", config.LANGUAGE_CODE)
+    )
+
+
+@jinja2.pass_context
+def _format_date_only(context: Jinja2Context, dt: datetime) -> str:
+    return format_date(
+        dt, format="medium", locale=context.get("LOCALE", config.LANGUAGE_CODE)
+    )
 
 
 def _pluralize(count: int, singular: str = "", plural: str = "s") -> str:
@@ -429,6 +470,7 @@ _templates.env.filters["clean_html"] = _clean_html
 _templates.env.filters["clean_html_wm"] = _clean_html_wm
 _templates.env.filters["timeago"] = _timeago
 _templates.env.filters["format_date"] = _format_date
+_templates.env.filters["format_date_only"] = _format_date_only
 _templates.env.filters["has_media_type"] = _has_media_type
 _templates.env.filters["html2text"] = _html2text
 _templates.env.filters["emojify"] = _emojify

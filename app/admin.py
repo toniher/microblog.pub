@@ -41,6 +41,7 @@ from app.config import verify_csrf_token
 from app.config import verify_password
 from app.database import AsyncSession
 from app.database import get_db_session
+from app.i18n import gettext_default
 from app.lookup import lookup
 from app.templates import is_current_user_admin
 from app.uploads import save_upload
@@ -1258,12 +1259,16 @@ async def admin_actions_new(
     db_session: AsyncSession = Depends(get_db_session),
 ) -> RedirectResponse:
     if not content and not content_warning:
-        raise HTTPException(status_code=422, detail="Error: object must have a content")
+        raise HTTPException(
+            status_code=422, detail=gettext_default("Error: object must have a content")
+        )
 
     # Optional Mastodon-style post language (BCP 47); empty means unset (None).
     language = (language or "").strip() or None
     if language and not _LANGUAGE_CODE_RE.match(language):
-        raise HTTPException(status_code=422, detail="Error: invalid language code")
+        raise HTTPException(
+            status_code=422, detail=gettext_default("Error: invalid language code")
+        )
 
     # Do like Mastodon, if there's only a CW with no content and some attachments,
     # swap the CW and the content
@@ -1273,7 +1278,9 @@ async def admin_actions_new(
         content_warning = None
 
     if not content:
-        raise HTTPException(status_code=422, detail="Error: object must have a content")
+        raise HTTPException(
+            status_code=422, detail=gettext_default("Error: object must have a content")
+        )
 
     # XXX: for some reason, no files restuls in an empty single file
     uploads = []
@@ -1293,7 +1300,8 @@ async def admin_actions_new(
                     )
                 else:
                     raise HTTPException(
-                        status_code=422, detail="Error: Unable to process upload"
+                        status_code=422,
+                        detail=gettext_default("Error: Unable to process upload"),
                     )
 
     ap_type = "Note"
@@ -1378,7 +1386,9 @@ async def admin_actions_edit_text(
     db_session: AsyncSession = Depends(get_db_session),
 ) -> RedirectResponse:
     if not content:
-        raise HTTPException(status_code=422, detail="Error: objec must have a content")
+        raise HTTPException(
+            status_code=422, detail=gettext_default("Error: object must have a content")
+        )
 
     maybe_object = (
         (

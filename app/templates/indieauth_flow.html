@@ -16,13 +16,14 @@
                 {% else %}
                     <span class="scolor">{{ client.name }}</span>
                 {% endif %}
-                <p>wants you to login{% if me %} as <strong class="lcolor">{{ me }}</strong>{% endif %} with the following redirect URI: <code>{{ redirect_uri }}</code>.</p>
+                {% set as_who %}{% if me %} as <strong class="lcolor">{{ me }}</strong>{% endif %}{% endset %}
+                <p>{% trans as_who=as_who|safe, uri=redirect_uri %}wants you to login{{ as_who }} with the following redirect URI: <code>{{ uri }}</code>.{% endtrans %}</p>
 
 
                 <form method="POST" action="{{ url_for('indieauth_flow') }}" class="form">
                     {{ hidden_inputs.embed_csrf_token(csrf_token) }}
                     {% if scopes %}
-                    <h3>Scopes</h3>
+                    <h3>{{ _("Scopes") }}</h3>
                     <ul>
                     {% for scope in scopes %}
                     <li><input type="checkbox" name="scopes" value="{{scope}}" id="scope-{{scope}}"><label for="scope-{{scope}}">{{ scope }}</label>
@@ -37,7 +38,7 @@
                     <input type="hidden" name="response_type" value="{{ response_type }}">
                     <input type="hidden" name="code_challenge" value="{{ code_challenge }}">
                     <input type="hidden" name="code_challenge_method" value="{{ code_challenge_method }}">
-                    <input type="submit" value="login">
+                    <input type="submit" value="{{ _("login") }}">
                 </form>
             </div>
         </div>

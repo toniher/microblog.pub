@@ -1,0 +1,799 @@
+# Translations template for PROJECT.
+# Copyright (C) 2026 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2026-07-17 21:46+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.10.3\n"
+
+#: app/admin.py:1263 app/admin.py:1282 app/admin.py:1390
+msgid "Error: object must have a content"
+msgstr ""
+
+#: app/admin.py:1270
+msgid "Error: invalid language code"
+msgstr ""
+
+#: app/admin.py:1304
+msgid "Error: Unable to process upload"
+msgstr ""
+
+#: app/config.py:306
+msgid "please try again"
+msgstr ""
+
+#: app/config.py:315
+#, python-format
+msgid "The security token has expired, %(please_try_again)s"
+msgstr ""
+
+#: app/templates/admin_direct_messages.html:6
+#, python-format
+msgid "%(name)s - Direct messages"
+msgstr ""
+
+#: app/templates/admin_direct_messages.html:15
+#, python-format
+msgid "With %(actors)s"
+msgstr ""
+
+#: app/templates/admin_edit_text.html:6 app/templates/admin_new.html:7
+#, python-format
+msgid "%(name)s - New"
+msgstr ""
+
+#: app/templates/admin_edit_text.html:19 app/templates/admin_new.html:48
+#: app/templates/admin_new_post.html:53
+msgid "Title"
+msgstr ""
+
+#: app/templates/admin_edit_text.html:44
+msgid "Submit"
+msgstr ""
+
+#: app/templates/admin_inbox.html:9
+#, python-format
+msgid "%(name)s - Inbox"
+msgstr ""
+
+#: app/templates/admin_inbox.html:20
+msgid "start following people in the lookup section"
+msgstr ""
+
+#: app/templates/admin_inbox.html:21
+#, python-format
+msgid "Nothing to see yet, %(link)s."
+msgstr ""
+
+#: app/templates/admin_inbox.html:28 app/templates/admin_profile.html:17
+#: app/templates/index.html:34
+msgid "shared"
+msgstr ""
+
+#: app/templates/admin_inbox.html:37 app/templates/notifications.html:16
+msgid "followed you"
+msgstr ""
+
+#: app/templates/admin_inbox.html:42
+msgid "liked one of your posts"
+msgstr ""
+
+#: app/templates/admin_new.html:13 app/templates/admin_new_post.html:16
+msgid "In reply to:"
+msgstr ""
+
+#: app/templates/admin_new.html:31 app/templates/admin_new_post.html:36
+#: app/templates/components/filters.html:22 app/templates/object.html:18
+msgid "Note"
+msgstr ""
+
+#: app/templates/admin_new.html:31 app/templates/admin_new_post.html:36
+#: app/templates/components/filters.html:22
+msgid "Article"
+msgstr ""
+
+#: app/templates/admin_new.html:31 app/templates/admin_new_post.html:36
+#: app/templates/components/filters.html:22
+msgid "Question"
+msgstr ""
+
+#: app/templates/admin_new.html:59 app/templates/admin_new_post.html:64
+msgid "Hey!"
+msgstr ""
+
+#: app/templates/admin_new.html:64 app/templates/admin_new_post.html:71
+msgid "single choice"
+msgstr ""
+
+#: app/templates/admin_new.html:65 app/templates/admin_new_post.html:72
+msgid "multiple choices"
+msgstr ""
+
+#: app/templates/admin_new.html:70 app/templates/admin_new_post.html:77
+msgid "ends in 5 minutes"
+msgstr ""
+
+#: app/templates/admin_new.html:71 app/templates/admin_new_post.html:78
+msgid "ends in 30 minutes"
+msgstr ""
+
+#: app/templates/admin_new.html:72 app/templates/admin_new_post.html:79
+msgid "ends in 1 hour"
+msgstr ""
+
+#: app/templates/admin_new.html:73 app/templates/admin_new_post.html:80
+msgid "ends in 6 hours"
+msgstr ""
+
+#: app/templates/admin_new.html:74 app/templates/admin_new_post.html:81
+msgid "ends in 1 day"
+msgstr ""
+
+#: app/templates/admin_new.html:79 app/templates/admin_new_post.html:86
+#, python-format
+msgid "Option %(n)s, leave empty to disable"
+msgstr ""
+
+#: app/templates/admin_new.html:85 app/templates/admin_new_post.html:92
+msgid "content warning (will mark the post as sensitive)"
+msgstr ""
+
+#: app/templates/admin_new.html:88 app/templates/admin_new_post.html:95
+#, python-format
+msgid "language code (optional, e.g. %(lang)s)"
+msgstr ""
+
+#: app/templates/admin_new.html:88 app/templates/admin_new_post.html:95
+msgid "BCP 47 language code, e.g. en or pt-BR"
+msgstr ""
+
+#: app/templates/admin_new.html:91 app/templates/admin_new_post.html:98
+msgid "Mark attachment(s) as sensitive"
+msgstr ""
+
+#: app/templates/admin_new.html:99 app/templates/admin_new_post.html:106
+msgid "Publish"
+msgstr ""
+
+#: app/templates/admin_new_post.html:10
+#, python-format
+msgid "%(name)s - New Post"
+msgstr ""
+
+#: app/templates/admin_outbox.html:10
+#, python-format
+msgid "%(name)s - Outbox"
+msgstr ""
+
+#: app/templates/admin_outbox.html:21
+msgid "You shared"
+msgstr ""
+
+#: app/templates/admin_outbox.html:28
+msgid "You liked"
+msgstr ""
+
+#: app/templates/admin_outbox.html:35
+msgid "You followed"
+msgstr ""
+
+#: app/templates/admin_profile.html:31
+#: app/templates/components/pagination.html:4
+msgid "See more"
+msgstr ""
+
+#: app/templates/articles.html:4
+#, python-format
+msgid "%(name)s's articles"
+msgstr ""
+
+#: app/templates/custom_page.html:10 app/templates/index.html:11
+msgid "ActivityPub profile"
+msgstr ""
+
+#: app/templates/custom_page.html:13 app/templates/index.html:6
+#: app/templates/index.html:14 app/templates/layout.html:9
+#: app/templates/layout.html:10 app/templates/layout.html:11
+#: app/templates/object.html:17
+#, python-format
+msgid "%(name)s's microblog"
+msgstr ""
+
+#: app/templates/custom_page.html:14 app/templates/index.html:15
+msgid "Homepage"
+msgstr ""
+
+#: app/templates/followers.html:5
+#, python-format
+msgid "%(name)s's followers"
+msgstr ""
+
+#: app/templates/followers.html:25 app/templates/following.html:25
+#, python-format
+msgid "And %(count)s more."
+msgid_plural "And %(count)s more."
+msgstr[0] ""
+msgstr[1] ""
+
+#: app/templates/followers.html:31
+msgid "Manage followers"
+msgstr ""
+
+#: app/templates/following.html:5
+#, python-format
+msgid "%(name)s's follows"
+msgstr ""
+
+#: app/templates/following.html:31
+msgid "Manage follows"
+msgstr ""
+
+#: app/templates/components/filters.html:22 app/templates/header.html:9
+msgid "Follow"
+msgstr ""
+
+#: app/templates/header.html:44
+msgid "Notes"
+msgstr ""
+
+#: app/templates/header.html:46
+msgid "Articles"
+msgstr ""
+
+#: app/templates/header.html:49
+msgid "Followers"
+msgstr ""
+
+#: app/templates/header.html:52
+msgid "Following"
+msgstr ""
+
+#: app/templates/index.html:46
+msgid "Previous"
+msgstr ""
+
+#: app/templates/index.html:50
+msgid "Next"
+msgstr ""
+
+#: app/templates/index.html:58
+msgid "write your first note"
+msgstr ""
+
+#: app/templates/index.html:59
+#, python-format
+msgid "Nothing here yet — %(link)s."
+msgstr ""
+
+#: app/templates/index.html:61
+msgid "Nothing to see here yet!"
+msgstr ""
+
+#: app/templates/indieauth_flow.html:20
+#, python-format
+msgid ""
+"wants you to login%(as_who)s with the following redirect URI: "
+"<code>%(uri)s</code>."
+msgstr ""
+
+#: app/templates/indieauth_flow.html:26
+msgid "Scopes"
+msgstr ""
+
+#: app/templates/indieauth_flow.html:41 app/templates/login.html:16
+msgid "login"
+msgstr ""
+
+#: app/templates/layout.html:17
+msgid "Skip to content"
+msgstr ""
+
+#: app/templates/layout.html:29
+msgid "Public"
+msgstr ""
+
+#: app/templates/layout.html:30
+msgid "New"
+msgstr ""
+
+#: app/templates/layout.html:31
+msgid "Stream"
+msgstr ""
+
+#: app/templates/layout.html:32
+msgid "Inbox"
+msgstr ""
+
+#: app/templates/layout.html:32
+msgid "Outbox"
+msgstr ""
+
+#: app/templates/layout.html:33
+msgid "DMs"
+msgstr ""
+
+#: app/templates/layout.html:34
+msgid "Notifications"
+msgstr ""
+
+#: app/templates/layout.html:35 app/templates/lookup.html:16
+msgid "Lookup"
+msgstr ""
+
+#: app/templates/layout.html:36
+msgid "Bookmarks"
+msgstr ""
+
+#: app/templates/layout.html:37
+msgid "Logout"
+msgstr ""
+
+#: app/templates/layout.html:55
+#, python-format
+msgid "Powered by %(mbp)s and %(ap)s."
+msgstr ""
+
+#: app/templates/login.html:10
+msgid "Invalid password."
+msgstr ""
+
+#: app/templates/login.html:15
+msgid "password"
+msgstr ""
+
+#: app/templates/lookup.html:12
+msgid ""
+"Interact with an ActivityPub object via its URL or look for a user using "
+"<i>@user@domain.tld</i>"
+msgstr ""
+
+#: app/templates/lookup.html:28
+msgid "The remote object is unavailable."
+msgstr ""
+
+#: app/templates/lookup.html:30
+msgid "Missing permissions to fetch the remote object."
+msgstr ""
+
+#: app/templates/lookup.html:32
+msgid "Lookup timed out, please try refreshing the page."
+msgstr ""
+
+#: app/templates/lookup.html:34
+msgid "Unexpected error, please check the logs and report an issue if needed."
+msgstr ""
+
+#: app/templates/notifications.html:7
+#, python-format
+msgid "%(name)s - Notifications"
+msgstr ""
+
+#: app/templates/notifications.html:19
+msgid "sent a follow request"
+msgstr ""
+
+#: app/templates/notifications.html:23
+msgid "unfollowed you"
+msgstr ""
+
+#: app/templates/notifications.html:26
+msgid "accepted your follow request"
+msgstr ""
+
+#: app/templates/notifications.html:29
+msgid "rejected your follow request"
+msgstr ""
+
+#: app/templates/components/actor.html:64 app/templates/notifications.html:32
+msgid "blocked you"
+msgstr ""
+
+#: app/templates/notifications.html:35
+msgid "unblocked you"
+msgstr ""
+
+#: app/templates/notifications.html:38
+msgid "was blocked"
+msgstr ""
+
+#: app/templates/notifications.html:41
+msgid "was unblocked"
+msgstr ""
+
+#: app/templates/notifications.html:47
+msgid "has moved to"
+msgstr ""
+
+#: app/templates/notifications.html:54
+msgid "liked a post"
+msgstr ""
+
+#: app/templates/notifications.html:57
+msgid "unliked a post"
+msgstr ""
+
+#: app/templates/notifications.html:60
+msgid "shared a post"
+msgstr ""
+
+#: app/templates/notifications.html:63
+msgid "unshared a post"
+msgstr ""
+
+#: app/templates/notifications.html:66
+msgid "mentioned you"
+msgstr ""
+
+#: app/templates/notifications.html:73
+#, python-format
+msgid "new webmention from %(source)s"
+msgstr ""
+
+#: app/templates/notifications.html:81
+#, python-format
+msgid "updated webmention from %(source)s"
+msgstr ""
+
+#: app/templates/notifications.html:89
+#, python-format
+msgid "deleted webmention from %(source)s"
+msgstr ""
+
+#: app/templates/object.html:11
+#, python-format
+msgid "%(name)s: \"%(excerpt)s\""
+msgstr ""
+
+#: app/templates/redirect.html:4
+#: app/templates/redirect_to_remote_instance.html:4
+#, python-format
+msgid "%(name)s's microblog - Redirect"
+msgstr ""
+
+#: app/templates/redirect.html:12
+#, python-format
+msgid "You are being redirected to: %(link)s"
+msgstr ""
+
+#: app/templates/redirect_to_remote_instance.html:12
+#, python-format
+msgid "You are being redirected to your instance: %(link)s"
+msgstr ""
+
+#: app/templates/remote_follow.html:5
+#, python-format
+msgid "Remote follow %(name)s"
+msgstr ""
+
+#: app/templates/remote_follow.html:13
+#, python-format
+msgid "Follow %(name)s"
+msgstr ""
+
+#: app/templates/remote_follow.html:15
+msgid "ActivityPub"
+msgstr ""
+
+#: app/templates/remote_follow.html:16
+msgid ""
+"If you have an ActivityPub account (e.g. Mastodon, Pleroma...), you can "
+"follow\n"
+"me to receive my posts on your home feed."
+msgstr ""
+
+#: app/templates/remote_follow.html:19
+msgid "What's your account?"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:44
+#: app/templates/remote_follow.html:23
+msgid "follow"
+msgstr ""
+
+#: app/templates/remote_follow.html:26
+msgid "RSS"
+msgstr ""
+
+#: app/templates/remote_follow.html:27
+msgid ""
+"You can also follow me using the following <a href=\"/feed.json\">RSS "
+"Feed</a>."
+msgstr ""
+
+#: app/templates/remote_interact.html:6
+msgid "Interact from your instance"
+msgstr ""
+
+#: app/templates/remote_interact.html:14
+msgid "Interact with this object"
+msgstr ""
+
+#: app/templates/remote_interact.html:24 app/templates/utils.html:234
+msgid "interact from your instance"
+msgstr ""
+
+#: app/templates/utils.html:42
+#, python-format
+msgid ""
+"in reply to <a href=\"%(href)s\" title=\"%(href)s\" rel=\"nofollow\">\n"
+"        this object\n"
+"    </a>"
+msgstr ""
+
+#: app/templates/utils.html:55 app/templates/utils.html:228
+msgid "permalink"
+msgstr ""
+
+#: app/templates/utils.html:115
+#, python-format
+msgid ""
+"in reply to <a href=\"%(href)s\" title=\"%(title)s\" rel=\"nofollow\">\n"
+"            this object\n"
+"        </a>"
+msgstr ""
+
+#: app/templates/utils.html:126
+#, python-format
+msgid ""
+"On %(start)s\n"
+"            (ends %(end)s)"
+msgstr ""
+
+#: app/templates/utils.html:135
+msgid "Location"
+msgstr ""
+
+#: app/templates/utils.html:187
+msgid "you voted for this answer"
+msgstr ""
+
+#: app/templates/utils.html:194
+#, python-format
+msgid "%(count)s vote"
+msgid_plural "%(count)s votes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: app/templates/utils.html:206
+msgid "vote"
+msgstr ""
+
+#: app/templates/utils.html:248
+msgid "ended"
+msgstr ""
+
+#: app/templates/utils.html:248
+msgid "ends"
+msgstr ""
+
+#: app/templates/utils.html:255
+#, python-format
+msgid "%(count)s voter"
+msgid_plural "%(count)s voters"
+msgstr[0] ""
+msgstr[1] ""
+
+#: app/templates/utils.html:267
+#, python-format
+msgid "<strong>%(count)s</strong> like"
+msgid_plural "<strong>%(count)s</strong> likes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: app/templates/utils.html:273
+#, python-format
+msgid "<strong>%(count)s</strong> share"
+msgid_plural "<strong>%(count)s</strong> shares"
+msgstr[0] ""
+msgstr[1] ""
+
+#: app/templates/utils.html:279
+#, python-format
+msgid "<strong>%(count)s</strong> webmention"
+msgid_plural "<strong>%(count)s</strong> webmentions"
+msgstr[0] ""
+msgstr[1] ""
+
+#: app/templates/utils.html:288
+#, python-format
+msgid "<strong>%(count)s</strong> reply"
+msgid_plural "<strong>%(count)s</strong> replies"
+msgstr[0] ""
+msgstr[1] ""
+
+#: app/templates/utils.html:322
+msgid "unlike"
+msgstr ""
+
+#: app/templates/utils.html:339
+msgid "unshare"
+msgstr ""
+
+#: app/templates/utils.html:370
+msgid "Likes"
+msgstr ""
+
+#: app/templates/utils.html:379 app/templates/utils.html:396
+#, python-format
+msgid "and %(count)s more."
+msgid_plural "and %(count)s more."
+msgstr[0] ""
+msgstr[1] ""
+
+#: app/templates/utils.html:387
+msgid "Shares"
+msgstr ""
+
+#: app/templates/utils.html:404
+msgid "Webmentions"
+msgstr ""
+
+#: app/templates/components/actor.html:18
+msgid "new"
+msgstr ""
+
+#: app/templates/components/actor.html:67
+msgid "already following"
+msgstr ""
+
+#: app/templates/components/actor.html:68
+msgid "unfollow"
+msgstr ""
+
+#: app/templates/components/actor.html:74
+msgid "follow request rejected"
+msgstr ""
+
+#: app/templates/components/actor.html:79
+msgid "follow request sent"
+msgstr ""
+
+#: app/templates/components/actor.html:80
+msgid "undo follow"
+msgstr ""
+
+#: app/templates/components/actor.html:86
+msgid "follows you"
+msgstr ""
+
+#: app/templates/components/actor.html:95
+#, python-format
+msgid "has moved to %(target)s"
+msgstr ""
+
+#: app/templates/components/actor.html:99
+msgid "blocked"
+msgstr ""
+
+#: app/templates/components/actor.html:116
+msgid "accepted"
+msgstr ""
+
+#: app/templates/components/actor.html:118
+msgid "rejected"
+msgstr ""
+
+#: app/templates/components/actor.html:127
+msgid "remote profile"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:8
+msgid "block"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:17
+msgid "unblock"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:26
+msgid "hide shares"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:35
+msgid "show shares"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:53
+msgid "accept follow"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:62
+msgid "reject follow"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:71
+msgid "like"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:80
+msgid "bookmark"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:89
+msgid "unbookmark"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:98
+msgid "pin"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:107
+msgid "unpin"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:114
+msgid "edit"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:123
+msgid "delete"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:132
+#: app/templates/components/admin_buttons.html:141
+msgid "local delete"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:150
+msgid "share"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:159
+msgid "undo"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:166
+msgid "reply"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:174
+msgid "direct message"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:181
+msgid "mention"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:188
+msgid "profile"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:196
+msgid "expand"
+msgstr ""
+
+#: app/templates/components/attachments.html:4
+msgid "show/hide sensitive content"
+msgstr ""
+
+#: app/templates/components/filters.html:4
+msgid "Filter by"
+msgstr ""
+
+#: app/templates/components/filters.html:13
+msgid "Reset filter"
+msgstr ""
+
+#: app/templates/components/filters.html:22
+msgid "Page"
+msgstr ""
+
+#: app/templates/components/filters.html:22
+msgid "Like"
+msgstr ""
+
+#: app/templates/components/filters.html:22
+msgid "Announce"
+msgstr ""
+

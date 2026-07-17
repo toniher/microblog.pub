@@ -27,6 +27,10 @@ Pleroma, PeerTube, PixelFed…) and doubles as an IndieWeb citizen.
   outbox access controlled via HTTP signature.
 - **Lightweight & backup-friendly**: SQLite; everything mutable lives in `data/`
   (config, uploads, secrets, the DB).
+- **Localizable interface**: gettext-based i18n (public pages negotiate a visitor's
+  `Accept-Language`, `/admin` follows the instance's `language_code`). Bundled
+  locales: `en`, `ca`, `es`, `fr`, `it`, `ro`. See `app/i18n.py` and "Translations /
+  i18n" in `docs/developer_guide.md`.
 
 ## Architecture
 
@@ -38,7 +42,12 @@ templates, Alembic migrations, background workers for federation traffic.
   - `admin.py` — authenticated admin UI (`/admin`, mounted via `include_router`)
   - `config.py` — loads `data/profile.toml` / env; exposes `CONFIG`, `ME`-related settings
   - `database.py` — sync `engine` + async `async_engine`/`async_session`, `Base`
-  - `templates.py` — `render_template()` helper + HTML sanitization allow-lists
+  - `templates.py` — `render_template()` helper (incl. per-request locale/gettext
+    wiring), HTML sanitization allow-lists, locale-aware date filters
+  - `i18n.py` — gettext locale resolution/negotiation (`Accept-Language` for public
+    pages, instance `language_code` for `/admin`), catalog loading; catalogs live
+    under `app/translations/<locale>/LC_MESSAGES/` (`.po` tracked, `.mo` gitignored,
+    compiled via `inv compile-translations`)
   - `httpsig.py`, `ldsig.py`, `key.py` — signature signing/verification, keypair
   - `indieauth.py`, `micropub.py`, `webmentions.py`, `webfinger.py` — IndieWeb + discovery
   - `source.py` — Markdown→HTML, hashtag/mention extraction
@@ -63,7 +72,7 @@ templates, Alembic migrations, background workers for federation traffic.
   fixtures; `tests/mastodon/` covers the Mastodon client API surface
 - `data/` — runtime state (gitignored); `tests.toml` is the test config
 - `templates/`, `static/`, `scss/` — server-rendered UI assets
-- `tasks.py` — `invoke` task runner (lint, tests, migrations, scss, workers…)
+- `tasks.py` — `invoke` task runner (lint, tests, migrations, scss, i18n, workers…)
 
 ### Conventions
 
@@ -97,13 +106,19 @@ poetry run inv process-incoming-activities    # inbox worker
 poetry run inv process-outgoing-activities    # outbox worker
 poetry run inv compile-scss
 
+# translations (i18n) — see "Translations / i18n" in docs/developer_guide.md
+poetry run inv extract-messages               # regenerate app/translations/messages.pot
+poetry run inv init-translation <locale>      # scaffold a new locale's .po
+poetry run inv update-translations            # merge new msgids into existing .po files
+poetry run inv compile-translations           # .po -> .mo (also runs as part of `inv update`)
+
 # docker
 make build        # build image (python:3.12-slim base)
 make config       # configuration wizard
 ```
 
 Testing notes:
-- Test suite runs against an in-memory SQLite DB; ~275 tests, ~110s.
+- Test suite runs against an in-memory SQLite DB; ~286 tests.
 - `activitypub/tests/test_actor.py` does real-network retries (~20s) — when running
   the whole suite ad hoc, pass `--timeout=60` (pytest-timeout) so a slow/hung test
   is killed instead of stalling the run.

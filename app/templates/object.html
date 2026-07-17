@@ -8,14 +8,14 @@
 {% else %}
     {% set excerpt = outbox_object.summary | html2text | trim | truncate(50) %}
 {% endif %}
-<title>{% if outbox_object.name %}{{ outbox_object.name }}{% else %}{{ local_actor.display_name }}: "{{ excerpt }}"{% endif %}</title>
+<title>{% if outbox_object.name %}{{ outbox_object.name }}{% else %}{{ _("%(name)s: \"%(excerpt)s\"", name=local_actor.display_name, excerpt=excerpt) }}{% endif %}</title>
 <link rel="webmention" href="{{ url_for("webmention_endpoint") }}">
 <link rel="alternate" href="{{ request.url }}" type="application/activity+json">
 <meta name="description" content="{{ excerpt }}">
 <meta content="article" property="og:type" />
 <meta content="{{ outbox_object.url }}" property="og:url" />
-<meta content="{{ local_actor.display_name }}'s microblog" property="og:site_name" />
-<meta content="{% if outbox_object.name %}{{ outbox_object.name }}{% else %}Note{% endif %}" property="og:title" />
+<meta content="{{ _("%(name)s's microblog", name=local_actor.display_name) }}" property="og:site_name" />
+<meta content="{% if outbox_object.name %}{{ outbox_object.name }}{% else %}{{ _("Note") }}{% endif %}" property="og:title" />
 <meta content="{{ excerpt }}" property="og:description" />
 <meta content="{{ local_actor.icon_url }}" property="og:image" />
 <meta content="summary" property="twitter:card" />

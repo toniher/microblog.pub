@@ -1,13 +1,13 @@
-{%- import "components/pagination.html" as pagination -%}
-{%- import "components/filters.html" as filters -%}
-{%- import "components/actor.html" as actor_component -%}
+{%- import "components/pagination.html" as pagination with context -%}
+{%- import "components/filters.html" as filters with context -%}
+{%- import "components/actor.html" as actor_component with context -%}
 {%- import "utils.html" as utils with context -%}
 
 {% extends "layout.html" %}
 
 {% block head %}
 <link rel="manifest" href="/static/pwa.webmanifest" />
-<title>{{ local_actor.display_name }} - Outbox</title>
+<title>{{ _("%(name)s - Outbox", name=local_actor.display_name) }}</title>
 {% endblock %}
 
 {% block content %}
@@ -18,21 +18,21 @@
 
     {% if outbox_object.ap_type == "Announce" %}
         <div class="h-entry" id="{{ outbox_object.permalink_id }}">
-            <div class="actor-action">You shared <span title="{{ outbox_object.ap_published_at.isoformat() }}">{{ outbox_object.ap_published_at | timeago }}</span></div>
+            <div class="actor-action">{{ _("You shared") }} <span title="{{ outbox_object.ap_published_at.isoformat() }}">{{ outbox_object.ap_published_at | timeago }}</span></div>
             <div class="h-cite u-repost-of">
                 {{ utils.display_object(outbox_object.relates_to_anybox_object, is_h_entry=False) }}
             </div>
         </div>
     {% elif outbox_object.ap_type == "Like" %}
         <div class="h-entry" id="{{ outbox_object.permalink_id }}">
-            <div class="actor-action">You liked <span title="{{ outbox_object.ap_published_at.isoformat() }}">{{ outbox_object.ap_published_at | timeago }}</span></div>
+            <div class="actor-action">{{ _("You liked") }} <span title="{{ outbox_object.ap_published_at.isoformat() }}">{{ outbox_object.ap_published_at | timeago }}</span></div>
             <div class="h-cite u-repost-of">
                 {{ utils.display_object(outbox_object.relates_to_anybox_object, is_h_entry=False) }}
             </div>
         </div>
     {% elif outbox_object.ap_type == "Follow" %}
         <div class="h-entry" id="{{ outbox_object.permalink_id }}">
-            <div class="actor-action">You followed <span title="{{ outbox_object.ap_published_at.isoformat() }}">{{ outbox_object.ap_published_at | timeago }}</span></div>
+            <div class="actor-action">{{ _("You followed") }} <span title="{{ outbox_object.ap_published_at.isoformat() }}">{{ outbox_object.ap_published_at | timeago }}</span></div>
             {{ actor_component.display_actor(request, csrf_token, is_admin, outbox_object.relates_to_actor, actors_metadata) }}
         </div>
     {% elif outbox_object.ap_type in ["Article", "Note", "Video", "Question"] %}

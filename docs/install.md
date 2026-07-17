@@ -52,9 +52,11 @@ processes** under [supervisord](http://supervisord.org/) (see `misc/docker-super
  - `outgoing_worker` — delivers your outgoing activities to other servers
 
 On every start, the entrypoint (`misc/docker_start.sh`) first runs `inv update
---no-update-deps`, which recompiles the CSS and applies any pending database
-migrations before launching supervisord. You therefore don't need to run migrations
-by hand after pulling a new version — restarting the container is enough.
+--no-update-deps`, which recompiles the CSS, compiles the translation catalogs
+(`.po` → `.mo`, see [Translations / i18n](developer_guide.md#translations-i18n)),
+and applies any pending database migrations before launching supervisord. You
+therefore don't need to run migrations by hand after pulling a new version —
+restarting the container is enough.
 
 The container runs as the unprivileged user `1000:1000` (see the `user:` line in
 `docker-compose.yml`), and its state lives in two volumes so it survives image
@@ -222,7 +224,7 @@ Setup a reverse proxy (see the next section).
 
 ### Updating 
 
-To update microblogpub locally, pull the remote changes and run the `update` task to regenerate the CSS and run any DB migrations.
+To update microblogpub locally, pull the remote changes and run the `update` task to regenerate the CSS, compile the translation catalogs, and run any DB migrations.
 
 ```bash
 git pull

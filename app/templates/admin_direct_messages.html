@@ -3,19 +3,16 @@
 
 {% block head %}
 <link rel="manifest" href="/static/pwa.webmanifest" />
-<title>{{ local_actor.display_name }} - Direct messages</title>
+<title>{{ _("%(name)s - Direct messages", name=local_actor.display_name) }}</title>
 {% endblock %}
 
 {% block content %}
 
 {% for anybox_object, convo, actors in threads %}
     <div class="h-entry" id="{{ anybox_object.permalink_id }}">
+        {% set actor_links %}{% for actor in actors %}<a href="{{ url_for("admin_profile") }}?actor_id={{ actor.ap_id }}">{{ actor.handle }}</a>{% endfor %}{% endset %}
         <div class="actor-action">
-            With {% for actor in actors %}
-            <a href="{{ url_for("admin_profile") }}?actor_id={{ actor.ap_id }}">
-                {{ actor.handle }}
-            </a>
-            {% endfor %}
+            {% trans actors=actor_links|safe %}With {{ actors }}{% endtrans %}
         </div>
         {{ utils.display_object(anybox_object, is_h_entry=false) }}
     </div>

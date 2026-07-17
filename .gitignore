@@ -9,3 +9,4 @@ docs/_build/
 requirements.txt
 app/static/favicon.ico
 misc/dev-supervisord.conf
+app/translations/**/*.mo

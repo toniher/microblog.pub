@@ -61,6 +61,41 @@ def compile_scss(ctx, watch=False):
 
 
 @task
+def extract_messages(ctx):
+    # type: (Context) -> None
+    run(
+        "pybabel extract -F babel.cfg -k _ -k gettext -k ngettext:1,2 "
+        "-k gettext_default "
+        "-o app/translations/messages.pot .",
+        echo=True,
+    )
+
+
+@task
+def init_translation(ctx, locale):
+    # type: (Context, str) -> None
+    run(
+        f"pybabel init -i app/translations/messages.pot -d app/translations -l {locale}",
+        echo=True,
+    )
+
+
+@task
+def update_translations(ctx):
+    # type: (Context) -> None
+    run(
+        "pybabel update -i app/translations/messages.pot -d app/translations",
+        echo=True,
+    )
+
+
+@task
+def compile_translations(ctx):
+    # type: (Context) -> None
+    run("pybabel compile -d app/translations -f", echo=True)
+
+
+@task
 def uvicorn(ctx):
     # type: (Context) -> None
     run("uvicorn app.main:app --no-server-header", pty=True, echo=True)
@@ -131,7 +166,7 @@ def download_twemoji(ctx):
             f.write(tf.extractfile(member).read())  # type: ignore
 
 
-@task(download_twemoji, compile_scss)
+@task(download_twemoji, compile_scss, compile_translations)
 def configuration_wizard(ctx):
     # type: (Context) -> None
     run("MICROBLOGPUB_CONFIG_FILE=tests.toml alembic upgrade head", echo=True)
@@ -148,7 +183,7 @@ def install_deps(ctx):
     run("poetry install", pty=True, echo=True)
 
 
-@task(pre=[compile_scss], post=[migrate_db])
+@task(pre=[compile_scss, compile_translations], post=[migrate_db])
 def update(ctx, update_deps=True):
     # type: (Context, bool) -> None
     if update_deps:

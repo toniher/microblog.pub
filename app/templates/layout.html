@@ -6,15 +6,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <meta name="color-scheme" content="light dark">
 <link rel="stylesheet" href="{{ BASE_URL }}/static/css/main.css?v={{ CSS_HASH }}">
-<link rel="alternate" title="{{ local_actor.display_name}}'s microblog" type="application/json" href="{{ url_for("json_feed") }}" />
-<link rel="alternate" href="{{ url_for("rss_feed") }}" type="application/rss+xml" title="{{ local_actor.display_name}}'s microblog">
-<link rel="alternate" href="{{ url_for("atom_feed") }}" type="application/atom+xml" title="{{ local_actor.display_name}}'s microblog">
+<link rel="alternate" title="{{ _("%(name)s's microblog", name=local_actor.display_name) }}" type="application/json" href="{{ url_for("json_feed") }}" />
+<link rel="alternate" href="{{ url_for("rss_feed") }}" type="application/rss+xml" title="{{ _("%(name)s's microblog", name=local_actor.display_name) }}">
+<link rel="alternate" href="{{ url_for("atom_feed") }}" type="application/atom+xml" title="{{ _("%(name)s's microblog", name=local_actor.display_name) }}">
 <link rel="icon" type="image/x-icon" href="{{ BASE_URL }}/img/favicon.ico">
 <style>{{ highlight_css }}</style>
 {% block head %}{% endblock %}
 </head>
 <body>
-<a href="#content" class="skip-link">Skip to content</a>
+<a href="#content" class="skip-link">{{ _("Skip to content") }}</a>
 <div id="main">
 <main id="content" tabindex="-1"{%- block main_tag %}{%- endblock %}>
 {% if is_admin %}
@@ -26,15 +26,15 @@
 <div class="admin-menu">
 <nav class="flexbox" hx-boost="true" hx-indicator="body">
     <ul>
-        <li>{{ admin_link("index", "Public") }}</li>
-        <li>{{ admin_link("admin_new", "New") }}</li>
-        <li>{{ admin_link("admin_stream", "Stream") }}</li>
-        <li>{{ admin_link("admin_inbox", "Inbox") }} / {{ admin_link("admin_outbox", "Outbox") }}</li>
-        <li>{{ admin_link("admin_direct_messages", "DMs") }}</li>
-        <li>{{ admin_link("get_notifications", "Notifications") }} {% if notifications_count %}({{ notifications_count }}){% endif %}</li>
-        <li>{{ admin_link("get_lookup", "Lookup") }}</li>
-        <li>{{ admin_link("admin_bookmarks", "Bookmarks") }}</li>
-        <li><a href="{{ url_for("logout")}}">Logout</a></li>
+        <li>{{ admin_link("index", _("Public")) }}</li>
+        <li>{{ admin_link("admin_new", _("New")) }}</li>
+        <li>{{ admin_link("admin_stream", _("Stream")) }}</li>
+        <li>{{ admin_link("admin_inbox", _("Inbox")) }} / {{ admin_link("admin_outbox", _("Outbox")) }}</li>
+        <li>{{ admin_link("admin_direct_messages", _("DMs")) }}</li>
+        <li>{{ admin_link("get_notifications", _("Notifications")) }} {% if notifications_count %}({{ notifications_count }}){% endif %}</li>
+        <li>{{ admin_link("get_lookup", _("Lookup")) }}</li>
+        <li>{{ admin_link("admin_bookmarks", _("Bookmarks")) }}</li>
+        <li><a href="{{ url_for("logout")}}">{{ _("Logout") }}</a></li>
     </ul>
 </nav>
 </div>
@@ -50,7 +50,9 @@
     {% if custom_footer %}
         {{ custom_footer | safe }}
     {% else %}
-        Powered by <a href="https://github.com/toniher/microblog.pub">microblog.pub</a> <small class="microblogpub-version"><code>{{ microblogpub_version }}</code></small> and <a href="https://activitypub.rocks/">ActivityPub</a>.
+        {% set mbp_link %}<a href="https://github.com/toniher/microblog.pub">microblog.pub</a> <small class="microblogpub-version"><code>{{ microblogpub_version }}</code></small>{% endset %}
+        {% set ap_link %}<a href="https://activitypub.rocks/">ActivityPub</a>{% endset %}
+        {% trans mbp=mbp_link|safe, ap=ap_link|safe %}Powered by {{ mbp }} and {{ ap }}.{% endtrans %}
     {% endif %}
     </div>
 </footer>

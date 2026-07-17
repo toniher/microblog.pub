@@ -1,12 +1,12 @@
 {%- import "utils.html" as utils with context -%}
-{%- import "components/actor.html" as actor_component -%}
-{%- import "components/filters.html" as filters -%}
-{%- import "components/pagination.html" as pagination -%}
+{%- import "components/actor.html" as actor_component with context -%}
+{%- import "components/filters.html" as filters with context -%}
+{%- import "components/pagination.html" as pagination with context -%}
 {% extends "layout.html" %}
 
 {% block head %}
 <link rel="manifest" href="/static/pwa.webmanifest" />
-<title>{{ local_actor.display_name }} - Inbox</title>
+<title>{{ _("%(name)s - Inbox", name=local_actor.display_name) }}</title>
 {% endblock %}
 
 {% block content %}
@@ -17,14 +17,15 @@
 
 {% if not inbox %}
 <div class="box">
-    <p>Nothing to see yet, <a href="{{ url_for("get_lookup") }}">start following people in the lookup section</a>.</p>
+    {% set lookup_link %}<a href="{{ url_for("get_lookup") }}">{{ _("start following people in the lookup section") }}</a>{% endset %}
+    <p>{% trans link=lookup_link|safe %}Nothing to see yet, {{ link }}.{% endtrans %}</p>
 </div>
 {% endif %}
 
 {% for inbox_object in inbox %}
 {% if inbox_object.ap_type == "Announce" %}
     <div class="h-entry" id="{{ inbox_object.permalink_id }}">
-        {{ actor_component.actor_action(url_for("admin_profile"), inbox_object, "shared", with_icon=True) }}
+        {{ actor_component.actor_action(url_for("admin_profile"), inbox_object, _("shared"), with_icon=True) }}
         <div class="h-cite u-repost-of">
             {{ utils.display_object(inbox_object.relates_to_anybox_object, is_h_entry=False) }}
         </div>
@@ -33,12 +34,12 @@
     {{ utils.display_object(inbox_object) }}
 {% elif inbox_object.ap_type == "Follow" %}
     <div class="h-entry" id="{{ inbox_object.permalink_id }}">
-        {{ actor_component.actor_action(url_for("admin_profile"), inbox_object, "followed you") }}
+        {{ actor_component.actor_action(url_for("admin_profile"), inbox_object, _("followed you")) }}
         {{ actor_component.display_actor(request, csrf_token, is_admin, inbox_object.actor, actors_metadata) }}
     </div>
 {% elif inbox_object.ap_type == "Like" %}
     <div class="h-entry" id="{{ inbox_object.permalink_id }}">
-        {{ actor_component.actor_action(url_for("admin_profile"), inbox_object, "liked one of your posts", with_icon=True) }}
+        {{ actor_component.actor_action(url_for("admin_profile"), inbox_object, _("liked one of your posts"), with_icon=True) }}
         <div class="h-cite u-repost-of">
           {{ utils.display_object(inbox_object.relates_to_anybox_object, is_h_entry=False) }}
         </div>

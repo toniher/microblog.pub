@@ -2,7 +2,7 @@
 {% extends "layout.html" %}
 
 {% block head %}
-<title>Remote follow {{ local_actor.display_name }}</title>
+<title>{{ _("Remote follow %(name)s", name=local_actor.display_name) }}</title>
 <meta name="robots" content="noindex, nofollow">
 {% endblock %}
 
@@ -10,21 +10,21 @@
 {% include "header.html" %}
 
 <div class="box">
-<h2>Follow {{ local_actor.display_name }}</h2>
+<h2>{{ _("Follow %(name)s", name=local_actor.display_name) }}</h2>
 
-<h3>ActivityPub</h3>
-<p>If you have an ActivityPub account (e.g. Mastodon, Pleroma...), you can follow
-me to receive my posts on your home feed.
+<h3>{{ _("ActivityPub") }}</h3>
+<p>{% trans %}If you have an ActivityPub account (e.g. Mastodon, Pleroma...), you can follow
+me to receive my posts on your home feed.{% endtrans %}
 </p>
-<p>What's your account?</p>
+<p>{{ _("What's your account?") }}</p>
 <form class="form" action="{{ url_for("post_remote_follow") }}" method="POST">
     {{ hidden_inputs.embed_csrf_token(csrf_token) }}
     <input type="text" name="profile" placeholder="you@instance.tld" autofocus>
-    <input type="submit" value="follow">
+    <input type="submit" value="{{ _("follow") }}">
 </form>
 
-<h3>RSS</h3>
-<p>You can also follow me using the following <a href="/feed.json">RSS Feed</a>.</p>
+<h3>{{ _("RSS") }}</h3>
+<p>{% trans %}You can also follow me using the following <a href="/feed.json">RSS Feed</a>.{% endtrans %}</p>
 
 </div>
 
