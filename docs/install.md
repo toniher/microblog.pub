@@ -109,6 +109,16 @@ tail -f data/incoming.log    # incoming federation worker
 tail -f data/outgoing.log    # outgoing federation worker
 ```
 
+supervisord rotates each of these once it hits `stdout_logfile_maxbytes` (see
+`misc/*supervisord.conf`), producing `data/*.log.1`, `data/*.log.2`, etc. — but it
+never compresses the backups. `misc/gzip_rotated_logs.sh` gzips those rotated
+files; run it periodically from the host's crontab (or a systemd timer) against
+the `data/` directory, e.g.:
+
+```
+0 3 * * * /path/to/repo/misc/gzip_rotated_logs.sh /path/to/data
+```
+
 The container's own stdout/stderr is also available via Docker:
 
 ```bash

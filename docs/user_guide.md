@@ -773,5 +773,6 @@ If the server is not (re)starting, you can:
 
  - [Ensure that the configuration is valid](#configuration-checking).
  - [Verify if you haven't any syntax error in the custom theme by recompiling the CSS](#recompiling-css-files).
- - Look at the log files (in `data/uvicorn.log`, `data/incoming.log` and `data/outgoing.log`).
+ - Look at the log files (in `data/uvicorn.log`, `data/incoming.log` and `data/outgoing.log`; see
+   [Viewing logs](install.md#viewing-logs) for how they rotate and are compressed).
  - If the CSS is not working, ensure your reverse proxy is serving the static file correctly.
