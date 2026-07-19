@@ -91,3 +91,24 @@ def test_following__html_hides_following(client, db) -> None:
         response = client.get("/following", headers={"Accept": "text/html"})
     assert response.status_code == 404
     assert response.headers["content-type"].startswith("text/html")
+
+
+def test_index__no_analytics_html_by_default(client, db) -> None:
+    response = client.get("/")
+    assert "__ANALYTICS_TEST__" not in response.text
+
+
+def test_index__analytics_html_shown_on_public_page(client, db) -> None:
+    with mock.patch(
+        "app.templates.ANALYTICS_HTML", "<script>__ANALYTICS_TEST__=1;</script>"
+    ):
+        response = client.get("/")
+    assert "__ANALYTICS_TEST__" in response.text
+
+
+def test_admin_login__analytics_html_not_shown(client, db) -> None:
+    with mock.patch(
+        "app.templates.ANALYTICS_HTML", "<script>__ANALYTICS_TEST__=1;</script>"
+    ):
+        response = client.get("/admin/login")
+    assert "__ANALYTICS_TEST__" not in response.text

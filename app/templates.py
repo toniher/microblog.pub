@@ -30,6 +30,7 @@ from activitypub.ap_object import Object
 from app import config
 from app import i18n
 from app import models
+from app.config import ANALYTICS_HTML
 from app.config import BASE_URL
 from app.config import CUSTOM_FOOTER
 from app.config import DEBUG
@@ -159,6 +160,7 @@ async def render_template(
             ),
             "actor_types": ap.ACTOR_TYPES,
             "custom_footer": CUSTOM_FOOTER,
+            "analytics_html": ANALYTICS_HTML,
             **template_args,
         },
         status_code=status_code,

@@ -108,6 +108,7 @@ class Config(pydantic.BaseModel):
     code_highlighting_theme: str = "friendly_grayscale"
     blocked_servers: list[_BlockedServer] = []
     custom_footer: str | None = None
+    analytics_html: str | None = None
     emoji: str | None = None
     also_known_as: str | None = None
 
@@ -206,6 +207,7 @@ CUSTOM_FOOTER = (
     if CONFIG.custom_footer
     else None
 )
+ANALYTICS_HTML = CONFIG.analytics_html
 
 BASE_URL = ID
 DEBUG = CONFIG.debug

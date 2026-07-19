@@ -292,6 +292,44 @@ custom_footer = "Content licensed under [CC BY-SA 4.0](https://creativecommons.o
 
 Markdown is supported, and the `{version}` placeholder is replaced by the running microblog.pub version.
 
+#### Web analytics
+
+You can add a self-hosted analytics tool such as [Matomo](https://matomo.org/),
+[Plausible](https://plausible.io/), [GoatCounter](https://www.goatcounter.com/)
+or [umami](https://umami.is/) by pasting the provider's tracking snippet into
+the `analytics_html` config item in `profile.toml`:
+
+```toml
+analytics_html = '''
+<script>
+  var _paq = window._paq = window._paq || [];
+  _paq.push(['trackPageView']);
+  _paq.push(['enableLinkTracking']);
+  (function() {
+    var u = "https://analytics.example.com/";
+    _paq.push(['setTrackerUrl', u + 'matomo.php']);
+    _paq.push(['setSiteId', '1']);
+    var d = document, g = d.createElement('script'), s = d.getElementsByTagName('script')[0];
+    g.async = true; g.src = u + 'matomo.js'; s.parentNode.insertBefore(g, s);
+  })();
+</script>
+'''
+```
+
+The snippet is inserted verbatim (as raw HTML) in the `<head>` of **public**
+pages only — it is never shown on `/admin` pages, and never shown to you when
+you're browsing your own instance logged in, so your own visits aren't tracked.
+
+By default the [Content Security Policy](#custom-content-security-policy-csp)
+only allows resources from your own domain (`default-src 'self'`), which will
+block a script loaded from another host. If your analytics provider is hosted
+on a different domain than your instance, you also need to set
+`custom_content_security_policy` to allow it, e.g.:
+
+```toml
+custom_content_security_policy = "default-src 'self'; style-src 'self' 'sha256-{HIGHLIGHT_CSS_HASH}'; script-src 'self' https://analytics.example.com; connect-src 'self' https://analytics.example.com; img-src 'self' https://analytics.example.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
+```
+
 #### Custom templates
 
 If you'd like to customize your instance's theme beyond CSS, you can modify the app's HTML by placing templates in `data/templates` which overwrite the defaults in `app/templates`.

@@ -12,6 +12,9 @@
 <link rel="icon" type="image/x-icon" href="{{ BASE_URL }}/img/favicon.ico">
 <style>{{ highlight_css }}</style>
 {% block head %}{% endblock %}
+{% if analytics_html and not is_admin and not request.url.path.startswith("/admin") %}
+{{ analytics_html | safe }}
+{% endif %}
 </head>
 <body>
 <a href="#content" class="skip-link">{{ _("Skip to content") }}</a>
