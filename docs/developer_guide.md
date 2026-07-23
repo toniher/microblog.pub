@@ -64,35 +64,25 @@ running the app.
 ### Emoji assets
 
 Standard unicode emoji are rendered as [Twemoji](https://github.com/jdecked/twemoji)
-SVGs served from `app/static/twemoji/`. These SVGs are **not** checked into the repo
-(the directory ships with only a `.gitignore`), so a fresh clone starts without them.
+SVGs served from `app/static/twemoji/`. These are **not** checked into the repo (the
+directory ships with only a `.gitignore`), so a fresh clone starts without them.
 
-**They are downloaded automatically during initial setup.** The `download-twemoji`
-task is a dependency of `configuration-wizard`, so:
+They are downloaded automatically during setup — the `download-twemoji` task is a
+dependency of `configuration-wizard`, so `poetry run inv configuration-wizard`
+(Python) or `make config` (Docker) fetches them. They are fetched **once** and are
+*not* refreshed on a normal start; the Docker entrypoint only re-downloads them when
+the `microblogpub_static` volume is empty (see [Installing](install.md#docker-edition)).
+To refresh manually (e.g. after bumping the pinned version), run `poetry run inv
+download-twemoji` — for Docker, a `docker run` of the same task mounting
+`--volume microblogpub_static:/app/app/static`.
 
- - **Python edition:** `poetry run inv configuration-wizard` fetches the SVGs straight
-   to `app/static/twemoji/` on disk.
- - **Docker edition:** `make config` does the same — its `docker run` mounts both
-   `data/` and the `microblogpub_static` named volume, so the emoji downloaded by the
-   wizard land in that volume and are then served by the running `docker compose`
-   container (which mounts the same volume at `/app/app/static`).
+Under the hood the task downloads a release tarball and extracts `assets/svg/`. The
+source is [jdecked/twemoji](https://github.com/jdecked/twemoji), the maintained
+continuation of the original `twitter/twemoji` (abandoned after the Twitter/X
+acquisition). The release tag is pinned in `tasks.py:download_twemoji` — bump it there
+when a newer release is needed.
 
-You don't need to download them by hand. They are fetched **once** and are *not*
-refreshed on a normal start — `inv update` / `make update` do not re-run the download.
-The Docker entrypoint (`misc/docker_start.sh`) only re-downloads them when the
-`microblogpub_static` volume is empty (i.e. on first boot or after the volume has been
-removed), so a wiped volume rebuilds itself automatically. To refresh or re-fetch them
-manually (e.g. after bumping the pinned version), run `poetry run inv download-twemoji`
-(or, for Docker, a `docker run` invocation of `inv download-twemoji` that mounts
-the static volume — i.e. `--volume microblogpub_static:/app/app/static`).
-
-Under the hood the task downloads a release tarball and extracts `assets/svg/` into
-`app/static/twemoji/`. The source is [jdecked/twemoji](https://github.com/jdecked/twemoji),
-the actively maintained continuation of the original `twitter/twemoji` project
-(abandoned after the Twitter/X acquisition). The release tag is pinned in
-`tasks.py:download_twemoji` — bump it there when a newer Twemoji release is needed.
-
-### Translations / i18n
+### Translations (i18n)
 
 The UI (public pages and the admin UI) uses [gettext](https://www.gnu.org/software/gettext/)
 via [Babel](https://babel.pocoo.org/) for translations. Catalogs live under

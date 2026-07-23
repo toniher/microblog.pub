@@ -89,35 +89,20 @@ metadata = [
 ]
 ```
 
-### Manually approving followers
+### Followers and following
 
-If you wish to manually approve followers, add this config item to `profile.toml`:
+These `profile.toml` items control how followers are handled and what's shown
+publicly (all default to `false`):
+
+ - `manually_approves_followers` — require manual approval of new followers.
+ - `hides_followers` — hide your followers list.
+ - `hides_following` — hide who you are following.
 
 ```toml
 manually_approves_followers = true
-```
-
-The default value is `false`.
-
-### Hiding followers
-
-If you wish to hide your followers, add this config item to `profile.toml`:
-
-```toml
 hides_followers = true
-```
-
-The default value is `false`.
-
-### Hiding who you are following
-
-If you wish to hide who you are following, add this config item to `profile.toml`:
-
-```toml
 hides_following = true
 ```
-
-The default value is `false`.
 
 ### Default language
 

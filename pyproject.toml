@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "microblogpub"
-version = "2.3.0"
+version = "2.3.1"
 description = "Self-hosted, single-user, ActivityPub-powered microblog"
 authors = [
     "Thomas Sileo <t@a4.io>",

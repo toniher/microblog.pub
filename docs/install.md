@@ -69,21 +69,19 @@ rebuilds:
    custom emoji.
 
 Using a named volume (rather than a host bind mount) for `app/static` means the
-image ships a pristine copy of the static assets and the entrypoint
+image ships a pristine copy of the static assets, and the entrypoint
 (`misc/docker_start.sh`) repopulates the volume from that copy whenever it is
-empty. So if you ever remove the volume it is transparently regenerated from the
-image on the next start:
+empty — restoring the base assets, recompiling the CSS, and re-downloading the
+Twemoji set (needs network access, runs once per volume). So a removed volume is
+transparently rebuilt on the next start with no manual step:
 
 ```bash
 docker compose down
-docker volume rm microblogpub_static   # will be recreated & repopulated on next up
+docker volume rm microblogpub_static   # recreated & repopulated on next up
 docker compose up -d
 ```
 
-When the volume is empty the entrypoint restores the base assets from the image,
-recompiles the CSS, and re-downloads the Twemoji set (this needs network access and
-runs only once per volume), so a wiped volume is fully rebuilt on the next start with
-no manual step. Note this first boot is slower because of the ~4,000-file Twemoji
+Note the first boot after a wipe is slower because of the ~4,000-file Twemoji
 download; subsequent starts skip it.
 
 ### Managing the app
