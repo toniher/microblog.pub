@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import activitypub.models
 from activitypub import activitypub as ap
 from activitypub import boxes
 from activitypub.ap_object import ObjectType
@@ -406,6 +407,42 @@ async def test_pin_and_unpin_own_status(
         f"/api/v1/statuses/{status_id}/unpin", headers=headers
     ).json()
     assert unpinned["pinned"] is False
+
+
+@pytest.mark.asyncio
+async def test_pin_enforces_max_pinned_limit(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    token = await _make_access_token(async_db_session, "write:accounts")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    for i in range(activitypub.models.MAX_PINNED_OBJECTS):
+        _, outbox_object = await boxes.send_create(
+            async_db_session,
+            ObjectType.NOTE.value,
+            f"Pin me {i}",
+            uploads=[],
+            in_reply_to=None,
+            visibility=ap.VisibilityEnum.PUBLIC,
+        )
+        status_id = ids.encode_outbox_id(outbox_object)
+        pinned = client.post(
+            f"/api/v1/statuses/{status_id}/pin", headers=headers
+        ).json()
+        assert pinned["pinned"] is True
+
+    _, one_too_many = await boxes.send_create(
+        async_db_session,
+        ObjectType.NOTE.value,
+        "One too many",
+        uploads=[],
+        in_reply_to=None,
+        visibility=ap.VisibilityEnum.PUBLIC,
+    )
+    status_id = ids.encode_outbox_id(one_too_many)
+    response = client.post(f"/api/v1/statuses/{status_id}/pin", headers=headers)
+    assert response.status_code == 422
+    assert "maximum number" in response.json()["error_description"]
 
 
 @pytest.mark.asyncio

@@ -1216,6 +1216,16 @@ async def admin_actions_pin(
     outbox_object = await get_outbox_object_by_ap_id(db_session, ap_object_id)
     if not outbox_object:
         raise ValueError("Should never happen")
+    if not outbox_object.is_pinned:
+        pinned_count = await db_session.scalar(
+            select(func.count(activitypub.models.OutboxObject.id)).where(
+                activitypub.models.OutboxObject.is_pinned.is_(True)
+            )
+        )
+        if pinned_count >= activitypub.models.MAX_PINNED_OBJECTS:
+            raise HTTPException(
+                status_code=400, detail="Maximum number of pinned posts reached"
+            )
     outbox_object.is_pinned = True
     await db_session.commit()
     return RedirectResponse(redirect_url, status_code=302)

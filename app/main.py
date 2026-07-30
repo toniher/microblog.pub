@@ -742,7 +742,7 @@ async def featured(
                 activitypub.models.OutboxObject.is_pinned.is_(True),
             )
             .order_by(activitypub.models.OutboxObject.ap_published_at.desc())
-            .limit(5)
+            .limit(activitypub.models.MAX_PINNED_OBJECTS)
         )
     ).all()
     return ActivityPubResponse(

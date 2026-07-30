@@ -2,7 +2,9 @@ from typing import Iterator
 
 import starlette
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
+import activitypub.models
 from activitypub import activitypub as ap
 from app.config import generate_csrf_token
 from app.main import app
@@ -66,3 +68,52 @@ def test_public_works_authenticated(client: TestClient) -> None:
     assert response.status_code == 302
     resp = client.get("/", cookies=generate_admin_session_cookies())
     assert resp.status_code == 200
+
+
+def test_admin_pin_enforces_max_pinned_limit(db: Session, client: TestClient) -> None:
+    for i in range(activitypub.models.MAX_PINNED_OBJECTS + 1):
+        response = client.post(
+            "/admin/actions/new",
+            data={
+                "content": f"note {i}",
+                "redirect_url": "http://testserver/",
+                "visibility": ap.VisibilityEnum.PUBLIC.name,
+                "csrf_token": generate_csrf_token(),
+            },
+            cookies=generate_admin_session_cookies(),
+            follow_redirects=False,
+        )
+        assert response.status_code == 302
+
+    outbox_objects = (
+        db.query(activitypub.models.OutboxObject)
+        .order_by(activitypub.models.OutboxObject.id)
+        .all()
+    )
+    assert len(outbox_objects) == activitypub.models.MAX_PINNED_OBJECTS + 1
+
+    for outbox_object in outbox_objects[: activitypub.models.MAX_PINNED_OBJECTS]:
+        response = client.post(
+            "/admin/actions/pin",
+            data={
+                "ap_object_id": outbox_object.ap_id,
+                "redirect_url": "http://testserver/",
+                "csrf_token": generate_csrf_token(),
+            },
+            cookies=generate_admin_session_cookies(),
+            follow_redirects=False,
+        )
+        assert response.status_code == 302
+
+    one_too_many = outbox_objects[activitypub.models.MAX_PINNED_OBJECTS]
+    response = client.post(
+        "/admin/actions/pin",
+        data={
+            "ap_object_id": one_too_many.ap_id,
+            "redirect_url": "http://testserver/",
+            "csrf_token": generate_csrf_token(),
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 400

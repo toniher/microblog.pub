@@ -21,6 +21,7 @@ from fastapi import Request
 from fastapi import UploadFile as FastAPIUploadFile
 from loguru import logger
 from sqlalchemy import delete
+from sqlalchemy import func
 from sqlalchemy import select
 from sqlalchemy import update
 from sqlalchemy.orm import joinedload
@@ -80,6 +81,7 @@ _INSTANCE_CONFIGURATION = {
         "max_characters": 100_000,
         "max_media_attachments": 4,
         "characters_reserved_per_url": 23,
+        "max_pinned_statuses": activitypub.models.MAX_PINNED_OBJECTS,
     },
     "media_attachments": {
         "supported_mime_types": [
@@ -2149,6 +2151,18 @@ async def statuses_pin(
         raise MastodonError(
             422, "validation_failed", "only your own statuses can be pinned"
         )
+    if not obj.is_pinned:
+        pinned_count = await db_session.scalar(
+            select(func.count(activitypub.models.OutboxObject.id)).where(
+                activitypub.models.OutboxObject.is_pinned.is_(True)
+            )
+        )
+        if pinned_count >= activitypub.models.MAX_PINNED_OBJECTS:
+            raise MastodonError(
+                422,
+                "validation_failed",
+                "You have already pinned the maximum number of statuses.",
+            )
     obj.is_pinned = True
     await db_session.commit()
     return JSONResponse(

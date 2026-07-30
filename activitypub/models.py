@@ -153,6 +153,10 @@ class InboxObject(Base, BaseObject):
         return True
 
 
+# Max number of posts that can be pinned at once (matches Mastodon's default)
+MAX_PINNED_OBJECTS = 5
+
+
 class OutboxObject(Base, BaseObject):
     __tablename__ = "outbox"
 
