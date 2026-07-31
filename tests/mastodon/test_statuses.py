@@ -1,3 +1,4 @@
+import base64
 import secrets
 
 import pytest
@@ -12,6 +13,7 @@ from activitypub import boxes
 from activitypub.ap_object import ObjectType
 from activitypub.ap_object import RemoteObject
 from activitypub.tests import factories
+from app import config
 from app import models
 from app.mastodon import ids
 from tests.utils import setup_remote_actor
@@ -197,3 +199,105 @@ async def test_statuses_reblogged_by_and_reblog_nesting(
     # Remote content is stored as published (no local markdown rendering).
     assert status["reblog"]["content"] == "From afar"
     assert status["reblog"]["account"]["id"] == ids.encode_account_id(follower.actor)
+
+
+def _decode_proxied_media_url(proxied_url: str) -> str:
+    # BASE_URL + "/proxy/media/{expires}/{sig}/" + base64(original_url)
+    encoded = proxied_url.rstrip("/").rsplit("/", 1)[-1]
+    padded = encoded + "=" * (-len(encoded) % 4)
+    return base64.urlsafe_b64decode(padded).decode()
+
+
+async def _send_note_with_og_meta(
+    async_db_session: AsyncSession, og_meta: list[dict] | None
+) -> str:
+    """Create a status, then attach scraped OG metadata to it.
+
+    `og_meta` is normally filled in by `app.utils.opengraph` at create time,
+    which would hit the network — set it directly instead, exactly as that
+    scraper would have stored it.
+    """
+    _, outbox_object = await boxes.send_create(
+        async_db_session,
+        ObjectType.NOTE.value,
+        "Check this out",
+        uploads=[],
+        in_reply_to=None,
+        visibility=ap.VisibilityEnum.PUBLIC,
+    )
+    outbox_object.og_meta = og_meta
+    await async_db_session.commit()
+    return ids.encode_outbox_id(outbox_object)
+
+
+@pytest.mark.asyncio
+async def test_status_card_from_og_meta(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    status_id = await _send_note_with_og_meta(
+        async_db_session,
+        [
+            {
+                "url": "https://example.com/article",
+                "title": "An article",
+                "image": "https://example.com/thumb.jpg",
+                "description": "What it is about",
+                "site_name": "example.com",
+            }
+        ],
+    )
+
+    response = client.get(f"/api/v1/statuses/{status_id}")
+
+    assert response.status_code == 200
+    card = response.json()["card"]
+    assert card is not None
+    assert card["url"] == "https://example.com/article"
+    assert card["title"] == "An article"
+    assert card["description"] == "What it is about"
+    assert card["provider_name"] == "example.com"
+    assert card["type"] == "link"
+    # The thumbnail goes through the media proxy like every other remote media
+    # URL — a client rendering the card must not hit the linked host directly.
+    assert card["image"].startswith(f"{config.BASE_URL}/proxy/media/")
+    assert _decode_proxied_media_url(card["image"]) == "https://example.com/thumb.jpg"
+
+
+@pytest.mark.asyncio
+async def test_status_card_first_usable_entry_wins(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    # A post can link to several pages; Mastodon's `card` is singular. Entries
+    # the scraper couldn't get a title/url for are skipped rather than
+    # serialized as a blank card.
+    status_id = await _send_note_with_og_meta(
+        async_db_session,
+        [
+            {"url": "https://example.com/untitled", "title": "", "site_name": ""},
+            {"url": "https://example.com/second", "title": "The second one"},
+        ],
+    )
+
+    card = client.get(f"/api/v1/statuses/{status_id}").json()["card"]
+
+    assert card is not None
+    assert card["url"] == "https://example.com/second"
+    assert card["title"] == "The second one"
+    # Absent in the stored metadata -> empty/None, never missing from the entity.
+    assert card["description"] == ""
+    assert card["provider_name"] == ""
+    assert card["image"] is None
+    assert card["blurhash"] is None
+
+
+@pytest.mark.asyncio
+async def test_status_card_is_null_without_og_meta(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    # A post with no external links, and one whose scrape found nothing usable.
+    cases: list[list[dict] | None] = [None, []]
+    for og_meta in cases:
+        status_id = await _send_note_with_og_meta(async_db_session, og_meta)
+        response = client.get(f"/api/v1/statuses/{status_id}")
+        assert response.status_code == 200
+        assert response.json()["card"] is None

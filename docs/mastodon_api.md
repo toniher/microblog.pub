@@ -33,6 +33,10 @@ credentials rather than a separate account system.
   sensitive/media attachments, polls (including voting), and per-post language.
 - **Interactions** — favourite, reblog, bookmark, pin, with their "who
   favourited/reblogged this" endpoints.
+- **Link previews** — posts containing a link carry a Mastodon `card`, built from
+  the OpenGraph metadata this instance already scrapes for its own web UI, so
+  clients render the same preview box. The thumbnail goes through the media
+  proxy, like every other remote image.
 - **Direct messages** — surfaced as Mastodon "conversations"
   (`/api/v1/conversations`), grouped the same way the `Direct messages` admin page
   groups them, with mark-as-read support.

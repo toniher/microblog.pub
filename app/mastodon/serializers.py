@@ -30,6 +30,7 @@ from activitypub.boxes import public_outbox_objects_count
 from app import config
 from app.database import AsyncSession
 from app.mastodon import ids
+from app.media import proxied_media_url
 from app.utils.datetime import parse_isoformat
 
 # The actor keypair is generated once, during initial setup, and never
@@ -306,6 +307,53 @@ def _serialize_hashtags(obj: AnyboxObject) -> list[dict]:
     ]
 
 
+def serialize_card(obj: AnyboxObject) -> dict | None:
+    """Map stored OpenGraph metadata onto a Mastodon PreviewCard.
+
+    `og_meta` is scraped and persisted when a status is created or received
+    (`app/utils/opengraph.py`, called from `activitypub/boxes.py`), so this is
+    pure re-serialization — no network access on the read path.
+
+    It's a list (one entry per external link in the post) while Mastodon's
+    `card` is singular, so the first usable entry wins — the same "first link"
+    rule the web UI applies in `display_og_meta` (app/templates/utils.html).
+    """
+    for og_meta in obj.og_meta or []:
+        if not isinstance(og_meta, dict):
+            continue
+
+        url = _as_str(og_meta.get("url"))
+        title = _as_str(og_meta.get("title"))
+        if not url or not title:
+            continue
+
+        image = _as_str(og_meta.get("image"))
+        return {
+            "url": url,
+            "title": title,
+            "description": _as_str(og_meta.get("description")),
+            # `og:type` isn't scraped and there's no oEmbed lookup, so the
+            # richer photo/video/rich variants aren't derivable here.
+            "type": "link",
+            "author_name": "",
+            "author_url": "",
+            "provider_name": _as_str(og_meta.get("site_name")),
+            "provider_url": "",
+            "html": "",
+            # The scraper doesn't record image dimensions.
+            "width": 0,
+            "height": 0,
+            # Proxied like every other remote media URL, so a client rendering
+            # the card doesn't leak the reader's IP to the linked host.
+            "image": proxied_media_url(image) if image else None,
+            "embed_url": "",
+            # Only computed for local uploads, never for scraped OG images.
+            "blurhash": None,
+        }
+
+    return None
+
+
 async def serialize_status(
     db_session: AsyncSession,
     obj: AnyboxObject,
@@ -392,7 +440,7 @@ async def serialize_status(
         "in_reply_to_id": in_reply_to_id,
         "in_reply_to_account_id": in_reply_to_account_id,
         "poll": serialize_poll(obj, status_id),
-        "card": None,
+        "card": serialize_card(obj),
         "language": _object_language(obj) or config.LANGUAGE_CODE,
         "text": None,
         "filtered": [],
