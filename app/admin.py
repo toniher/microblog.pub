@@ -26,6 +26,8 @@ from activitypub.actor import LOCAL_ACTOR
 from activitypub.actor import fetch_actor
 from activitypub.actor import get_actors_metadata
 from activitypub.actor import list_actors
+from activitypub.actor import mute_actor
+from activitypub.actor import unmute_actor
 from activitypub.boxes import get_inbox_object_by_ap_id
 from activitypub.boxes import get_outbox_object_by_ap_id
 from activitypub.boxes import send_block
@@ -392,6 +394,60 @@ async def admin_blocks(
     )
 
 
+@router.get("/mutes", response_model=None)
+async def admin_mutes(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    cursor: str | None = None,
+) -> templates.TemplateResponse:
+    where = [
+        activitypub.models.Actor.id.in_(activitypub.models.muted_actor_ids()),
+        activitypub.models.Actor.is_deleted.is_(False),
+    ]
+    if cursor:
+        where.append(
+            activitypub.models.Actor.created_at < pagination.decode_cursor(cursor)
+        )
+
+    page_size = 20
+    mutes_count = await db_session.scalar(
+        select(func.count(activitypub.models.Actor.id)).where(*where)
+    )
+
+    muted_actors = (
+        (
+            await db_session.scalars(
+                select(activitypub.models.Actor)
+                .where(*where)
+                .order_by(activitypub.models.Actor.created_at.desc())
+                .limit(page_size)
+            )
+        )
+        .unique()
+        .all()
+    )
+
+    next_cursor = (
+        pagination.encode_cursor(muted_actors[-1].created_at)
+        if muted_actors and mutes_count > page_size
+        else None
+    )
+
+    # display_actor() renders the unmute button off this metadata.
+    actors_metadata = await get_actors_metadata(db_session, list(muted_actors))
+
+    return await templates.render_template(
+        db_session,
+        request,
+        "admin_mutes.html",
+        {
+            "actors_metadata": actors_metadata,
+            "muted_actors": muted_actors,
+            "next_cursor": next_cursor,
+        },
+    )
+
+
 @router.get("/stream", response_model=None)
 async def admin_stream(
     request: Request,
@@ -401,6 +457,9 @@ async def admin_stream(
     where = [
         activitypub.models.InboxObject.is_hidden_from_stream.is_(False),
         activitypub.models.InboxObject.is_deleted.is_(False),
+        # Keeping muted actors out of the stream is the whole point of a
+        # mute; they stay reachable from their profile and the Mutes page.
+        *activitypub.models.not_from_muted_actors(),
     ]
     if cursor:
         where.append(
@@ -844,7 +903,7 @@ async def get_notifications(
     db_session: AsyncSession = Depends(get_db_session),
     cursor: str | None = None,
 ) -> templates.TemplateResponse:
-    where = []
+    where = [models.notification_not_muted()]
     if cursor:
         decoded_cursor = pagination.decode_cursor(cursor)
         where.append(models.Notification.created_at < decoded_cursor)
@@ -896,6 +955,7 @@ async def get_notifications(
             select(func.count(models.Notification.id)).where(
                 models.Notification.is_new.is_(True),
                 models.Notification.created_at < decoded_next_cursor,
+                models.notification_not_muted(),
             )
         )
 
@@ -1122,6 +1182,36 @@ async def admin_actions_unblock(
 ) -> RedirectResponse:
     logger.info(f"Unblocking {ap_actor_id}")
     await send_unblock(db_session, ap_actor_id)
+    return RedirectResponse(redirect_url, status_code=302)
+
+
+@router.post("/actions/mute", response_model=None)
+async def admin_actions_mute(
+    request: Request,
+    ap_actor_id: str = Form(),
+    redirect_url: str = Form(),
+    csrf_check: None = Depends(verify_csrf_token),
+    db_session: AsyncSession = Depends(get_db_session),
+) -> RedirectResponse:
+    logger.info(f"Muting {ap_actor_id}")
+    actor = await fetch_actor(db_session, ap_actor_id)
+    # Indefinite, notifications included — the same defaults a Mastodon
+    # client gets. Timed mutes are only settable through the API.
+    await mute_actor(db_session, actor)
+    return RedirectResponse(redirect_url, status_code=302)
+
+
+@router.post("/actions/unmute", response_model=None)
+async def admin_actions_unmute(
+    request: Request,
+    ap_actor_id: str = Form(),
+    redirect_url: str = Form(),
+    csrf_check: None = Depends(verify_csrf_token),
+    db_session: AsyncSession = Depends(get_db_session),
+) -> RedirectResponse:
+    logger.info(f"Unmuting {ap_actor_id}")
+    actor = await fetch_actor(db_session, ap_actor_id)
+    await unmute_actor(db_session, actor)
     return RedirectResponse(redirect_url, status_code=302)
 
 

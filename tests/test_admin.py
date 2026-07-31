@@ -1,3 +1,4 @@
+from datetime import timedelta
 from typing import Iterator
 
 import respx
@@ -7,11 +8,14 @@ from sqlalchemy.orm import Session
 
 import activitypub.models
 from activitypub import activitypub as ap
+from activitypub.ap_object import RemoteObject
 from activitypub.tests import factories
 from app.config import generate_csrf_token
 from app.main import app
+from app.utils.datetime import now
 from tests.utils import generate_admin_session_cookies
 from tests.utils import setup_remote_actor
+from tests.utils import setup_remote_actor_as_follower
 
 
 def _iter_endpoint_routes(
@@ -98,6 +102,113 @@ def test_admin_blocks_with_no_blocked_actor(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert "No blocked accounts." in response.text
+
+
+def test_admin_mutes_lists_muted_actors(
+    db: Session, client: TestClient, respx_mock: respx.MockRouter
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    muted = factories.ActorFactory.from_remote_actor(ra)
+    muted.is_muted = True
+    db.commit()
+
+    other_ra = setup_remote_actor(respx_mock, base_url="https://example.org")
+    not_muted = factories.ActorFactory.from_remote_actor(other_ra)
+
+    response = client.get("/admin/mutes", cookies=generate_admin_session_cookies())
+
+    assert response.status_code == 200
+    assert muted.ap_id in response.text
+    assert not_muted.ap_id not in response.text
+    # display_actor() offers the unmute action for every listed actor
+    assert "/admin/actions/unmute" in response.text
+
+
+def test_admin_mutes_skips_expired_mute(
+    db: Session, client: TestClient, respx_mock: respx.MockRouter
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    actor = factories.ActorFactory.from_remote_actor(ra)
+    actor.is_muted = True
+    actor.muted_until = now() - timedelta(seconds=1)
+    db.commit()
+
+    response = client.get("/admin/mutes", cookies=generate_admin_session_cookies())
+
+    assert response.status_code == 200
+    assert actor.ap_id not in response.text
+    assert "No muted accounts." in response.text
+
+
+def test_admin_mutes_with_no_muted_actor(client: TestClient) -> None:
+    response = client.get("/admin/mutes", cookies=generate_admin_session_cookies())
+
+    assert response.status_code == 200
+    assert "No muted accounts." in response.text
+
+
+def test_admin_mute_and_unmute_actions(
+    db: Session, client: TestClient, respx_mock: respx.MockRouter
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    actor = factories.ActorFactory.from_remote_actor(ra)
+    db.commit()
+
+    response = client.post(
+        "/admin/actions/mute",
+        data={
+            "ap_actor_id": actor.ap_id,
+            "redirect_url": "http://testserver/admin/mutes",
+            "csrf_token": generate_csrf_token(),
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    db.refresh(actor)
+    assert actor.is_muted is True
+    # The admin button matches a Mastodon client's defaults.
+    assert actor.are_notifications_muted is True
+    assert actor.muted_until is None
+
+    response = client.post(
+        "/admin/actions/unmute",
+        data={
+            "ap_actor_id": actor.ap_id,
+            "redirect_url": "http://testserver/admin/mutes",
+            "csrf_token": generate_csrf_token(),
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    db.refresh(actor)
+    assert actor.is_muted is False
+
+
+def test_admin_stream_hides_muted_actor(
+    db: Session, client: TestClient, respx_mock: respx.MockRouter
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    follower = setup_remote_actor_as_follower(ra)
+    assert follower.actor is not None
+    factories.InboxObjectFactory.from_remote_object(
+        RemoteObject(
+            factories.build_note_object(from_remote_actor=ra, content="Noisy note"),
+            ra,
+        ),
+        follower.actor,
+    )
+
+    response = client.get("/admin/stream", cookies=generate_admin_session_cookies())
+    assert "Noisy note" in response.text
+
+    follower.actor.is_muted = True
+    db.commit()
+
+    response = client.get("/admin/stream", cookies=generate_admin_session_cookies())
+    assert response.status_code == 200
+    assert "Noisy note" not in response.text
 
 
 def test_admin_pin_enforces_max_pinned_limit(db: Session, client: TestClient) -> None:

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-31 19:32+0200\n"
+"POT-Creation-Date: 2026-08-01 01:27+0200\n"
 "PO-Revision-Date: 2026-07-17 21:46+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -18,15 +18,15 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: app/admin.py:1327 app/admin.py:1346 app/admin.py:1454
+#: app/admin.py:1417 app/admin.py:1436 app/admin.py:1544
 msgid "Error: object must have a content"
 msgstr ""
 
-#: app/admin.py:1334
+#: app/admin.py:1424
 msgid "Error: invalid language code"
 msgstr ""
 
-#: app/admin.py:1368
+#: app/admin.py:1458
 msgid "Error: Unable to process upload"
 msgstr ""
 
@@ -100,6 +100,20 @@ msgstr ""
 
 #: app/templates/admin_inbox.html:42
 msgid "liked one of your posts"
+msgstr ""
+
+#: app/templates/admin_mutes.html:6
+msgid "Muted accounts"
+msgstr ""
+
+#: app/templates/admin_mutes.html:24
+msgid "No muted accounts."
+msgstr ""
+
+#: app/templates/admin_mutes.html:31
+msgid ""
+"Muting is local: nothing is sent to the muted account. Their posts stop "
+"showing up in the stream, and their notifications are hidden."
 msgstr ""
 
 #: app/templates/admin_new.html:13 app/templates/admin_new_post.html:16
@@ -353,10 +367,14 @@ msgid "Blocks"
 msgstr ""
 
 #: app/templates/layout.html:41
+msgid "Mutes"
+msgstr ""
+
+#: app/templates/layout.html:42
 msgid "Logout"
 msgstr ""
 
-#: app/templates/layout.html:59
+#: app/templates/layout.html:60
 #, python-format
 msgid "Powered by %(mbp)s and %(ap)s."
 msgstr ""
@@ -513,7 +531,7 @@ msgstr ""
 msgid "What's your account?"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:44
+#: app/templates/components/admin_buttons.html:62
 #: app/templates/remote_follow.html:23
 msgid "follow"
 msgstr ""
@@ -693,15 +711,24 @@ msgstr ""
 msgid "blocked"
 msgstr ""
 
-#: app/templates/components/actor.html:116
+#: app/templates/components/actor.html:106
+#, python-format
+msgid "muted until %(expiry)s"
+msgstr ""
+
+#: app/templates/components/actor.html:108
+msgid "muted"
+msgstr ""
+
+#: app/templates/components/actor.html:126
 msgid "accepted"
 msgstr ""
 
-#: app/templates/components/actor.html:118
+#: app/templates/components/actor.html:128
 msgid "rejected"
 msgstr ""
 
-#: app/templates/components/actor.html:127
+#: app/templates/components/actor.html:137
 msgid "remote profile"
 msgstr ""
 
@@ -714,79 +741,87 @@ msgid "unblock"
 msgstr ""
 
 #: app/templates/components/admin_buttons.html:26
-msgid "hide shares"
+msgid "mute"
 msgstr ""
 
 #: app/templates/components/admin_buttons.html:35
-msgid "show shares"
+msgid "unmute"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:44
+msgid "hide shares"
 msgstr ""
 
 #: app/templates/components/admin_buttons.html:53
-msgid "accept follow"
-msgstr ""
-
-#: app/templates/components/admin_buttons.html:62
-msgid "reject follow"
+msgid "show shares"
 msgstr ""
 
 #: app/templates/components/admin_buttons.html:71
-msgid "like"
+msgid "accept follow"
 msgstr ""
 
 #: app/templates/components/admin_buttons.html:80
-msgid "bookmark"
+msgid "reject follow"
 msgstr ""
 
 #: app/templates/components/admin_buttons.html:89
-msgid "unbookmark"
+msgid "like"
 msgstr ""
 
 #: app/templates/components/admin_buttons.html:98
-msgid "pin"
+msgid "bookmark"
 msgstr ""
 
 #: app/templates/components/admin_buttons.html:107
+msgid "unbookmark"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:116
+msgid "pin"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:125
 msgid "unpin"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:114
+#: app/templates/components/admin_buttons.html:132
 msgid "edit"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:123
+#: app/templates/components/admin_buttons.html:141
 msgid "delete"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:132
-#: app/templates/components/admin_buttons.html:141
+#: app/templates/components/admin_buttons.html:150
+#: app/templates/components/admin_buttons.html:159
 msgid "local delete"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:150
+#: app/templates/components/admin_buttons.html:168
 msgid "share"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:159
+#: app/templates/components/admin_buttons.html:177
 msgid "undo"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:166
+#: app/templates/components/admin_buttons.html:184
 msgid "reply"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:174
+#: app/templates/components/admin_buttons.html:192
 msgid "direct message"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:181
+#: app/templates/components/admin_buttons.html:199
 msgid "mention"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:188
+#: app/templates/components/admin_buttons.html:206
 msgid "profile"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:196
+#: app/templates/components/admin_buttons.html:214
 msgid "expand"
 msgstr ""
 

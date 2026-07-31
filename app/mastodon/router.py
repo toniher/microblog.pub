@@ -34,7 +34,9 @@ from activitypub import activitypub as ap
 from activitypub.actor import RemoteActor
 from activitypub.actor import fetch_actor
 from activitypub.actor import get_actors_metadata
+from activitypub.actor import mute_actor
 from activitypub.actor import refresh_actor_counts
+from activitypub.actor import unmute_actor
 from activitypub.ap_object import RemoteObject
 from activitypub.boxes import AnyboxObject
 from activitypub.boxes import ReplyTreeNode
@@ -335,10 +337,8 @@ def _serialize_relationship(
         "followed_by": meta.is_follower if meta else False,
         "blocking": actor.is_blocked,
         "blocked_by": meta.has_blocked_local_actor if meta else False,
-        # No mute model exists — always false, matching the /api/v1/mutes
-        # stub (see PR-1c).
-        "muting": False,
-        "muting_notifications": False,
+        "muting": actor.is_muted_now,
+        "muting_notifications": actor.are_notifications_muted_now,
         "requested": meta.is_follow_request_sent if meta else False,
         "domain_blocking": False,
         "endorsed": False,
@@ -964,6 +964,9 @@ async def _fetch_inbox_timeline_page(
             activitypub.models.InboxObject.ap_type.in_(_TIMELINE_OBJECT_TYPES),
             activitypub.models.InboxObject.is_hidden_from_stream.is_(False),
             activitypub.models.InboxObject.is_deleted.is_(False),
+            # Applies to every timeline (home, public, hashtag), like
+            # Mastodon: a mute hides the account everywhere but the profile.
+            *activitypub.models.not_from_muted_actors(),
             *extra_where,
         )
         .options(joinedload(activitypub.models.InboxObject.actor))
@@ -1254,7 +1257,10 @@ async def notifications_list(
 
     query = (
         select(models.Notification)
-        .where(models.Notification.notification_type.in_(allowed_internal_types))
+        .where(
+            models.Notification.notification_type.in_(allowed_internal_types),
+            models.notification_not_muted(),
+        )
         .options(*_NOTIFICATION_OPTIONS)
         .order_by(models.Notification.id.desc())
         .limit(params.limit)
@@ -1678,15 +1684,8 @@ async def suggestions_v2_index(
     return JSONResponse(content=[], status_code=200)
 
 
-# /api/v1/blocks is a real, non-stub list (blocks are persisted as
-# Actor.is_blocked) — see the "Social graph" section below.
-
-
-@router.get("/api/v1/mutes", response_model=None)
-async def mutes_index(
-    token_info: AccessTokenInfo = Depends(require_scope("read")),
-) -> JSONResponse:
-    return JSONResponse(content=[], status_code=200)
+# /api/v1/blocks and /api/v1/mutes are real, non-stub lists (both are
+# persisted on the actor row) — see the "Social graph" section below.
 
 
 # follow_requests is a real, non-stub list — see the "Social graph" section
@@ -1866,6 +1865,21 @@ class _StatusParams:
         else:
             value = self._form.get("poll[expires_in]")
         return int(str(value)) if value else None
+
+
+async def _body_params(request: Request) -> _StatusParams:
+    """Read a request body as either JSON or form data.
+
+    Same content-type dance as POST /api/v1/statuses below — clients disagree
+    on which encoding they use for POST bodies, whatever the endpoint.
+    """
+    content_type, _, _ = request.headers.get("Content-Type", "").partition(";")
+    if content_type.strip().lower() == "application/json":
+        try:
+            return _StatusParams(await request.json(), None)
+        except ValueError:
+            return _StatusParams({}, None)
+    return _StatusParams(None, await request.form())
 
 
 @router.post("/api/v1/statuses", response_model=None)
@@ -2460,15 +2474,55 @@ async def blocks_index(
     return await _respond_with_account_list(request, db_session, actors)
 
 
+@router.get("/api/v1/mutes", response_model=None)
+async def mutes_index(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:mutes")),
+) -> JSONResponse:
+    """Muted accounts.
+
+    Same shape as /api/v1/blocks, including the ordering caveat: the cursor
+    follows the account id (first-seen order), not when the mute was set.
+    Mutes that have already expired are left out.
+    """
+    params = pagination.parse_pagination(request)
+    query = _apply_account_cursor(
+        select(activitypub.models.Actor)
+        .where(
+            activitypub.models.Actor.id.in_(activitypub.models.muted_actor_ids()),
+            activitypub.models.Actor.is_deleted.is_(False),
+        )
+        .order_by(activitypub.models.Actor.id.desc())
+        .limit(params.limit),
+        params,
+    )
+
+    actors = (await db_session.scalars(query)).unique().all()
+    return await _respond_with_account_list(request, db_session, actors)
+
+
 @router.post("/api/v1/accounts/{account_id}/mute", response_model=None)
 async def accounts_mute(
     account_id: str,
+    request: Request,
     db_session: AsyncSession = Depends(get_db_session),
     token_info: AccessTokenInfo = Depends(require_scope("write:mutes")),
 ) -> JSONResponse:
-    # No mute model exists (see PR-1c's /api/v1/mutes stub) — no-op, always
-    # returns muting:false.
     actor = await _resolve_account_or_404(db_session, account_id)
+    params = await _body_params(request)
+
+    # Mastodon's defaults: mute notifications too, and last until unmuted.
+    notifications = (
+        params.get_bool("notifications") if params.has("notifications") else True
+    )
+    raw_duration = params.get("duration")
+    try:
+        duration = int(str(raw_duration)) if raw_duration else 0
+    except ValueError:
+        raise MastodonError(422, "validation_failed", "duration must be a number")
+
+    await mute_actor(db_session, actor, duration=duration, notifications=notifications)
     return JSONResponse(
         content=await _relationship_for_actor(db_session, account_id, actor),
         status_code=200,
@@ -2482,6 +2536,8 @@ async def accounts_unmute(
     token_info: AccessTokenInfo = Depends(require_scope("write:mutes")),
 ) -> JSONResponse:
     actor = await _resolve_account_or_404(db_session, account_id)
+    if actor.is_muted:
+        await unmute_actor(db_session, actor)
     return JSONResponse(
         content=await _relationship_for_actor(db_session, account_id, actor),
         status_code=200,

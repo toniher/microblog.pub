@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-31 19:32+0200\n"
+"POT-Creation-Date: 2026-08-01 01:27+0200\n"
 "PO-Revision-Date: 2026-07-17 22:19+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ca\n"
@@ -18,15 +18,15 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: app/admin.py:1327 app/admin.py:1346 app/admin.py:1454
+#: app/admin.py:1417 app/admin.py:1436 app/admin.py:1544
 msgid "Error: object must have a content"
 msgstr "Error: el contingut és obligatori"
 
-#: app/admin.py:1334
+#: app/admin.py:1424
 msgid "Error: invalid language code"
 msgstr "Error: codi d'idioma no vàlid"
 
-#: app/admin.py:1368
+#: app/admin.py:1458
 msgid "Error: Unable to process upload"
 msgstr "Error: no s'ha pogut processar la pujada"
 
@@ -101,6 +101,23 @@ msgstr "us ha començat a seguir"
 #: app/templates/admin_inbox.html:42
 msgid "liked one of your posts"
 msgstr "li ha agradat una de les vostres publicacions"
+
+#: app/templates/admin_mutes.html:6
+msgid "Muted accounts"
+msgstr "Comptes silenciats"
+
+#: app/templates/admin_mutes.html:24
+msgid "No muted accounts."
+msgstr "Cap compte silenciat."
+
+#: app/templates/admin_mutes.html:31
+msgid ""
+"Muting is local: nothing is sent to the muted account. Their posts stop "
+"showing up in the stream, and their notifications are hidden."
+msgstr ""
+"Silenciar és local: no s'envia res al compte silenciat. Les seves "
+"publicacions deixen d'aparèixer al flux i les seves notificacions "
+"s'amaguen."
 
 #: app/templates/admin_new.html:13 app/templates/admin_new_post.html:16
 msgid "In reply to:"
@@ -355,10 +372,14 @@ msgid "Blocks"
 msgstr "Blocats"
 
 #: app/templates/layout.html:41
+msgid "Mutes"
+msgstr "Silenciats"
+
+#: app/templates/layout.html:42
 msgid "Logout"
 msgstr "Tanca la sessió"
 
-#: app/templates/layout.html:59
+#: app/templates/layout.html:60
 #, python-format
 msgid "Powered by %(mbp)s and %(ap)s."
 msgstr "Funciona amb %(mbp)s i %(ap)s."
@@ -520,7 +541,7 @@ msgstr ""
 msgid "What's your account?"
 msgstr "Quin és el vostre compte?"
 
-#: app/templates/components/admin_buttons.html:44
+#: app/templates/components/admin_buttons.html:62
 #: app/templates/remote_follow.html:23
 msgid "follow"
 msgstr "segueix"
@@ -710,15 +731,24 @@ msgstr "s'ha traslladat a %(target)s"
 msgid "blocked"
 msgstr "blocat"
 
-#: app/templates/components/actor.html:116
+#: app/templates/components/actor.html:106
+#, python-format
+msgid "muted until %(expiry)s"
+msgstr "silenciat fins al %(expiry)s"
+
+#: app/templates/components/actor.html:108
+msgid "muted"
+msgstr "silenciat"
+
+#: app/templates/components/actor.html:126
 msgid "accepted"
 msgstr "acceptat"
 
-#: app/templates/components/actor.html:118
+#: app/templates/components/actor.html:128
 msgid "rejected"
 msgstr "rebutjat"
 
-#: app/templates/components/actor.html:127
+#: app/templates/components/actor.html:137
 msgid "remote profile"
 msgstr "perfil remot"
 
@@ -731,79 +761,87 @@ msgid "unblock"
 msgstr "desbloca"
 
 #: app/templates/components/admin_buttons.html:26
+msgid "mute"
+msgstr "silencia"
+
+#: app/templates/components/admin_buttons.html:35
+msgid "unmute"
+msgstr "deixa de silenciar"
+
+#: app/templates/components/admin_buttons.html:44
 msgid "hide shares"
 msgstr "amaga les comparticions"
 
-#: app/templates/components/admin_buttons.html:35
+#: app/templates/components/admin_buttons.html:53
 msgid "show shares"
 msgstr "mostra les comparticions"
 
-#: app/templates/components/admin_buttons.html:53
+#: app/templates/components/admin_buttons.html:71
 msgid "accept follow"
 msgstr "accepta el seguiment"
 
-#: app/templates/components/admin_buttons.html:62
+#: app/templates/components/admin_buttons.html:80
 msgid "reject follow"
 msgstr "rebutja el seguiment"
 
-#: app/templates/components/admin_buttons.html:71
+#: app/templates/components/admin_buttons.html:89
 msgid "like"
 msgstr "m'agrada"
 
-#: app/templates/components/admin_buttons.html:80
+#: app/templates/components/admin_buttons.html:98
 msgid "bookmark"
 msgstr "afegeix a preferits"
 
-#: app/templates/components/admin_buttons.html:89
+#: app/templates/components/admin_buttons.html:107
 msgid "unbookmark"
 msgstr "treu de preferits"
 
-#: app/templates/components/admin_buttons.html:98
+#: app/templates/components/admin_buttons.html:116
 msgid "pin"
 msgstr "fixa"
 
-#: app/templates/components/admin_buttons.html:107
+#: app/templates/components/admin_buttons.html:125
 msgid "unpin"
 msgstr "deixa de fixar"
 
-#: app/templates/components/admin_buttons.html:114
+#: app/templates/components/admin_buttons.html:132
 msgid "edit"
 msgstr "edita"
 
-#: app/templates/components/admin_buttons.html:123
+#: app/templates/components/admin_buttons.html:141
 msgid "delete"
 msgstr "suprimeix"
 
-#: app/templates/components/admin_buttons.html:132
-#: app/templates/components/admin_buttons.html:141
+#: app/templates/components/admin_buttons.html:150
+#: app/templates/components/admin_buttons.html:159
 msgid "local delete"
 msgstr "suprimeix localment"
 
-#: app/templates/components/admin_buttons.html:150
+#: app/templates/components/admin_buttons.html:168
 msgid "share"
 msgstr "comparteix"
 
-#: app/templates/components/admin_buttons.html:159
+#: app/templates/components/admin_buttons.html:177
 msgid "undo"
 msgstr "desfés"
 
-#: app/templates/components/admin_buttons.html:166
+#: app/templates/components/admin_buttons.html:184
 msgid "reply"
 msgstr "respon"
 
-#: app/templates/components/admin_buttons.html:174
+#: app/templates/components/admin_buttons.html:192
 msgid "direct message"
 msgstr "missatge directe"
 
-#: app/templates/components/admin_buttons.html:181
+#: app/templates/components/admin_buttons.html:199
 msgid "mention"
 msgstr "menciona"
 
-#: app/templates/components/admin_buttons.html:188
+#: app/templates/components/admin_buttons.html:206
 msgid "profile"
 msgstr "perfil"
 
-#: app/templates/components/admin_buttons.html:196
+#: app/templates/components/admin_buttons.html:214
 msgid "expand"
 msgstr "amplia"
 

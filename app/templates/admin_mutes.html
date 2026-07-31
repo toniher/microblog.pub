@@ -1,0 +1,34 @@
+{%- import "components/actor.html" as actor_component with context -%}
+{%- import "components/pagination.html" as pagination with context -%}
+{% extends "layout.html" %}
+
+{% block head %}
+<title>{% trans %}Muted accounts{% endtrans %}</title>
+<meta name="robots" content="noindex, nofollow">
+{% endblock %}
+
+{% block content %}
+<div id="mutes">
+{% if muted_actors %}
+<ul>
+{% for actor in muted_actors %}
+<li>
+    <div class="ap-object">
+        {{ actor_component.display_actor(request, csrf_token, is_admin, actor, actors_metadata) }}
+    </div>
+</li>
+{% endfor %}
+</ul>
+{% else %}
+<div class="box">
+    <p>{{ _("No muted accounts.") }}</p>
+</div>
+{% endif %}
+
+{{ pagination.pagination(url_for("admin_mutes"), next_cursor) }}
+
+<div class="box">
+    <p>{{ _("Muting is local: nothing is sent to the muted account. Their posts stop showing up in the stream, and their notifications are hidden.") }}</p>
+</div>
+</div>
+{% endblock %}

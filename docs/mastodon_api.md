@@ -47,11 +47,17 @@ credentials rather than a separate account system.
   actors' statuses/followers/following (boosts included in your own profile,
   same as everyone else's), follow/unfollow, block/unblock, the list of accounts
   you've blocked (`/api/v1/blocks`, so blocks can be reviewed and undone from a
-  client), mute/unmute, personal notes on an account, and incoming follow request
+  client), personal notes on an account, and incoming follow request
   approve/reject.
   Opening a remote actor you don't follow yet backfills their recent posts and
   follower/following/post counts on demand (fetched and cached, throttled), so
   their profile isn't empty on first view.
+- **Mutes** — mute/unmute an account, with the `notifications` and `duration`
+  options, plus the list of who you've muted (`/api/v1/mutes`) and the
+  `muting`/`muting_notifications` relationship flags. A muted account
+  disappears from every timeline (their boosts, and other people's boosts of
+  them, included) but keeps following you and stays reachable from their
+  profile — nothing is federated, so they can't tell.
 - **Search** (`/api/v2/search`) — accounts, statuses, and hashtags.
 - **Media uploads**, including descriptions/alt text.
 
@@ -62,7 +68,7 @@ things a single-user server has no data for. These degrade gracefully (an empty
 list, or a harmless no-op) rather than erroring, so clients render an empty state
 instead of crashing:
 
-- **Lists, filters, suggestions, mutes, the directory, trends, and familiar
+- **Lists, filters, suggestions, the directory, trends, and familiar
   followers** — always empty.
 - **Notification requests / policy** — this server never filters notifications,
   so the filtered-notifications queue (`/api/v1/notifications/requests`) is

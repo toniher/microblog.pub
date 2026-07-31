@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-31 19:32+0200\n"
+"POT-Creation-Date: 2026-08-01 01:27+0200\n"
 "PO-Revision-Date: 2026-07-17 22:20+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: es\n"
@@ -18,15 +18,15 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: app/admin.py:1327 app/admin.py:1346 app/admin.py:1454
+#: app/admin.py:1417 app/admin.py:1436 app/admin.py:1544
 msgid "Error: object must have a content"
 msgstr "Error: el contenido es obligatorio"
 
-#: app/admin.py:1334
+#: app/admin.py:1424
 msgid "Error: invalid language code"
 msgstr "Error: código de idioma no válido"
 
-#: app/admin.py:1368
+#: app/admin.py:1458
 msgid "Error: Unable to process upload"
 msgstr "Error: no se pudo procesar la subida"
 
@@ -101,6 +101,23 @@ msgstr "ha empezado a seguirte"
 #: app/templates/admin_inbox.html:42
 msgid "liked one of your posts"
 msgstr "le ha gustado una de tus publicaciones"
+
+#: app/templates/admin_mutes.html:6
+msgid "Muted accounts"
+msgstr "Cuentas silenciadas"
+
+#: app/templates/admin_mutes.html:24
+msgid "No muted accounts."
+msgstr "Ninguna cuenta silenciada."
+
+#: app/templates/admin_mutes.html:31
+msgid ""
+"Muting is local: nothing is sent to the muted account. Their posts stop "
+"showing up in the stream, and their notifications are hidden."
+msgstr ""
+"Silenciar es local: no se envía nada a la cuenta silenciada. Sus "
+"publicaciones dejan de aparecer en el flujo y sus notificaciones se "
+"ocultan."
 
 #: app/templates/admin_new.html:13 app/templates/admin_new_post.html:16
 msgid "In reply to:"
@@ -355,10 +372,14 @@ msgid "Blocks"
 msgstr "Bloqueos"
 
 #: app/templates/layout.html:41
+msgid "Mutes"
+msgstr "Silenciados"
+
+#: app/templates/layout.html:42
 msgid "Logout"
 msgstr "Cerrar sesión"
 
-#: app/templates/layout.html:59
+#: app/templates/layout.html:60
 #, python-format
 msgid "Powered by %(mbp)s and %(ap)s."
 msgstr "Con la tecnología de %(mbp)s y %(ap)s."
@@ -522,7 +543,7 @@ msgstr ""
 msgid "What's your account?"
 msgstr "¿Cuál es tu cuenta?"
 
-#: app/templates/components/admin_buttons.html:44
+#: app/templates/components/admin_buttons.html:62
 #: app/templates/remote_follow.html:23
 msgid "follow"
 msgstr "seguir"
@@ -713,15 +734,24 @@ msgstr "se ha mudado a %(target)s"
 msgid "blocked"
 msgstr "bloqueado"
 
-#: app/templates/components/actor.html:116
+#: app/templates/components/actor.html:106
+#, python-format
+msgid "muted until %(expiry)s"
+msgstr "silenciado hasta el %(expiry)s"
+
+#: app/templates/components/actor.html:108
+msgid "muted"
+msgstr "silenciado"
+
+#: app/templates/components/actor.html:126
 msgid "accepted"
 msgstr "aceptado"
 
-#: app/templates/components/actor.html:118
+#: app/templates/components/actor.html:128
 msgid "rejected"
 msgstr "rechazado"
 
-#: app/templates/components/actor.html:127
+#: app/templates/components/actor.html:137
 msgid "remote profile"
 msgstr "perfil remoto"
 
@@ -734,79 +764,87 @@ msgid "unblock"
 msgstr "desbloquear"
 
 #: app/templates/components/admin_buttons.html:26
+msgid "mute"
+msgstr "silenciar"
+
+#: app/templates/components/admin_buttons.html:35
+msgid "unmute"
+msgstr "dejar de silenciar"
+
+#: app/templates/components/admin_buttons.html:44
 msgid "hide shares"
 msgstr "ocultar comparticiones"
 
-#: app/templates/components/admin_buttons.html:35
+#: app/templates/components/admin_buttons.html:53
 msgid "show shares"
 msgstr "mostrar comparticiones"
 
-#: app/templates/components/admin_buttons.html:53
+#: app/templates/components/admin_buttons.html:71
 msgid "accept follow"
 msgstr "aceptar seguimiento"
 
-#: app/templates/components/admin_buttons.html:62
+#: app/templates/components/admin_buttons.html:80
 msgid "reject follow"
 msgstr "rechazar seguimiento"
 
-#: app/templates/components/admin_buttons.html:71
+#: app/templates/components/admin_buttons.html:89
 msgid "like"
 msgstr "me gusta"
 
-#: app/templates/components/admin_buttons.html:80
+#: app/templates/components/admin_buttons.html:98
 msgid "bookmark"
 msgstr "añadir a marcadores"
 
-#: app/templates/components/admin_buttons.html:89
+#: app/templates/components/admin_buttons.html:107
 msgid "unbookmark"
 msgstr "quitar de marcadores"
 
-#: app/templates/components/admin_buttons.html:98
+#: app/templates/components/admin_buttons.html:116
 msgid "pin"
 msgstr "fijar"
 
-#: app/templates/components/admin_buttons.html:107
+#: app/templates/components/admin_buttons.html:125
 msgid "unpin"
 msgstr "dejar de fijar"
 
-#: app/templates/components/admin_buttons.html:114
+#: app/templates/components/admin_buttons.html:132
 msgid "edit"
 msgstr "editar"
 
-#: app/templates/components/admin_buttons.html:123
+#: app/templates/components/admin_buttons.html:141
 msgid "delete"
 msgstr "eliminar"
 
-#: app/templates/components/admin_buttons.html:132
-#: app/templates/components/admin_buttons.html:141
+#: app/templates/components/admin_buttons.html:150
+#: app/templates/components/admin_buttons.html:159
 msgid "local delete"
 msgstr "eliminar localmente"
 
-#: app/templates/components/admin_buttons.html:150
+#: app/templates/components/admin_buttons.html:168
 msgid "share"
 msgstr "compartir"
 
-#: app/templates/components/admin_buttons.html:159
+#: app/templates/components/admin_buttons.html:177
 msgid "undo"
 msgstr "deshacer"
 
-#: app/templates/components/admin_buttons.html:166
+#: app/templates/components/admin_buttons.html:184
 msgid "reply"
 msgstr "responder"
 
-#: app/templates/components/admin_buttons.html:174
+#: app/templates/components/admin_buttons.html:192
 msgid "direct message"
 msgstr "mensaje directo"
 
-#: app/templates/components/admin_buttons.html:181
+#: app/templates/components/admin_buttons.html:199
 msgid "mention"
 msgstr "mencionar"
 
-#: app/templates/components/admin_buttons.html:188
+#: app/templates/components/admin_buttons.html:206
 msgid "profile"
 msgstr "perfil"
 
-#: app/templates/components/admin_buttons.html:196
+#: app/templates/components/admin_buttons.html:214
 msgid "expand"
 msgstr "ampliar"
 

@@ -4,6 +4,7 @@ import pytest
 import respx
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from activitypub import activitypub as ap
 from activitypub import boxes
@@ -431,3 +432,98 @@ async def test_timelines_home_serializes_reblog_target_dict_in_reply_to(
         and status["reblog"]["in_reply_to_id"] == ids.encode_inbox_id(root_inbox_object)
         for status in response.json()
     )
+
+
+@pytest.mark.asyncio
+async def test_timelines_home_hides_muted_actor(
+    client: TestClient,
+    db: Session,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    muted_ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    muted_follower = setup_remote_actor_as_follower(muted_ra)
+    assert muted_follower.actor is not None
+    muted_note = factories.InboxObjectFactory.from_remote_object(
+        RemoteObject(
+            factories.build_note_object(from_remote_actor=muted_ra, content="Noisy"),
+            muted_ra,
+        ),
+        muted_follower.actor,
+    )
+
+    other_ra = setup_remote_actor(respx_mock, base_url="https://example.org")
+    other_follower = setup_remote_actor_as_follower(other_ra)
+    assert other_follower.actor is not None
+    other_note = factories.InboxObjectFactory.from_remote_object(
+        RemoteObject(
+            factories.build_note_object(from_remote_actor=other_ra, content="Quiet"),
+            other_ra,
+        ),
+        other_follower.actor,
+    )
+
+    muted_follower.actor.is_muted = True
+    db.commit()
+
+    token = await _make_access_token(async_db_session, "read:statuses")
+    response = client.get(
+        "/api/v1/timelines/home", headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 200
+    returned_ids = {status["id"] for status in response.json()}
+    assert ids.encode_inbox_id(muted_note) not in returned_ids
+    assert ids.encode_inbox_id(other_note) in returned_ids
+
+
+@pytest.mark.asyncio
+async def test_timelines_home_hides_boost_of_muted_actor(
+    client: TestClient,
+    db: Session,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    muted_ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    muted_follower = setup_remote_actor_as_follower(muted_ra)
+    assert muted_follower.actor is not None
+    muted_note = RemoteObject(
+        factories.build_note_object(from_remote_actor=muted_ra, content="Noisy"),
+        muted_ra,
+    )
+    muted_inbox_object = factories.InboxObjectFactory.from_remote_object(
+        muted_note, muted_follower.actor
+    )
+
+    booster_ra = setup_remote_actor(respx_mock, base_url="https://example.org")
+    booster = setup_remote_actor_as_follower(booster_ra)
+    assert booster.actor is not None
+    boost = RemoteObject(
+        {
+            "@context": ap.AS_CTX,
+            "type": "Announce",
+            "id": f"{booster_ra.ap_id}/announce/muted",
+            "actor": booster_ra.ap_id,
+            "object": muted_note.ap_id,
+            "to": [ap.AS_PUBLIC],
+            "cc": [],
+            "published": muted_note.ap_object["published"],
+            "url": f"{booster_ra.ap_id}/announce/muted",
+        },
+        booster_ra,
+    )
+    boost_object = factories.InboxObjectFactory.from_remote_object(
+        boost, booster.actor, relates_to_inbox_object_id=muted_inbox_object.id
+    )
+
+    muted_follower.actor.is_muted = True
+    db.commit()
+
+    token = await _make_access_token(async_db_session, "read:statuses")
+    response = client.get(
+        "/api/v1/timelines/home", headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 200
+    returned_ids = {status["id"] for status in response.json()}
+    assert ids.encode_inbox_id(boost_object) not in returned_ids

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-31 19:32+0200\n"
+"POT-Creation-Date: 2026-08-01 01:27+0200\n"
 "PO-Revision-Date: 2026-07-17 22:20+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ro\n"
@@ -19,15 +19,15 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: app/admin.py:1327 app/admin.py:1346 app/admin.py:1454
+#: app/admin.py:1417 app/admin.py:1436 app/admin.py:1544
 msgid "Error: object must have a content"
 msgstr "Eroare: conținutul este obligatoriu"
 
-#: app/admin.py:1334
+#: app/admin.py:1424
 msgid "Error: invalid language code"
 msgstr "Eroare: cod de limbă invalid"
 
-#: app/admin.py:1368
+#: app/admin.py:1458
 msgid "Error: Unable to process upload"
 msgstr "Eroare: nu s-a putut procesa încărcarea"
 
@@ -102,6 +102,22 @@ msgstr "v-a urmărit"
 #: app/templates/admin_inbox.html:42
 msgid "liked one of your posts"
 msgstr "a apreciat una dintre publicațiile dvs."
+
+#: app/templates/admin_mutes.html:6
+msgid "Muted accounts"
+msgstr "Conturi amuțite"
+
+#: app/templates/admin_mutes.html:24
+msgid "No muted accounts."
+msgstr "Niciun cont amuțit."
+
+#: app/templates/admin_mutes.html:31
+msgid ""
+"Muting is local: nothing is sent to the muted account. Their posts stop "
+"showing up in the stream, and their notifications are hidden."
+msgstr ""
+"Amuțirea este locală: nu se trimite nimic contului amuțit. Postările lui "
+"nu mai apar în flux, iar notificările lui sunt ascunse."
 
 #: app/templates/admin_new.html:13 app/templates/admin_new_post.html:16
 msgid "In reply to:"
@@ -357,10 +373,14 @@ msgid "Blocks"
 msgstr "Blocări"
 
 #: app/templates/layout.html:41
+msgid "Mutes"
+msgstr "Amuțite"
+
+#: app/templates/layout.html:42
 msgid "Logout"
 msgstr "Deconectare"
 
-#: app/templates/layout.html:59
+#: app/templates/layout.html:60
 #, python-format
 msgid "Powered by %(mbp)s and %(ap)s."
 msgstr "Susținut de %(mbp)s și %(ap)s."
@@ -524,7 +544,7 @@ msgstr ""
 msgid "What's your account?"
 msgstr "Care este contul dvs.?"
 
-#: app/templates/components/admin_buttons.html:44
+#: app/templates/components/admin_buttons.html:62
 #: app/templates/remote_follow.html:23
 msgid "follow"
 msgstr "urmărește"
@@ -721,15 +741,24 @@ msgstr "s-a mutat la %(target)s"
 msgid "blocked"
 msgstr "blocat"
 
-#: app/templates/components/actor.html:116
+#: app/templates/components/actor.html:106
+#, python-format
+msgid "muted until %(expiry)s"
+msgstr "amuțit până la %(expiry)s"
+
+#: app/templates/components/actor.html:108
+msgid "muted"
+msgstr "amuțit"
+
+#: app/templates/components/actor.html:126
 msgid "accepted"
 msgstr "acceptat"
 
-#: app/templates/components/actor.html:118
+#: app/templates/components/actor.html:128
 msgid "rejected"
 msgstr "respins"
 
-#: app/templates/components/actor.html:127
+#: app/templates/components/actor.html:137
 msgid "remote profile"
 msgstr "profil la distanță"
 
@@ -742,79 +771,87 @@ msgid "unblock"
 msgstr "deblochează"
 
 #: app/templates/components/admin_buttons.html:26
+msgid "mute"
+msgstr "amuțește"
+
+#: app/templates/components/admin_buttons.html:35
+msgid "unmute"
+msgstr "dezamuțește"
+
+#: app/templates/components/admin_buttons.html:44
 msgid "hide shares"
 msgstr "ascunde distribuirile"
 
-#: app/templates/components/admin_buttons.html:35
+#: app/templates/components/admin_buttons.html:53
 msgid "show shares"
 msgstr "arată distribuirile"
 
-#: app/templates/components/admin_buttons.html:53
+#: app/templates/components/admin_buttons.html:71
 msgid "accept follow"
 msgstr "acceptă urmărirea"
 
-#: app/templates/components/admin_buttons.html:62
+#: app/templates/components/admin_buttons.html:80
 msgid "reject follow"
 msgstr "respinge urmărirea"
 
-#: app/templates/components/admin_buttons.html:71
+#: app/templates/components/admin_buttons.html:89
 msgid "like"
 msgstr "apreciază"
 
-#: app/templates/components/admin_buttons.html:80
+#: app/templates/components/admin_buttons.html:98
 msgid "bookmark"
 msgstr "adaugă la favorite"
 
-#: app/templates/components/admin_buttons.html:89
+#: app/templates/components/admin_buttons.html:107
 msgid "unbookmark"
 msgstr "elimină din favorite"
 
-#: app/templates/components/admin_buttons.html:98
+#: app/templates/components/admin_buttons.html:116
 msgid "pin"
 msgstr "fixează"
 
-#: app/templates/components/admin_buttons.html:107
+#: app/templates/components/admin_buttons.html:125
 msgid "unpin"
 msgstr "anulează fixarea"
 
-#: app/templates/components/admin_buttons.html:114
+#: app/templates/components/admin_buttons.html:132
 msgid "edit"
 msgstr "editează"
 
-#: app/templates/components/admin_buttons.html:123
+#: app/templates/components/admin_buttons.html:141
 msgid "delete"
 msgstr "șterge"
 
-#: app/templates/components/admin_buttons.html:132
-#: app/templates/components/admin_buttons.html:141
+#: app/templates/components/admin_buttons.html:150
+#: app/templates/components/admin_buttons.html:159
 msgid "local delete"
 msgstr "șterge local"
 
-#: app/templates/components/admin_buttons.html:150
+#: app/templates/components/admin_buttons.html:168
 msgid "share"
 msgstr "distribuie"
 
-#: app/templates/components/admin_buttons.html:159
+#: app/templates/components/admin_buttons.html:177
 msgid "undo"
 msgstr "anulează"
 
-#: app/templates/components/admin_buttons.html:166
+#: app/templates/components/admin_buttons.html:184
 msgid "reply"
 msgstr "răspunde"
 
-#: app/templates/components/admin_buttons.html:174
+#: app/templates/components/admin_buttons.html:192
 msgid "direct message"
 msgstr "mesaj direct"
 
-#: app/templates/components/admin_buttons.html:181
+#: app/templates/components/admin_buttons.html:199
 msgid "mention"
 msgstr "menționează"
 
-#: app/templates/components/admin_buttons.html:188
+#: app/templates/components/admin_buttons.html:206
 msgid "profile"
 msgstr "profil"
 
-#: app/templates/components/admin_buttons.html:196
+#: app/templates/components/admin_buttons.html:214
 msgid "expand"
 msgstr "extinde"
 

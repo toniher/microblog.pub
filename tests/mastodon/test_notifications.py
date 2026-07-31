@@ -9,6 +9,7 @@ import respx
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from activitypub import activitypub as ap
 from activitypub import boxes
@@ -377,3 +378,82 @@ async def test_notifications_list_serializes_actor_string_media_fields(
         _decode_proxied_media_url(account["header"])
         == "https://example.com/media/header.jpg"
     )
+
+
+@pytest.mark.asyncio
+async def test_notifications_hides_muted_actor(
+    client: TestClient,
+    db: Session,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    muted_ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    muted_follower = setup_remote_actor_as_follower(muted_ra)
+    assert muted_follower.actor is not None
+
+    other_ra = setup_remote_actor(respx_mock, base_url="https://example.org")
+    other_follower = setup_remote_actor_as_follower(other_ra)
+    assert other_follower.actor is not None
+
+    async_db_session.add_all(
+        [
+            models.Notification(
+                notification_type=models.NotificationType.NEW_FOLLOWER,
+                actor_id=muted_follower.actor.id,
+            ),
+            models.Notification(
+                notification_type=models.NotificationType.NEW_FOLLOWER,
+                actor_id=other_follower.actor.id,
+            ),
+        ]
+    )
+    await async_db_session.commit()
+
+    muted_follower.actor.is_muted = True
+    muted_follower.actor.are_notifications_muted = True
+    db.commit()
+
+    token = await _make_access_token(async_db_session, "read:notifications")
+    response = client.get(
+        "/api/v1/notifications", headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 200
+    account_ids = {notif["account"]["id"] for notif in response.json()}
+    assert str(other_follower.actor.id) in account_ids
+    assert str(muted_follower.actor.id) not in account_ids
+
+
+@pytest.mark.asyncio
+async def test_notifications_kept_when_mute_spares_notifications(
+    client: TestClient,
+    db: Session,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    follower = setup_remote_actor_as_follower(ra)
+    assert follower.actor is not None
+
+    async_db_session.add(
+        models.Notification(
+            notification_type=models.NotificationType.NEW_FOLLOWER,
+            actor_id=follower.actor.id,
+        )
+    )
+    await async_db_session.commit()
+
+    # Muted, but the mute was set with notifications=false.
+    follower.actor.is_muted = True
+    follower.actor.are_notifications_muted = False
+    db.commit()
+
+    token = await _make_access_token(async_db_session, "read:notifications")
+    response = client.get(
+        "/api/v1/notifications", headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 200
+    assert {notif["account"]["id"] for notif in response.json()} == {
+        str(follower.actor.id)
+    }

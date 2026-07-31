@@ -12,9 +12,13 @@ from sqlalchemy import Index
 from sqlalchemy import Integer
 from sqlalchemy import String
 from sqlalchemy import UniqueConstraint
+from sqlalchemy import or_
+from sqlalchemy import select
 from sqlalchemy import text
 from sqlalchemy.orm import Mapped
+from sqlalchemy.orm import aliased
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import Select
 
 from activitypub import activitypub as ap
 from activitypub.actor import LOCAL_ACTOR
@@ -23,6 +27,7 @@ from activitypub.ap_object import Attachment
 from activitypub.ap_object import Object as BaseObject
 from app.config import BASE_URL
 from app.database import Base
+from app.utils.datetime import as_utc
 from app.utils.datetime import now
 
 
@@ -41,6 +46,20 @@ class Actor(Base, BaseActor):
 
     is_blocked = Column(Boolean, nullable=False, default=False, server_default="0")
     is_deleted = Column(Boolean, nullable=False, default=False, server_default="0")
+
+    # Muting is purely local (nothing is federated, unlike a block): the actor
+    # keeps following/being followed, their posts just stop showing up.
+    is_muted = Column(Boolean, nullable=False, default=False, server_default="0")
+    # Null while muted means "until I unmute"; a timestamp makes the mute
+    # lapse on its own (Mastodon's `duration` parameter). Nothing sweeps
+    # expired rows — `is_muted_now`/`muted_actor_ids()` apply the expiry at
+    # read time, and unmuting clears the flag.
+    muted_until = Column(DateTime(timezone=True), nullable=True)
+    # Whether the mute also hides notifications from this actor (Mastodon's
+    # `notifications` parameter, `muting_notifications` in a relationship).
+    are_notifications_muted = Column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
 
     are_announces_hidden_from_stream = Column(
         Boolean, nullable=False, default=False, server_default="0"
@@ -62,6 +81,51 @@ class Actor(Base, BaseActor):
     @property
     def is_from_db(self) -> bool:
         return True
+
+    @property
+    def is_muted_now(self) -> bool:
+        """`is_muted` with the expiry applied — a lapsed mute is no mute."""
+        if not self.is_muted:
+            return False
+        return self.muted_until is None or as_utc(self.muted_until) > now()
+
+    @property
+    def are_notifications_muted_now(self) -> bool:
+        return self.is_muted_now and bool(self.are_notifications_muted)
+
+
+def muted_actor_ids(*, notifications_only: bool = False) -> Select:
+    """Ids of the actors whose mute is currently in effect.
+
+    The SQL counterpart of `Actor.is_muted_now`, for filtering timelines and
+    notifications with a subquery instead of loading every muted actor.
+    """
+    where = [
+        Actor.is_muted.is_(True),
+        or_(Actor.muted_until.is_(None), Actor.muted_until > now()),
+    ]
+    if notifications_only:
+        where.append(Actor.are_notifications_muted.is_(True))
+    return select(Actor.id).where(*where)
+
+
+def not_from_muted_actors() -> list[Any]:
+    """Where-clauses dropping muted actors from a query over `InboxObject`.
+
+    Covers both what a muted actor sent us and what someone else did with a
+    muted actor's object (a boost of their note, most visibly) — Mastodon
+    hides both.
+    """
+    related = aliased(InboxObject)
+    return [
+        InboxObject.actor_id.not_in(muted_actor_ids()),
+        or_(
+            InboxObject.relates_to_inbox_object_id.is_(None),
+            InboxObject.relates_to_inbox_object_id.not_in(
+                select(related.id).where(related.actor_id.in_(muted_actor_ids()))
+            ),
+        ),
+    ]
 
 
 class InboxObject(Base, BaseObject):

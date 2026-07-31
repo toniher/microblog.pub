@@ -373,6 +373,37 @@ async def refresh_actor_counts(actor: "ActorModel") -> None:
     actor.counts_refreshed_at = now()
 
 
+async def mute_actor(
+    db_session: AsyncSession,
+    actor: "ActorModel",
+    *,
+    duration: int | None = None,
+    notifications: bool = True,
+) -> None:
+    """Hide an actor's posts (and optionally their notifications) locally.
+
+    Unlike a block, nothing is federated and the follow relationship is left
+    alone — the remote side can't tell. `duration` is a number of seconds
+    after which the mute lapses on its own (Mastodon's parameter); no
+    duration means "until unmuted".
+    """
+    actor.is_muted = True
+    # A zero (or nonsensical negative) duration is Mastodon's "no expiry",
+    # not "already expired".
+    actor.muted_until = (
+        now() + timedelta(seconds=duration) if duration and duration > 0 else None
+    )
+    actor.are_notifications_muted = notifications
+    await db_session.commit()
+
+
+async def unmute_actor(db_session: AsyncSession, actor: "ActorModel") -> None:
+    actor.is_muted = False
+    actor.muted_until = None
+    actor.are_notifications_muted = False
+    await db_session.commit()
+
+
 async def list_actors(db_session: AsyncSession, limit: int = 100) -> list["ActorModel"]:
 
     return (

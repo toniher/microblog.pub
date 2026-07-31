@@ -136,7 +136,8 @@ async def render_template(
             "notifications_count": (
                 await db_session.scalar(
                     select(func.count(models.Notification.id)).where(
-                        models.Notification.is_new.is_(True)
+                        models.Notification.is_new.is_(True),
+                        models.notification_not_muted(),
                     )
                 )
                 if is_admin

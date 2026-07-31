@@ -1,9 +1,11 @@
 import secrets
+from datetime import timedelta
 
 import pytest
 import respx
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from activitypub import activitypub as ap
 from activitypub import boxes
@@ -13,6 +15,7 @@ from activitypub.ap_object import RemoteObject
 from activitypub.tests import factories
 from app import models
 from app.mastodon import ids
+from app.utils.datetime import now
 from tests.utils import setup_remote_actor
 from tests.utils import setup_remote_actor_as_follower
 
@@ -158,7 +161,7 @@ async def test_blocks_requires_read_blocks_scope(
 
 
 @pytest.mark.asyncio
-async def test_mute_and_unmute_are_noops(
+async def test_mute_and_unmute(
     client: TestClient,
     async_db_session: AsyncSession,
     respx_mock: respx.MockRouter,
@@ -171,12 +174,134 @@ async def test_mute_and_unmute_are_noops(
     headers = {"Authorization": f"Bearer {token}"}
 
     muted = client.post(f"/api/v1/accounts/{account_id}/mute", headers=headers).json()
-    assert muted["muting"] is False
+    assert muted["muting"] is True
+    # Mastodon's default: a mute hides notifications too.
+    assert muted["muting_notifications"] is True
 
     unmuted = client.post(
         f"/api/v1/accounts/{account_id}/unmute", headers=headers
     ).json()
     assert unmuted["muting"] is False
+    assert unmuted["muting_notifications"] is False
+
+
+@pytest.mark.asyncio
+async def test_mute_without_notifications(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    actor = factories.ActorFactory.from_remote_actor(ra)
+    account_id = ids.encode_account_id(actor)
+
+    token = await _make_access_token(async_db_session, "write:mutes")
+    muted = client.post(
+        f"/api/v1/accounts/{account_id}/mute",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"notifications": False},
+    ).json()
+
+    assert muted["muting"] is True
+    assert muted["muting_notifications"] is False
+
+
+@pytest.mark.asyncio
+async def test_mute_with_duration_expires(
+    client: TestClient,
+    db: Session,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    actor = factories.ActorFactory.from_remote_actor(ra)
+    account_id = ids.encode_account_id(actor)
+
+    token = await _make_access_token(
+        async_db_session, "read:accounts read:mutes write:mutes"
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+
+    muted = client.post(
+        f"/api/v1/accounts/{account_id}/mute",
+        headers=headers,
+        data={"duration": "3600"},
+    ).json()
+    assert muted["muting"] is True
+    listed = client.get("/api/v1/mutes", headers=headers).json()
+    assert [account["id"] for account in listed] == [account_id]
+
+    # Backdate the expiry rather than waiting an hour: an elapsed mute is
+    # applied at read time, no sweep involved.
+    actor.muted_until = now() - timedelta(seconds=1)
+    db.commit()
+
+    assert client.get("/api/v1/mutes", headers=headers).json() == []
+    relationships = client.get(
+        f"/api/v1/accounts/relationships?id[]={account_id}", headers=headers
+    ).json()
+    assert relationships[0]["muting"] is False
+
+
+@pytest.mark.asyncio
+async def test_mute_with_zero_duration_never_expires(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    actor = factories.ActorFactory.from_remote_actor(ra)
+    account_id = ids.encode_account_id(actor)
+
+    token = await _make_access_token(async_db_session, "write:mutes")
+    muted = client.post(
+        f"/api/v1/accounts/{account_id}/mute",
+        headers={"Authorization": f"Bearer {token}"},
+        # What Mastodon clients send for "mute indefinitely".
+        data={"duration": "0"},
+    ).json()
+
+    assert muted["muting"] is True
+    assert actor.muted_until is None
+
+
+@pytest.mark.asyncio
+async def test_mutes_list(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    actor = factories.ActorFactory.from_remote_actor(ra)
+    account_id = ids.encode_account_id(actor)
+
+    token = await _make_access_token(async_db_session, "read:mutes write:mutes")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    assert client.get("/api/v1/mutes", headers=headers).json() == []
+
+    client.post(f"/api/v1/accounts/{account_id}/mute", headers=headers)
+
+    listed = client.get("/api/v1/mutes", headers=headers)
+    assert listed.status_code == 200
+    assert [account["id"] for account in listed.json()] == [account_id]
+
+    client.post(f"/api/v1/accounts/{account_id}/unmute", headers=headers)
+
+    assert client.get("/api/v1/mutes", headers=headers).json() == []
+
+
+def test_mutes_requires_auth(client: TestClient) -> None:
+    assert client.get("/api/v1/mutes").status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_mutes_requires_read_mutes_scope(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    token = await _make_access_token(async_db_session, "write:mutes")
+    response = client.get("/api/v1/mutes", headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 403
 
 
 @pytest.mark.asyncio

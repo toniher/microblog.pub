@@ -14,6 +14,7 @@ from sqlalchemy import Integer
 from sqlalchemy import String
 from sqlalchemy import Table
 from sqlalchemy import UniqueConstraint
+from sqlalchemy import or_
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import relationship
 
@@ -21,6 +22,7 @@ from activitypub import activitypub as ap
 from activitypub.models import Actor
 from activitypub.models import InboxObject
 from activitypub.models import OutboxObject
+from activitypub.models import muted_actor_ids
 from app.database import Base
 from app.database import metadata_obj
 from app.utils import webmentions
@@ -193,6 +195,19 @@ class Notification(Base):
 
     is_accepted = Column(Boolean, nullable=True)
     is_rejected = Column(Boolean, nullable=True)
+
+
+def notification_not_muted() -> Any:
+    """Where-clause dropping notifications sent by a muted actor.
+
+    Only mutes set to hide notifications count (the API's `notifications`
+    parameter); the NULL arm keeps actor-less notifications — webmentions —
+    which a bare `NOT IN` would evaluate to NULL and silently drop.
+    """
+    return or_(
+        Notification.actor_id.is_(None),
+        Notification.actor_id.not_in(muted_actor_ids(notifications_only=True)),
+    )
 
 
 outbox_fts = Table(

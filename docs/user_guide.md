@@ -455,6 +455,25 @@ Note that the list is ordered by when each account was first seen by your
 instance, not by when you blocked it: blocks are stored as a flag on the account,
 without a timestamp of their own.
 
+### Muting accounts
+
+Muting is the quieter alternative to a block: the account keeps following you and
+can still see your posts, nothing is federated (they can't tell), but their posts
+stop appearing anywhere you read. That covers the stream, their boosts, *and*
+other people's boosts of them, plus their notifications.
+
+The `mute` button sits next to `block` wherever a profile is displayed in the
+admin interface, and the `Mutes` page in the admin menu lists everyone you've
+muted with an `unmute` button for each. Muting someone hides posts you already
+received rather than deleting them — unmuting brings them back.
+
+Mastodon clients see the same list through `GET /api/v1/mutes` and can mute with
+the two options the API defines: whether notifications are hidden too (the admin
+button always hides them), and a duration after which the mute lapses on its own
+(the admin button mutes until you undo it). Like the blocks list, the page is
+ordered by when each account was first seen by your instance, not by when you
+muted it.
+
 ### Blocking servers
 
 In addition to blocking "single actors" via the admin interface, you can also prevent any communication with entire servers.

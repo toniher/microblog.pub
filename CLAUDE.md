@@ -119,7 +119,7 @@ make config       # configuration wizard
 ```
 
 Testing notes:
-- Test suite runs against an in-memory SQLite DB; ~286 tests.
+- Test suite runs against an in-memory SQLite DB; ~315 tests.
 - `activitypub/tests/test_actor.py` does real-network retries (~20s) — when running
   the whole suite ad hoc, pass `--timeout=60` (pytest-timeout) so a slow/hung test
   is killed instead of stalling the run.

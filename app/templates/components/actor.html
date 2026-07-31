@@ -101,6 +101,16 @@
                 {% else %}
                     <li>{{ admin_buttons.admin_block_button(request, csrf_token, actor) }}</li>
                 {% endif %}
+                {% if actor.is_muted_now %}
+                    {% if actor.muted_until %}
+                        <li title="{{ actor.muted_until.isoformat() }}">{% trans expiry=actor.muted_until|format_date %}muted until {{ expiry }}{% endtrans %}</li>
+                    {% else %}
+                        <li>{{ _("muted") }}</li>
+                    {% endif %}
+                    <li>{{ admin_buttons.admin_unmute_button(request, csrf_token, actor) }}</li>
+                {% else %}
+                    <li>{{ admin_buttons.admin_mute_button(request, csrf_token, actor) }}</li>
+                {% endif %}
             {% endif %}
                 <li>{{ admin_buttons.admin_dm_button(request, csrf_token, actor.handle) }}</li>
                 <li>{{ admin_buttons.admin_mention_button(request, csrf_token, actor.handle) }}</li>

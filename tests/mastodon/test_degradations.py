@@ -12,9 +12,12 @@ _SCOPE_GATED_ENDPOINTS = [
     "/api/v2/filters",
     "/api/v1/suggestions",
     "/api/v2/suggestions",
-    "/api/v1/mutes",
     "/api/v1/follow_requests",
 ]
+
+# /api/v1/mutes and /api/v1/blocks used to live in the list above; they're
+# real lists now (tests/mastodon/test_social.py), empty only when nothing is
+# muted/blocked.
 
 _PUBLIC_ENDPOINTS = [
     "/api/v1/directory",
