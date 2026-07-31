@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-17 21:46+0200\n"
+"POT-Creation-Date: 2026-07-31 19:32+0200\n"
 "PO-Revision-Date: 2026-07-17 22:20+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: es\n"
@@ -18,26 +18,38 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: app/admin.py:1263 app/admin.py:1282 app/admin.py:1390
+#: app/admin.py:1327 app/admin.py:1346 app/admin.py:1454
 msgid "Error: object must have a content"
 msgstr "Error: el contenido es obligatorio"
 
-#: app/admin.py:1270
+#: app/admin.py:1334
 msgid "Error: invalid language code"
 msgstr "Error: código de idioma no válido"
 
-#: app/admin.py:1304
+#: app/admin.py:1368
 msgid "Error: Unable to process upload"
 msgstr "Error: no se pudo procesar la subida"
 
-#: app/config.py:306
+#: app/config.py:308
 msgid "please try again"
 msgstr "inténtelo de nuevo"
 
-#: app/config.py:315
+#: app/config.py:318
 #, python-format
 msgid "The security token has expired, %(please_try_again)s"
 msgstr "El token de seguridad ha caducado, %(please_try_again)s"
+
+#: app/templates/admin_blocks.html:6
+msgid "Blocked accounts"
+msgstr "Cuentas bloqueadas"
+
+#: app/templates/admin_blocks.html:24
+msgid "No blocked accounts."
+msgstr "Ninguna cuenta bloqueada."
+
+#: app/templates/admin_blocks.html:31
+msgid "Block activities"
+msgstr "Actividades de bloqueo"
 
 #: app/templates/admin_direct_messages.html:6
 #, python-format
@@ -283,8 +295,12 @@ msgstr "¡Todavía no hay nada que ver aquí!"
 
 #: app/templates/indieauth_flow.html:20
 #, python-format
-msgid "wants you to login%(as_who)s with the following redirect URI: <code>%(uri)s</code>."
-msgstr "quiere que inicies sesión%(as_who)s con la siguiente URI de redirección: <code>%(uri)s</code>."
+msgid ""
+"wants you to login%(as_who)s with the following redirect URI: "
+"<code>%(uri)s</code>."
+msgstr ""
+"quiere que inicies sesión%(as_who)s con la siguiente URI de redirección: "
+"<code>%(uri)s</code>."
 
 #: app/templates/indieauth_flow.html:26
 msgid "Scopes"
@@ -294,51 +310,55 @@ msgstr "Ámbitos"
 msgid "login"
 msgstr "iniciar sesión"
 
-#: app/templates/layout.html:17
+#: app/templates/layout.html:20
 msgid "Skip to content"
 msgstr "Saltar al contenido"
 
-#: app/templates/layout.html:29
+#: app/templates/layout.html:32
 msgid "Public"
 msgstr "Público"
 
-#: app/templates/layout.html:30
+#: app/templates/layout.html:33
 msgid "New"
 msgstr "Nuevo"
 
-#: app/templates/layout.html:31
+#: app/templates/layout.html:34
 msgid "Stream"
 msgstr "Flujo"
 
-#: app/templates/layout.html:32
+#: app/templates/layout.html:35
 msgid "Inbox"
 msgstr "Bandeja de entrada"
 
-#: app/templates/layout.html:32
+#: app/templates/layout.html:35
 msgid "Outbox"
 msgstr "Bandeja de salida"
 
-#: app/templates/layout.html:33
+#: app/templates/layout.html:36
 msgid "DMs"
 msgstr "MD"
 
-#: app/templates/layout.html:34
+#: app/templates/layout.html:37
 msgid "Notifications"
 msgstr "Notificaciones"
 
-#: app/templates/layout.html:35 app/templates/lookup.html:16
+#: app/templates/layout.html:38 app/templates/lookup.html:16
 msgid "Lookup"
 msgstr "Búsqueda"
 
-#: app/templates/layout.html:36
+#: app/templates/layout.html:39
 msgid "Bookmarks"
 msgstr "Marcadores"
 
-#: app/templates/layout.html:37
+#: app/templates/layout.html:40
+msgid "Blocks"
+msgstr "Bloqueos"
+
+#: app/templates/layout.html:41
 msgid "Logout"
 msgstr "Cerrar sesión"
 
-#: app/templates/layout.html:55
+#: app/templates/layout.html:59
 #, python-format
 msgid "Powered by %(mbp)s and %(ap)s."
 msgstr "Con la tecnología de %(mbp)s y %(ap)s."
@@ -352,8 +372,12 @@ msgid "password"
 msgstr "contraseña"
 
 #: app/templates/lookup.html:12
-msgid "Interact with an ActivityPub object via its URL or look for a user using <i>@user@domain.tld</i>"
-msgstr "Interactúa con un objeto de ActivityPub mediante su URL o busca un usuario con <i>@usuario@dominio.tld</i>"
+msgid ""
+"Interact with an ActivityPub object via its URL or look for a user using "
+"<i>@user@domain.tld</i>"
+msgstr ""
+"Interactúa con un objeto de ActivityPub mediante su URL o busca un "
+"usuario con <i>@usuario@dominio.tld</i>"
 
 #: app/templates/lookup.html:28
 msgid "The remote object is unavailable."
@@ -369,7 +393,9 @@ msgstr "La búsqueda ha agotado el tiempo de espera; intenta actualizar la pági
 
 #: app/templates/lookup.html:34
 msgid "Unexpected error, please check the logs and report an issue if needed."
-msgstr "Error inesperado; revisa los registros e informa del problema si es necesario."
+msgstr ""
+"Error inesperado; revisa los registros e informa del problema si es "
+"necesario."
 
 #: app/templates/notifications.html:7
 #, python-format
@@ -484,10 +510,12 @@ msgstr "ActivityPub"
 
 #: app/templates/remote_follow.html:16
 msgid ""
-"If you have an ActivityPub account (e.g. Mastodon, Pleroma...), you can follow\n"
+"If you have an ActivityPub account (e.g. Mastodon, Pleroma...), you can "
+"follow\n"
 "me to receive my posts on your home feed."
 msgstr ""
-"Si tienes una cuenta de ActivityPub (p. ej. Mastodon, Pleroma...), puedes seguirme\n"
+"Si tienes una cuenta de ActivityPub (p. ej. Mastodon, Pleroma...), puedes"
+" seguirme\n"
 "para recibir mis publicaciones en tu muro principal."
 
 #: app/templates/remote_follow.html:19
@@ -504,8 +532,12 @@ msgid "RSS"
 msgstr "RSS"
 
 #: app/templates/remote_follow.html:27
-msgid "You can also follow me using the following <a href=\"/feed.json\">RSS Feed</a>."
-msgstr "También puedes seguirme mediante el siguiente <a href=\"/feed.json\">feed RSS</a>."
+msgid ""
+"You can also follow me using the following <a href=\"/feed.json\">RSS "
+"Feed</a>."
+msgstr ""
+"También puedes seguirme mediante el siguiente <a href=\"/feed.json\">feed"
+" RSS</a>."
 
 #: app/templates/remote_interact.html:6
 msgid "Interact from your instance"
@@ -541,7 +573,8 @@ msgid ""
 "            this object\n"
 "        </a>"
 msgstr ""
-"en respuesta a <a href=\"%(href)s\" title=\"%(title)s\" rel=\"nofollow\">\n"
+"en respuesta a <a href=\"%(href)s\" title=\"%(title)s\" rel=\"nofollow\">"
+"\n"
 "            este objeto\n"
 "        </a>"
 

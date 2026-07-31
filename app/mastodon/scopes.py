@@ -23,9 +23,11 @@ from app.mastodon.errors import MastodonError
 # write:blocks/write:mutes split; a token granted just `follow` still
 # satisfies any of these granular scopes.
 FOLLOW_COVERED_PREFIXES = (
+    "read:blocks",
     "read:follows",
-    "write:follows",
+    "read:mutes",
     "write:blocks",
+    "write:follows",
     "write:mutes",
 )
 

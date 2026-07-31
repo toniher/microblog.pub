@@ -442,6 +442,19 @@ The `ObjectInfo` passed to the callback exposes:
 
 Restart microblog.pub after adding or changing `data/stream.py`.
 
+### Blocking accounts
+
+You can block a single actor from anywhere their profile is displayed in the admin
+interface (the `block` button next to their handle).
+
+The `Blocks` page in the admin menu lists every account you have blocked, with an
+`unblock` button for each — it's also where you can check whether someone is still
+blocked. Mastodon clients see the same list through `GET /api/v1/blocks`.
+
+Note that the list is ordered by when each account was first seen by your
+instance, not by when you blocked it: blocks are stored as a flag on the account,
+without a timestamp of their own.
+
 ### Blocking servers
 
 In addition to blocking "single actors" via the admin interface, you can also prevent any communication with entire servers.

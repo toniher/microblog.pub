@@ -8,34 +8,46 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-17 21:46+0200\n"
+"POT-Creation-Date: 2026-07-31 19:32+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.10.3\n"
+"Generated-By: Babel 2.18.0\n"
 
-#: app/admin.py:1263 app/admin.py:1282 app/admin.py:1390
+#: app/admin.py:1327 app/admin.py:1346 app/admin.py:1454
 msgid "Error: object must have a content"
 msgstr ""
 
-#: app/admin.py:1270
+#: app/admin.py:1334
 msgid "Error: invalid language code"
 msgstr ""
 
-#: app/admin.py:1304
+#: app/admin.py:1368
 msgid "Error: Unable to process upload"
 msgstr ""
 
-#: app/config.py:306
+#: app/config.py:308
 msgid "please try again"
 msgstr ""
 
-#: app/config.py:315
+#: app/config.py:318
 #, python-format
 msgid "The security token has expired, %(please_try_again)s"
+msgstr ""
+
+#: app/templates/admin_blocks.html:6
+msgid "Blocked accounts"
+msgstr ""
+
+#: app/templates/admin_blocks.html:24
+msgid "No blocked accounts."
+msgstr ""
+
+#: app/templates/admin_blocks.html:31
+msgid "Block activities"
 msgstr ""
 
 #: app/templates/admin_direct_messages.html:6
@@ -295,51 +307,55 @@ msgstr ""
 msgid "login"
 msgstr ""
 
-#: app/templates/layout.html:17
+#: app/templates/layout.html:20
 msgid "Skip to content"
 msgstr ""
 
-#: app/templates/layout.html:29
+#: app/templates/layout.html:32
 msgid "Public"
 msgstr ""
 
-#: app/templates/layout.html:30
+#: app/templates/layout.html:33
 msgid "New"
 msgstr ""
 
-#: app/templates/layout.html:31
+#: app/templates/layout.html:34
 msgid "Stream"
 msgstr ""
 
-#: app/templates/layout.html:32
+#: app/templates/layout.html:35
 msgid "Inbox"
 msgstr ""
 
-#: app/templates/layout.html:32
+#: app/templates/layout.html:35
 msgid "Outbox"
 msgstr ""
 
-#: app/templates/layout.html:33
+#: app/templates/layout.html:36
 msgid "DMs"
 msgstr ""
 
-#: app/templates/layout.html:34
+#: app/templates/layout.html:37
 msgid "Notifications"
 msgstr ""
 
-#: app/templates/layout.html:35 app/templates/lookup.html:16
+#: app/templates/layout.html:38 app/templates/lookup.html:16
 msgid "Lookup"
 msgstr ""
 
-#: app/templates/layout.html:36
+#: app/templates/layout.html:39
 msgid "Bookmarks"
 msgstr ""
 
-#: app/templates/layout.html:37
+#: app/templates/layout.html:40
+msgid "Blocks"
+msgstr ""
+
+#: app/templates/layout.html:41
 msgid "Logout"
 msgstr ""
 
-#: app/templates/layout.html:55
+#: app/templates/layout.html:59
 #, python-format
 msgid "Powered by %(mbp)s and %(ap)s."
 msgstr ""

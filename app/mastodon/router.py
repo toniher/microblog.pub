@@ -12,6 +12,7 @@ from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
 from typing import Any
+from typing import Sequence
 from typing import cast
 from urllib.parse import urlparse
 
@@ -633,21 +634,8 @@ def _should_refresh_counts(actor: activitypub.models.Actor) -> bool:
     return now() - as_utc(actor.counts_refreshed_at) > _ACTOR_COUNTS_TTL
 
 
-async def _paginated_actor_list(
-    request: Request,
-    db_session: AsyncSession,
-    *,
-    model: type[activitypub.models.Follower] | type[activitypub.models.Following],
-    join_column,
-) -> JSONResponse:
-    params = pagination.parse_pagination(request)
-    query = (
-        select(model)
-        .join(activitypub.models.Actor, join_column == activitypub.models.Actor.id)
-        .options(joinedload(model.actor))
-        .order_by(activitypub.models.Actor.id.desc())
-        .limit(params.limit)
-    )
+def _apply_account_cursor(query, params: pagination.PaginationParams):
+    """Apply max_id/since_id/min_id to a query ordered by `Actor.id` desc."""
     if params.max_id:
         decoded = ids.decode_account_id(params.max_id)
         if decoded is not None:
@@ -659,9 +647,16 @@ async def _paginated_actor_list(
         if decoded is not None:
             query = query.where(activitypub.models.Actor.id > decoded)
 
-    rows = (await db_session.scalars(query)).unique().all()
+    return query
+
+
+async def _respond_with_account_list(
+    request: Request,
+    db_session: AsyncSession,
+    actors: Sequence[activitypub.models.Actor],
+) -> JSONResponse:
     accounts = [
-        await serializers.serialize_account(db_session, row.actor) for row in rows
+        await serializers.serialize_account(db_session, actor) for actor in actors
     ]
 
     response = JSONResponse(content=accounts, status_code=200)
@@ -671,6 +666,29 @@ async def _paginated_actor_list(
     if link_header:
         response.headers["Link"] = link_header
     return response
+
+
+async def _paginated_actor_list(
+    request: Request,
+    db_session: AsyncSession,
+    *,
+    model: type[activitypub.models.Follower] | type[activitypub.models.Following],
+    join_column,
+) -> JSONResponse:
+    params = pagination.parse_pagination(request)
+    query = _apply_account_cursor(
+        select(model)
+        .join(activitypub.models.Actor, join_column == activitypub.models.Actor.id)
+        .options(joinedload(model.actor))
+        .order_by(activitypub.models.Actor.id.desc())
+        .limit(params.limit),
+        params,
+    )
+
+    rows = (await db_session.scalars(query)).unique().all()
+    return await _respond_with_account_list(
+        request, db_session, [row.actor for row in rows]
+    )
 
 
 @router.get("/api/v1/accounts/{account_id}/followers", response_model=None)
@@ -1660,6 +1678,10 @@ async def suggestions_v2_index(
     return JSONResponse(content=[], status_code=200)
 
 
+# /api/v1/blocks is a real, non-stub list (blocks are persisted as
+# Actor.is_blocked) — see the "Social graph" section below.
+
+
 @router.get("/api/v1/mutes", response_model=None)
 async def mutes_index(
     token_info: AccessTokenInfo = Depends(require_scope("read")),
@@ -2404,6 +2426,38 @@ async def accounts_unblock(
         content=await _relationship_for_actor(db_session, account_id, actor),
         status_code=200,
     )
+
+
+@router.get("/api/v1/blocks", response_model=None)
+async def blocks_index(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:blocks")),
+) -> JSONResponse:
+    """Blocked accounts.
+
+    Unlike /api/v1/mutes (a stub, no mute model), blocks are persisted as
+    `Actor.is_blocked`, so this is a real list — clients need it to show and
+    undo blocks.
+
+    Ordered by account id descending (most recently *seen* actor first) rather
+    than by block time: nothing records when the flag was set, and Mastodon's
+    max_id/since_id contract needs the ordering to follow the id anyway.
+    """
+    params = pagination.parse_pagination(request)
+    query = _apply_account_cursor(
+        select(activitypub.models.Actor)
+        .where(
+            activitypub.models.Actor.is_blocked.is_(True),
+            activitypub.models.Actor.is_deleted.is_(False),
+        )
+        .order_by(activitypub.models.Actor.id.desc())
+        .limit(params.limit),
+        params,
+    )
+
+    actors = (await db_session.scalars(query)).unique().all()
+    return await _respond_with_account_list(request, db_session, actors)
 
 
 @router.post("/api/v1/accounts/{account_id}/mute", response_model=None)

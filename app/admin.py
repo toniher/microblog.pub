@@ -338,6 +338,60 @@ async def admin_bookmarks(
     )
 
 
+@router.get("/blocks", response_model=None)
+async def admin_blocks(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    cursor: str | None = None,
+) -> templates.TemplateResponse:
+    where = [
+        activitypub.models.Actor.is_blocked.is_(True),
+        activitypub.models.Actor.is_deleted.is_(False),
+    ]
+    if cursor:
+        where.append(
+            activitypub.models.Actor.created_at < pagination.decode_cursor(cursor)
+        )
+
+    page_size = 20
+    blocks_count = await db_session.scalar(
+        select(func.count(activitypub.models.Actor.id)).where(*where)
+    )
+
+    blocked_actors = (
+        (
+            await db_session.scalars(
+                select(activitypub.models.Actor)
+                .where(*where)
+                .order_by(activitypub.models.Actor.created_at.desc())
+                .limit(page_size)
+            )
+        )
+        .unique()
+        .all()
+    )
+
+    next_cursor = (
+        pagination.encode_cursor(blocked_actors[-1].created_at)
+        if blocked_actors and blocks_count > page_size
+        else None
+    )
+
+    # display_actor() renders the unblock button off this metadata.
+    actors_metadata = await get_actors_metadata(db_session, list(blocked_actors))
+
+    return await templates.render_template(
+        db_session,
+        request,
+        "admin_blocks.html",
+        {
+            "actors_metadata": actors_metadata,
+            "blocked_actors": blocked_actors,
+            "next_cursor": next_cursor,
+        },
+    )
+
+
 @router.get("/stream", response_model=None)
 async def admin_stream(
     request: Request,

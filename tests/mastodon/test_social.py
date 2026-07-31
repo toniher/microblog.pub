@@ -117,6 +117,47 @@ async def test_block_and_unblock(
 
 
 @pytest.mark.asyncio
+async def test_blocks_list(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    actor = factories.ActorFactory.from_remote_actor(ra)
+    account_id = ids.encode_account_id(actor)
+
+    token = await _make_access_token(async_db_session, "read:blocks write:blocks")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    assert client.get("/api/v1/blocks", headers=headers).json() == []
+
+    client.post(f"/api/v1/accounts/{account_id}/block", headers=headers)
+
+    listed = client.get("/api/v1/blocks", headers=headers)
+    assert listed.status_code == 200
+    assert [account["id"] for account in listed.json()] == [account_id]
+
+    client.post(f"/api/v1/accounts/{account_id}/unblock", headers=headers)
+
+    assert client.get("/api/v1/blocks", headers=headers).json() == []
+
+
+def test_blocks_requires_auth(client: TestClient) -> None:
+    assert client.get("/api/v1/blocks").status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_blocks_requires_read_blocks_scope(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    token = await _make_access_token(async_db_session, "write:blocks")
+    response = client.get(
+        "/api/v1/blocks", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_mute_and_unmute_are_noops(
     client: TestClient,
     async_db_session: AsyncSession,

@@ -45,8 +45,10 @@ credentials rather than a separate account system.
 - **Accounts & social graph** — profile lookup (including the batch
   `/api/v1/accounts?id[]=...` form some clients use), your own and remote
   actors' statuses/followers/following (boosts included in your own profile,
-  same as everyone else's), follow/unfollow, block/unblock, mute/unmute,
-  personal notes on an account, and incoming follow request approve/reject.
+  same as everyone else's), follow/unfollow, block/unblock, the list of accounts
+  you've blocked (`/api/v1/blocks`, so blocks can be reviewed and undone from a
+  client), mute/unmute, personal notes on an account, and incoming follow request
+  approve/reject.
   Opening a remote actor you don't follow yet backfills their recent posts and
   follower/following/post counts on demand (fetched and cached, throttled), so
   their profile isn't empty on first view.

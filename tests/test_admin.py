@@ -1,14 +1,17 @@
 from typing import Iterator
 
+import respx
 import starlette
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 import activitypub.models
 from activitypub import activitypub as ap
+from activitypub.tests import factories
 from app.config import generate_csrf_token
 from app.main import app
 from tests.utils import generate_admin_session_cookies
+from tests.utils import setup_remote_actor
 
 
 def _iter_endpoint_routes(
@@ -68,6 +71,33 @@ def test_public_works_authenticated(client: TestClient) -> None:
     assert response.status_code == 302
     resp = client.get("/", cookies=generate_admin_session_cookies())
     assert resp.status_code == 200
+
+
+def test_admin_blocks_lists_blocked_actors(
+    db: Session, client: TestClient, respx_mock: respx.MockRouter
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    blocked = factories.ActorFactory.from_remote_actor(ra)
+    blocked.is_blocked = True
+    db.commit()
+
+    other_ra = setup_remote_actor(respx_mock, base_url="https://example.org")
+    not_blocked = factories.ActorFactory.from_remote_actor(other_ra)
+
+    response = client.get("/admin/blocks", cookies=generate_admin_session_cookies())
+
+    assert response.status_code == 200
+    assert blocked.ap_id in response.text
+    assert not_blocked.ap_id not in response.text
+    # display_actor() offers the unblock action for every listed actor
+    assert "/admin/actions/unblock" in response.text
+
+
+def test_admin_blocks_with_no_blocked_actor(client: TestClient) -> None:
+    response = client.get("/admin/blocks", cookies=generate_admin_session_cookies())
+
+    assert response.status_code == 200
+    assert "No blocked accounts." in response.text
 
 
 def test_admin_pin_enforces_max_pinned_limit(db: Session, client: TestClient) -> None:
