@@ -125,6 +125,80 @@ async def test_notifications_list_marks_as_read(
 
 
 @pytest.mark.asyncio
+async def test_notifications_unread_count(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    follower = setup_remote_actor_as_follower(ra)
+    assert follower.actor is not None
+
+    unread = models.Notification(
+        notification_type=models.NotificationType.NEW_FOLLOWER,
+        actor_id=follower.actor.id,
+        is_new=True,
+    )
+    already_read = models.Notification(
+        notification_type=models.NotificationType.LIKE,
+        actor_id=follower.actor.id,
+        is_new=False,
+    )
+    # Has no Mastodon equivalent — must never be counted.
+    unmapped = models.Notification(
+        notification_type=models.NotificationType.UNDO_LIKE,
+        actor_id=follower.actor.id,
+        is_new=True,
+    )
+    async_db_session.add_all([unread, already_read, unmapped])
+    await async_db_session.commit()
+
+    token = await _make_access_token(async_db_session, "read:notifications")
+    response = client.get(
+        "/api/v1/notifications/unread_count",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"count": 1}
+
+
+@pytest.mark.asyncio
+async def test_notifications_unread_count_drops_to_zero_after_list_marks_read(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    follower = setup_remote_actor_as_follower(ra)
+    assert follower.actor is not None
+
+    notif = models.Notification(
+        notification_type=models.NotificationType.NEW_FOLLOWER,
+        actor_id=follower.actor.id,
+        is_new=True,
+    )
+    async_db_session.add(notif)
+    await async_db_session.commit()
+
+    token = await _make_access_token(async_db_session, "read:notifications")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    before = client.get("/api/v1/notifications/unread_count", headers=headers)
+    assert before.json() == {"count": 1}
+
+    client.get("/api/v1/notifications", headers=headers)
+
+    after = client.get("/api/v1/notifications/unread_count", headers=headers)
+    assert after.json() == {"count": 0}
+
+
+def test_notifications_unread_count_requires_auth(client: TestClient) -> None:
+    response = client.get("/api/v1/notifications/unread_count")
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
 async def test_notifications_list_formats_created_at_with_millisecond_precision(
     client: TestClient,
     async_db_session: AsyncSession,

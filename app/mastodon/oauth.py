@@ -21,6 +21,7 @@ from app.admin import user_session_or_redirect
 from app.database import AsyncSession
 from app.database import get_db_session
 from app.indieauth import TokenGrantError
+from app.indieauth import _check_access_token
 from app.indieauth import enforce_access_token
 from app.indieauth import indieauth_authorization_endpoint
 from app.indieauth import issue_access_token
@@ -170,3 +171,29 @@ async def oauth_token(
         },
         status_code=200,
     )
+
+
+@router.post("/oauth/revoke", response_model=None)
+async def oauth_revoke(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+) -> JSONResponse:
+    """Log-out support: clients call this so the token is dead server-side,
+    not just forgotten locally."""
+    content_type, _, _ = request.headers.get("Content-Type", "").partition(";")
+    if content_type.strip().lower() == "application/json":
+        form_data = await request.json()
+    else:
+        form_data = await request.form()
+
+    token = str(form_data.get("token", ""))
+    if token:
+        is_token_valid, token_info = await _check_access_token(db_session, token)
+        if is_token_valid:
+            if not token_info:
+                raise ValueError("Should never happen")
+
+            token_info.is_revoked = True
+            await db_session.commit()
+
+    return JSONResponse(content={}, status_code=200)

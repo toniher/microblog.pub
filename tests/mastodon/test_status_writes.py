@@ -765,3 +765,86 @@ async def test_statuses_update_requires_status(
         data={"status": ""},
     )
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_statuses_history_never_edited_returns_single_entry(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    token = await _make_access_token(async_db_session, "write:statuses")
+    create_response = client.post(
+        "/api/v1/statuses",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"status": "Original text"},
+    )
+    status_id = create_response.json()["id"]
+
+    response = client.get(f"/api/v1/statuses/{status_id}/history")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["content"] == "<p>Original text</p>\n"
+    assert data[0]["account"]["id"] == create_response.json()["account"]["id"]
+
+
+@pytest.mark.asyncio
+async def test_statuses_history_lists_all_edits_in_ascending_order(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    token = await _make_access_token(async_db_session, "read:statuses write:statuses")
+    create_response = client.post(
+        "/api/v1/statuses",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"status": "Version one"},
+    )
+    status_id = create_response.json()["id"]
+
+    client.put(
+        f"/api/v1/statuses/{status_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"status": "Version two"},
+    )
+    client.put(
+        f"/api/v1/statuses/{status_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"status": "Version three", "sensitive": "true"},
+    )
+
+    response = client.get(f"/api/v1/statuses/{status_id}/history")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert [entry["content"] for entry in data] == [
+        "<p>Version one</p>\n",
+        "<p>Version two</p>\n",
+        "<p>Version three</p>\n",
+    ]
+    assert data[-1]["sensitive"] is True
+    assert data[0]["sensitive"] is False
+    # Ascending order: each entry's created_at is <= the next's.
+    assert data[0]["created_at"] <= data[1]["created_at"] <= data[2]["created_at"]
+
+
+def test_statuses_history_not_found_for_remote_status(
+    client: TestClient,
+    respx_mock: respx.MockRouter,
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    follower = setup_remote_actor_as_follower(ra)
+    remote_note = RemoteObject(
+        factories.build_note_object(from_remote_actor=ra, content="From afar"),
+        ra,
+    )
+    inbox_object = factories.InboxObjectFactory.from_remote_object(
+        remote_note, follower.actor
+    )
+
+    status_id = ids.encode_inbox_id(inbox_object)
+    response = client.get(f"/api/v1/statuses/{status_id}/history")
+    assert response.status_code == 404
+
+
+def test_statuses_history_not_found(client: TestClient) -> None:
+    response = client.get("/api/v1/statuses/999999/history")
+    assert response.status_code == 404

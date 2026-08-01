@@ -22,7 +22,9 @@ same followers. The app just becomes another window onto your existing instance.
 There's nothing to enable server-side — the API is always mounted, and
 registrations/logins go through the same OAuth2 flow as
 [IndieAuth](https://www.w3.org/TR/indieauth/), reusing your existing admin
-credentials rather than a separate account system.
+credentials rather than a separate account system. "Log out" in the app calls
+`POST /oauth/revoke`, which kills the token server-side too — it isn't just
+forgotten on the device.
 
 ## What works
 
@@ -31,6 +33,8 @@ credentials rather than a separate account system.
   `min_id` pagination and a `Link` header, like real Mastodon.
 - **Statuses** — read, create, edit, delete; replies, content warnings,
   sensitive/media attachments, polls (including voting), and per-post language.
+  Editing keeps full history (`/api/v1/statuses/:id/history`), so clients can
+  show what a post looked like before each edit.
 - **Interactions** — favourite, reblog, bookmark, pin, with their "who
   favourited/reblogged this" endpoints.
 - **Link previews** — posts containing a link carry a Mastodon `card`, built from
@@ -41,14 +45,19 @@ credentials rather than a separate account system.
   (`/api/v1/conversations`), grouped the same way the `Direct messages` admin page
   groups them, with mark-as-read support.
 - **Notifications** — follows, favourites, reblogs, mentions, moves; read
-  state, per-type filtering, clear/dismiss.
+  state, per-type filtering, clear/dismiss, and an unread count
+  (`/api/v1/notifications/unread_count`) for badge counts.
+- **Read-position sync** — `/api/v1/markers` is genuinely persisted (home and
+  notifications timelines), so "resume where I left off" survives across
+  devices and reinstalls.
 - **Accounts & social graph** — profile lookup (including the batch
   `/api/v1/accounts?id[]=...` form some clients use), your own and remote
   actors' statuses/followers/following (boosts included in your own profile,
   same as everyone else's), follow/unfollow, block/unblock, the list of accounts
   you've blocked (`/api/v1/blocks`, so blocks can be reviewed and undone from a
   client), personal notes on an account, and incoming follow request
-  approve/reject.
+  approve/reject, with a real `follow_requests_count` badge on your own
+  profile.
   Opening a remote actor you don't follow yet backfills their recent posts and
   follower/following/post counts on demand (fetched and cached, throttled), so
   their profile isn't empty on first view.

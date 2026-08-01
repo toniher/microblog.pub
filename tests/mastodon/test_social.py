@@ -368,6 +368,50 @@ async def test_follow_requests_list_and_authorize(
 
 
 @pytest.mark.asyncio
+async def test_follow_requests_count_in_verify_credentials(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    actor = factories.ActorFactory.from_remote_actor(ra)
+
+    follow_activity = RemoteObject(
+        factories.build_follow_activity(
+            from_remote_actor=ra, for_remote_actor=LOCAL_ACTOR
+        ),
+        ra,
+    )
+    inbox_object = factories.InboxObjectFactory.from_remote_object(
+        follow_activity, actor
+    )
+    notif = models.Notification(
+        notification_type=models.NotificationType.PENDING_INCOMING_FOLLOWER,
+        actor_id=actor.id,
+        inbox_object_id=inbox_object.id,
+    )
+    async_db_session.add(notif)
+    await async_db_session.commit()
+
+    account_id = ids.encode_account_id(actor)
+    token = await _make_access_token(
+        async_db_session, "read:accounts read:follows write:follows"
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.get("/api/v1/accounts/verify_credentials", headers=headers)
+    assert response.json()["source"]["follow_requests_count"] == 1
+
+    authorized = client.post(
+        f"/api/v1/follow_requests/{account_id}/authorize", headers=headers
+    )
+    assert authorized.status_code == 200
+
+    response_after = client.get("/api/v1/accounts/verify_credentials", headers=headers)
+    assert response_after.json()["source"]["follow_requests_count"] == 0
+
+
+@pytest.mark.asyncio
 async def test_follow_requests_reject(
     client: TestClient,
     async_db_session: AsyncSession,

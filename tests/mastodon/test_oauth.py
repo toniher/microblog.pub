@@ -363,3 +363,55 @@ async def test_apps_verify_credentials_with_authorized_token(
     data = response.json()
     assert data["name"] == "Test Mastodon Client"
     assert data["vapid_key"] == ""
+
+
+@pytest.mark.asyncio
+async def test_oauth_revoke_kills_the_token_server_side(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    await _register_client(async_db_session)
+    verifier = "unit-test-code-verifier-1234567890"
+
+    authorize_response = _authorize(
+        client,
+        client_id="mastodon-client",
+        redirect_uri="https://client.example/callback",
+        code_challenge=_s256_challenge(verifier),
+        code_challenge_method="S256",
+    )
+    code = _extract_code(authorize_response.headers["refresh"])
+
+    token_response = client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": "https://client.example/callback",
+            "client_id": "mastodon-client",
+            "code_verifier": verifier,
+        },
+    )
+    access_token = token_response.json()["access_token"]
+
+    revoke_response = client.post(
+        "/oauth/revoke",
+        data={
+            "client_id": "mastodon-client",
+            "client_secret": "mastodon-secret",
+            "token": access_token,
+        },
+    )
+    assert revoke_response.status_code == 200
+    assert revoke_response.json() == {}
+
+    response = client.get(
+        "/api/v1/apps/verify_credentials",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert response.status_code == 401
+
+
+def test_oauth_revoke_with_unknown_token_is_a_noop(client: TestClient) -> None:
+    response = client.post("/oauth/revoke", data={"token": "not-a-real-token"})
+    assert response.status_code == 200
+    assert response.json() == {}

@@ -24,6 +24,7 @@ from activitypub import activitypub as ap
 from activitypub.actor import LOCAL_ACTOR
 from activitypub.actor import Actor as BaseActor
 from activitypub.ap_object import Attachment
+from activitypub.ap_object import Object as APObjectView
 from activitypub.boxes import AnyboxObject
 from activitypub.boxes import get_anybox_object_by_ap_id
 from activitypub.boxes import public_outbox_objects_count
@@ -444,6 +445,55 @@ async def serialize_status(
         "language": _object_language(obj) or config.LANGUAGE_CODE,
         "text": None,
         "filtered": [],
+    }
+
+
+class _RevisionSnapshot(APObjectView):
+    """Wraps one `OutboxObject.revisions[]` entry (or the object's own live
+    state) in the same `Object` interface `serialize_status` uses, so
+    `content`/`summary`/`sensitive`/`attachments` don't need reimplementing.
+    """
+
+    def __init__(self, ap_object: ap.RawObject, actor: BaseActor) -> None:
+        self._ap_object = ap_object
+        self._actor = actor
+
+    @property
+    def ap_object(self) -> ap.RawObject:
+        return self._ap_object
+
+    @property
+    def actor(self) -> BaseActor:
+        return self._actor
+
+
+def serialize_status_edit(
+    ap_object: ap.RawObject,
+    created_at_raw: str | None,
+    actor: BaseActor,
+    account: dict,
+    status_id: str,
+) -> dict:
+    snapshot = _RevisionSnapshot(ap_object, actor)
+    created_at = (
+        parse_isoformat(created_at_raw) if created_at_raw else _FALLBACK_CREATED_AT
+    )
+
+    return {
+        "content": _as_str(snapshot.content),
+        "spoiler_text": _as_str(snapshot.summary),
+        "sensitive": bool(snapshot.sensitive),
+        "created_at": format_datetime(created_at),
+        "account": account,
+        # Polls aren't editable through send_update — every revision shares
+        # the same poll as the live status, so there's nothing distinct to
+        # report per historical entry.
+        "poll": None,
+        "media_attachments": [
+            serialize_media_attachment(attachment, index, status_id)
+            for index, attachment in enumerate(snapshot.attachments)
+        ],
+        "emojis": [],
     }
 
 

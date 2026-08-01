@@ -197,6 +197,22 @@ class Notification(Base):
     is_rejected = Column(Boolean, nullable=True)
 
 
+class Marker(Base):
+    """Cross-device read-position sync (`GET/POST /api/v1/markers`).
+
+    Single-user instance, so `timeline` alone ("home"/"notifications") is
+    the natural unique key — no per-account scoping needed.
+    """
+
+    __tablename__ = "marker"
+
+    id = Column(Integer, primary_key=True, index=True)
+    timeline = Column(String, nullable=False, unique=True, index=True)
+    last_read_id = Column(String, nullable=False)
+    version = Column(Integer, nullable=False, default=1)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=now)
+
+
 def notification_not_muted() -> Any:
     """Where-clause dropping notifications sent by a muted actor.
 

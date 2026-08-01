@@ -896,7 +896,12 @@ async def send_update(
     if not outbox_object:
         raise ValueError(f"{ap_id} not found")
 
-    revisions = outbox_object.revisions or []
+    # Copy rather than mutate outbox_object.revisions in place: appending to
+    # the same list object SQLAlchemy already holds as the column's current
+    # value means old/new compare equal on flush (same identity), so the
+    # reassignment below is silently skipped and every edit after the first
+    # is dropped from history.
+    revisions = list(outbox_object.revisions or [])
     revisions.append(
         {
             "ap_object": outbox_object.ap_object,

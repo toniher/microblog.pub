@@ -224,44 +224,90 @@ async def announcements(
     return JSONResponse(content=[], status_code=200)
 
 
-# Markers aren't persisted (no schema for cross-device read-position sync
-# yet); GET always reports none saved, POST accepts and echoes back what was
-# sent without storing it, so well-behaved clients don't error out.
 _MARKER_TIMELINES = ("home", "notifications")
+
+
+def _serialize_marker(marker: models.Marker) -> dict:
+    return {
+        "last_read_id": marker.last_read_id,
+        "version": marker.version,
+        "updated_at": serializers.format_datetime(marker.updated_at or now()),
+    }
 
 
 @router.get("/api/v1/markers", response_model=None)
 async def get_markers(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
     token_info: AccessTokenInfo = Depends(require_scope("read:statuses")),
 ) -> JSONResponse:
-    return JSONResponse(content={}, status_code=200)
+    requested = request.query_params.getlist("timeline[]") or list(_MARKER_TIMELINES)
+    markers = (
+        await db_session.scalars(
+            select(models.Marker).where(models.Marker.timeline.in_(requested))
+        )
+    ).all()
+    return JSONResponse(
+        content={marker.timeline: _serialize_marker(marker) for marker in markers},
+        status_code=200,
+    )
 
 
 @router.post("/api/v1/markers", response_model=None)
 async def post_markers(
     request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
     token_info: AccessTokenInfo = Depends(require_scope("write:statuses")),
 ) -> JSONResponse:
     form_data = await request.form()
-    now_iso = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
     content = {}
     for timeline in _MARKER_TIMELINES:
         last_read_id = form_data.get(f"{timeline}[last_read_id]")
-        if last_read_id is not None:
-            content[timeline] = {
-                "last_read_id": str(last_read_id),
-                "version": 1,
-                "updated_at": now_iso,
-            }
+        if last_read_id is None:
+            continue
 
-    return JSONResponse(content=content, status_code=200)
+        marker = (
+            await db_session.scalars(
+                select(models.Marker).where(models.Marker.timeline == timeline)
+            )
+        ).one_or_none()
+        if marker is None:
+            marker = models.Marker(timeline=timeline)
+            db_session.add(marker)
+
+        marker.last_read_id = str(last_read_id)
+        marker.version = (marker.version or 0) + 1
+        marker.updated_at = now()
+        content[timeline] = marker
+
+    await db_session.commit()
+
+    return JSONResponse(
+        content={
+            timeline: _serialize_marker(marker) for timeline, marker in content.items()
+        },
+        status_code=200,
+    )
 
 
 # --- Accounts + relationships -----------------------------------------------
 # Static-path routes (verify_credentials/relationships/lookup) are registered
 # before the dynamic "/{account_id}" ones below so FastAPI doesn't try to
 # match them as an account id.
+
+
+async def _pending_follow_requests_count(db_session: AsyncSession) -> int:
+    return await db_session.scalar(
+        select(func.count())
+        .select_from(models.Notification)
+        .where(
+            models.Notification.notification_type
+            == models.NotificationType.PENDING_INCOMING_FOLLOWER,
+            models.Notification.is_accepted.is_(None),
+            models.Notification.is_rejected.is_(None),
+        )
+    )
 
 
 @router.get("/api/v1/accounts/verify_credentials", response_model=None)
@@ -276,7 +322,7 @@ async def accounts_verify_credentials(
         "language": config.LANGUAGE_CODE,
         "note": account["note"],
         "fields": account["fields"],
-        "follow_requests_count": 0,
+        "follow_requests_count": await _pending_follow_requests_count(db_session),
     }
     return JSONResponse(content=account, status_code=200)
 
@@ -797,6 +843,45 @@ async def statuses_source(
     )
 
 
+@router.get("/api/v1/statuses/{status_id}/history", response_model=None)
+async def statuses_history(
+    status_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+) -> JSONResponse:
+    # Unlike /source (editing-only, always requires auth), history is public
+    # for any status a viewer could already see — same visibility check as
+    # /context. But the `revisions` column (and the pre-edit snapshots it
+    # holds) only exists on OutboxObject, so remote (InboxObject) statuses
+    # 404 here too.
+    obj = await _get_visible_status_or_404(request, db_session, status_id)
+    if not isinstance(obj, activitypub.models.OutboxObject):
+        raise MastodonError(404, "not_found", "status not found")
+
+    account = await serializers.serialize_account(db_session, obj.actor)
+    entries = [
+        serializers.serialize_status_edit(
+            revision["ap_object"],
+            revision.get("updated"),
+            obj.actor,
+            account,
+            status_id,
+        )
+        for revision in obj.revisions or []
+    ]
+    entries.append(
+        serializers.serialize_status_edit(
+            obj.ap_object,
+            obj.ap_object.get("updated") or obj.ap_object.get("published"),
+            obj.actor,
+            account,
+            status_id,
+        )
+    )
+
+    return JSONResponse(content=entries, status_code=200)
+
+
 def _find_node_with_ancestors(
     node: ReplyTreeNode, target_ap_id: str, path: list[ReplyTreeNode]
 ) -> tuple[ReplyTreeNode, list[ReplyTreeNode]] | None:
@@ -1231,13 +1316,7 @@ async def _serialize_notification(
     return result
 
 
-@router.get("/api/v1/notifications", response_model=None)
-async def notifications_list(
-    request: Request,
-    db_session: AsyncSession = Depends(get_db_session),
-    token_info: AccessTokenInfo = Depends(require_scope("read:notifications")),
-) -> JSONResponse:
-    params = pagination.parse_pagination(request)
+def _allowed_notification_types(request: Request) -> list[models.NotificationType]:
     include_types = set(request.query_params.getlist("types[]"))
     exclude_types = set(request.query_params.getlist("exclude_types[]"))
 
@@ -1254,6 +1333,17 @@ async def notifications_list(
             for t in allowed_internal_types
             if _NOTIFICATION_TYPE_MAP[t] not in exclude_types
         ]
+    return allowed_internal_types
+
+
+@router.get("/api/v1/notifications", response_model=None)
+async def notifications_list(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:notifications")),
+) -> JSONResponse:
+    params = pagination.parse_pagination(request)
+    allowed_internal_types = _allowed_notification_types(request)
 
     query = (
         select(models.Notification)
@@ -1358,6 +1448,29 @@ async def notification_requests_index(
     token_info: AccessTokenInfo = Depends(require_scope("read:notifications")),
 ) -> JSONResponse:
     return JSONResponse(content=[], status_code=200)
+
+
+@router.get("/api/v1/notifications/unread_count", response_model=None)
+async def notifications_unread_count(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:notifications")),
+) -> JSONResponse:
+    allowed_internal_types = _allowed_notification_types(request)
+    limit = min(int(request.query_params.get("limit", 100)), 1000)
+
+    query = select(func.count()).select_from(
+        select(models.Notification.id)
+        .where(
+            models.Notification.notification_type.in_(allowed_internal_types),
+            models.Notification.is_new.is_(True),
+            models.notification_not_muted(),
+        )
+        .limit(limit)
+        .subquery()
+    )
+    count = await db_session.scalar(query)
+    return JSONResponse(content={"count": count}, status_code=200)
 
 
 @router.get("/api/v1/notifications/{notification_id}", response_model=None)

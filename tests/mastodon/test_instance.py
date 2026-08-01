@@ -97,7 +97,7 @@ async def test_announcements_requires_scope_and_returns_empty_list(
 
 
 @pytest.mark.asyncio
-async def test_markers_get_is_always_empty(
+async def test_markers_get_is_empty_when_none_saved(
     client: TestClient, async_db_session: AsyncSession
 ) -> None:
     token = await _make_access_token(async_db_session, "read:statuses")
@@ -110,27 +110,5 @@ async def test_markers_get_is_always_empty(
     assert response.json() == {}
 
 
-@pytest.mark.asyncio
-async def test_markers_post_echoes_without_persisting(
-    client: TestClient, async_db_session: AsyncSession
-) -> None:
-    token = await _make_access_token(async_db_session, "write:statuses")
-    headers = {"Authorization": f"Bearer {token}"}
-
-    post_response = client.post(
-        "/api/v1/markers",
-        headers=headers,
-        data={"home[last_read_id]": "42"},
-    )
-    assert post_response.status_code == 200
-    data = post_response.json()
-    assert data["home"]["last_read_id"] == "42"
-    assert "notifications" not in data
-
-    # Not actually persisted: a subsequent GET (even with a read-capable
-    # token) reports nothing saved.
-    read_token = await _make_access_token(async_db_session, "read:statuses")
-    get_response = client.get(
-        "/api/v1/markers", headers={"Authorization": f"Bearer {read_token}"}
-    )
-    assert get_response.json() == {}
+# Markers are now genuinely persisted (see tests/mastodon/test_markers.py for
+# the full round-trip coverage) — this used to be an echo-only stub.
