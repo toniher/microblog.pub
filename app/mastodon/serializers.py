@@ -87,6 +87,48 @@ async def _owner_counts(db_session: AsyncSession) -> tuple[int, int, int]:
     return followers_count, following_count, statuses_count
 
 
+async def serialize_featured_tags(db_session: AsyncSession) -> list[dict]:
+    """Map the profile's `featured_tags` config list to Mastodon's
+    FeaturedTag entity.
+
+    Read-only: featured tags are configured in `data/profile.toml`, not
+    stored in the DB, so there's no POST/DELETE — just this GET-backed view.
+    Counts/`last_status_at` come from `TaggedOutboxObject`, the same index
+    `GET /t/{tag}` uses, rather than the Mastodon router's bounded JSON-scan
+    hashtag timeline.
+    """
+    featured_tags = []
+    for index, raw_tag in enumerate(config.FEATURED_TAGS):
+        tag = raw_tag.lstrip("#").lower()
+        where = [
+            activitypub.models.TaggedOutboxObject.tag == tag,
+            activitypub.models.OutboxObject.visibility == ap.VisibilityEnum.PUBLIC,
+            activitypub.models.OutboxObject.is_deleted.is_(False),
+        ]
+        statuses_count, last_status_at = (
+            await db_session.execute(
+                select(
+                    func.count(activitypub.models.OutboxObject.id),
+                    func.max(activitypub.models.OutboxObject.ap_published_at),
+                )
+                .join(activitypub.models.TaggedOutboxObject)
+                .where(*where)
+            )
+        ).one()
+        featured_tags.append(
+            {
+                "id": str(index),
+                "name": tag,
+                "url": f"{config.BASE_URL}/t/{tag}",
+                "statuses_count": statuses_count or 0,
+                "last_status_at": (
+                    last_status_at.date().isoformat() if last_status_at else None
+                ),
+            }
+        )
+    return featured_tags
+
+
 def _fields(actor: BaseActor) -> list[dict]:
     return [
         {

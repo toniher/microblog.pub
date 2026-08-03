@@ -67,6 +67,10 @@ forgotten on the device.
   disappears from every timeline (their boosts, and other people's boosts of
   them, included) but keeps following you and stays reachable from their
   profile — nothing is federated, so they can't tell.
+- **Featured tags** (`/api/v1/featured_tags`) — hashtags pinned to your profile via
+  `featured_tags` in `profile.toml`, shown with their post counts. Read-only: this
+  mirrors the config file, so there's no `POST`/`DELETE` to add or remove one from
+  a client.
 - **Search** (`/api/v2/search`) — accounts, statuses, and hashtags.
 - **Media uploads**, including descriptions/alt text.
 

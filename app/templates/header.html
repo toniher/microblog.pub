@@ -23,6 +23,14 @@
     {% endfor %}
 </div>
 
+{% if FEATURED_TAGS %}
+<div id="featured-tags">
+    {% for tag in FEATURED_TAGS %}
+    <a href="{{ BASE_URL }}/t/{{ tag | lower }}" class="label-btn">#{{ tag }}</a>
+    {% endfor %}
+</div>
+{% endif %}
+
 </div>
 
 {%- macro header_link(url, text) -%}

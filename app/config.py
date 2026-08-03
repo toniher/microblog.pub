@@ -136,6 +136,10 @@ class Config(pydantic.BaseModel):
 
     disabled_notifications: list[str] = []
 
+    # Hashtags pinned to the profile (Mastodon's "featured tags"), shown as-is
+    # without the leading "#".
+    featured_tags: list[str] = []
+
     # Only set when the app is served on a non-root path
     id: str | None = None
 
@@ -191,6 +195,7 @@ HIDES_FOLLOWERS = CONFIG.hides_followers
 HIDES_FOLLOWING = CONFIG.hides_following
 LANGUAGE_CODE = CONFIG.language_code
 ENABLE_MICRODATA = CONFIG.enable_microdata
+FEATURED_TAGS = CONFIG.featured_tags
 PRIVACY_REPLACE = None
 if CONFIG.privacy_replace:
     PRIVACY_REPLACE = {pr.domain: pr.replace_by for pr in CONFIG.privacy_replace}

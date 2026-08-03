@@ -490,3 +490,4 @@ _templates.env.globals["LANGUAGE_CODE"] = config.LANGUAGE_CODE
 _templates.env.globals["ENABLE_MICRODATA"] = config.ENABLE_MICRODATA
 _templates.env.globals["NAVBAR_ITEMS"] = config.NavBarItems
 _templates.env.globals["ICON_URL"] = config.ICON_URL
+_templates.env.globals["FEATURED_TAGS"] = config.FEATURED_TAGS

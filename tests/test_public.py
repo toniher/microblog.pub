@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from activitypub import activitypub as ap
 from activitypub.actor import LOCAL_ACTOR
+from app import templates
 
 _ACCEPTED_AP_HEADERS = [
     "application/activity+json",
@@ -19,6 +20,59 @@ def test_index__html(db: Session, client: TestClient):
     response = client.get("/")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
+
+
+def _use_shipped_templates_only(
+    monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+) -> None:
+    """Ignore any local `data/templates` override so a test exercises the
+    shipped `app/templates/*.html`, not an instance owner's fork of it.
+
+    Jinja's `auto_reload` only re-checks the mtime of the file a template was
+    *previously* resolved from — it doesn't re-scan the search path — so a
+    template already cached from `data/templates` earlier in the test run
+    would otherwise survive the `searchpath` swap below. Clearing the cache
+    forces re-resolution against the new search path; the finalizer drops
+    that override-free entry again once `searchpath` itself has been
+    reverted, so later tests don't inherit it.
+    """
+    env = templates._templates.env
+    assert env.cache is not None
+    monkeypatch.setattr(env.loader, "searchpath", ["app/templates"])
+    env.cache.clear()
+    request.addfinalizer(env.cache.clear)
+
+
+def test_index__html_shows_featured_tags(
+    db: Session,
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
+) -> None:
+    monkeypatch.setitem(
+        templates._templates.env.globals, "FEATURED_TAGS", ["Microblogging"]
+    )
+    _use_shipped_templates_only(monkeypatch, request)
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert '<a href="http://localhost:8000/t/microblogging"' in response.text
+    assert "#Microblogging" in response.text
+
+
+def test_index__html_no_featured_tags_by_default(
+    db: Session,
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
+) -> None:
+    _use_shipped_templates_only(monkeypatch, request)
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert 'id="featured-tags"' not in response.text
 
 
 @pytest.mark.parametrize("accept", _ACCEPTED_AP_HEADERS)

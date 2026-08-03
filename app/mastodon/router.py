@@ -783,6 +783,23 @@ async def accounts_following(
     )
 
 
+@router.get("/api/v1/accounts/{account_id}/featured_tags", response_model=None)
+async def accounts_featured_tags(
+    account_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
+) -> JSONResponse:
+    if account_id != ids.LOCAL_ACTOR_ID:
+        # We only have featured tags for our own profile (configured in
+        # `data/profile.toml`) — a remote actor's featured tags live on
+        # their home server.
+        return JSONResponse(content=[], status_code=200)
+
+    return JSONResponse(
+        content=await serializers.serialize_featured_tags(db_session),
+        status_code=200,
+    )
+
+
 # --- Statuses ----------------------------------------------------------------
 
 
@@ -1806,6 +1823,17 @@ async def suggestions_v2_index(
 
 
 # Public, unauthenticated in real Mastodon too.
+
+
+@router.get("/api/v1/featured_tags", response_model=None)
+async def featured_tags_index(
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:accounts")),
+) -> JSONResponse:
+    return JSONResponse(
+        content=await serializers.serialize_featured_tags(db_session),
+        status_code=200,
+    )
 
 
 @router.get("/api/v1/directory", response_model=None)

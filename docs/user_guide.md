@@ -89,6 +89,22 @@ metadata = [
 ]
 ```
 
+### Featured tags
+
+You can pin hashtags to your profile with the `featured_tags` config item. Mastodon
+clients (Tusky, Ivory, Ice Cubes…) show these as clickable badges on your profile,
+alongside how many of your posts use each tag.
+
+```toml
+featured_tags = ["microblogging", "activitypub"]
+```
+
+This is read-only: featured tags are configured in `profile.toml`, not editable from
+a client, so `POST`/`DELETE /api/v1/featured_tags` aren't implemented — only the `GET`
+endpoints (`/api/v1/featured_tags` and `/api/v1/accounts/:id/featured_tags`). They're
+also shown on the public web profile, linking to the matching [hashtag
+page](#public-website).
+
 ### Followers and following
 
 These `profile.toml` items control how followers are handled and what's shown
