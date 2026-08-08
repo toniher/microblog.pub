@@ -184,6 +184,82 @@ async def instance_v2(
     )
 
 
+@router.get("/api/v1/instance/rules", response_model=None)
+async def instance_rules() -> JSONResponse:
+    return JSONResponse(content=[], status_code=200)
+
+
+@router.get("/api/v1/instance/extended_description", response_model=None)
+async def instance_extended_description() -> JSONResponse:
+    return JSONResponse(
+        content=serializers.serialize_extended_description(), status_code=200
+    )
+
+
+@router.get("/api/v1/instance/peers", response_model=None)
+async def instance_peers() -> JSONResponse:
+    # Deliberately empty rather than the real federated-peers list: exposing
+    # who you've federated with is a privacy tradeoff (and a ready-made probe
+    # target), not just a data-availability gap, so this instance opts out.
+    return JSONResponse(content=[], status_code=200)
+
+
+@router.get("/api/v1/instance/domain_blocks", response_model=None)
+async def instance_domain_blocks() -> JSONResponse:
+    return JSONResponse(
+        content=serializers.serialize_instance_domain_blocks(), status_code=200
+    )
+
+
+_ACTIVITY_WEEKS = 12
+
+
+def _week_start(dt: datetime) -> datetime:
+    return (dt - timedelta(days=dt.isoweekday() - 1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+
+
+@router.get("/api/v1/instance/activity", response_model=None)
+async def instance_activity(
+    db_session: AsyncSession = Depends(get_db_session),
+) -> JSONResponse:
+    """Weekly stats for the last `_ACTIVITY_WEEKS` weeks, most recent first.
+
+    `registrations` is always 0 (registration is disabled on a single-user
+    instance). `logins` counts new `IndieAuthAccessToken` rows — the same
+    OAuth flow backs every client login here, so a fresh token is a login.
+    """
+    current_week_start = _week_start(now())
+    weeks = []
+    for offset in range(_ACTIVITY_WEEKS):
+        week_start = current_week_start - timedelta(weeks=offset)
+        week_end = week_start + timedelta(weeks=1)
+        statuses_count = await db_session.scalar(
+            select(func.count(activitypub.models.OutboxObject.id)).where(
+                activitypub.models.OutboxObject.visibility == ap.VisibilityEnum.PUBLIC,
+                activitypub.models.OutboxObject.is_deleted.is_(False),
+                activitypub.models.OutboxObject.ap_published_at >= week_start,
+                activitypub.models.OutboxObject.ap_published_at < week_end,
+            )
+        )
+        logins_count = await db_session.scalar(
+            select(func.count(models.IndieAuthAccessToken.id)).where(
+                models.IndieAuthAccessToken.created_at >= week_start,
+                models.IndieAuthAccessToken.created_at < week_end,
+            )
+        )
+        weeks.append(
+            {
+                "week": str(int(week_start.timestamp())),
+                "statuses": str(statuses_count or 0),
+                "logins": str(logins_count or 0),
+                "registrations": "0",
+            }
+        )
+    return JSONResponse(content=weeks, status_code=200)
+
+
 @router.get("/api/v1/custom_emojis", response_model=None)
 async def custom_emojis() -> JSONResponse:
     return JSONResponse(

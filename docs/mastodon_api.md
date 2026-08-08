@@ -80,6 +80,12 @@ forgotten on the device.
   a client.
 - **Search** (`/api/v2/search`) — accounts, statuses, and hashtags.
 - **Media uploads**, including descriptions/alt text.
+- **Instance "about" extras** — `/api/v1/instance/rules` (empty, none configured),
+  `/extended_description` (the same bio text as the instance description), the
+  public `/instance/domain_blocks` transparency list (hostname, digest, reason —
+  distinct from the authenticated `/api/v1/domain_blocks` above), and `/activity`
+  (12 weeks of post counts and login counts, so "about this server" screens have
+  something to plot instead of blanks).
 
 ## What doesn't (single-user degradations)
 
@@ -90,6 +96,9 @@ instead of crashing:
 
 - **Lists, filters, suggestions, the directory, trends, and familiar
   followers** — always empty.
+- **Federated peers** (`/api/v1/instance/peers`) — always empty. This one's a
+  deliberate privacy choice rather than a missing feature: the data exists,
+  but publishing which servers you've federated with is worth opting out of.
 - **Notification requests / policy** — this server never filters notifications,
   so the filtered-notifications queue (`/api/v1/notifications/requests`) is
   always empty and the policy (`/api/v2/notifications/policy`) always reports

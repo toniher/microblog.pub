@@ -11,6 +11,7 @@ see `app/mastodon/ids.py`) and a cached remote actor (a
 wrapper interface.
 """
 
+import hashlib
 import mimetypes
 from datetime import datetime
 from datetime import timezone
@@ -101,6 +102,44 @@ async def _owner_counts(db_session: AsyncSession) -> tuple[int, int, int]:
     )
     statuses_count = await public_outbox_objects_count(db_session)
     return followers_count, following_count, statuses_count
+
+
+def serialize_extended_description() -> dict:
+    """`GET /api/v1/instance/extended_description`.
+
+    `profile.toml` has no separate "long about" field — this reuses the same
+    bio text `/api/v1/instance`'s `description`/`short_description` already
+    collapse to a single config value. `updated_at` has no real change-history
+    to draw from either, so it reuses the same keypair-mtime proxy
+    `_owner_created_at` already stands in for "when this instance was set up"
+    on the account entity.
+    """
+    return {
+        "updated_at": format_datetime(_owner_created_at()),
+        "content": LOCAL_ACTOR.summary or "",
+    }
+
+
+def serialize_instance_domain_blocks() -> list[dict]:
+    """`GET /api/v1/instance/domain_blocks` — the public transparency list.
+
+    Distinct from `GET /api/v1/domain_blocks` (gap #20, already implemented):
+    that one is the authenticated personal blocklist a logged-in client reads;
+    this one is unauthenticated and includes the optional reason, matching
+    real Mastodon's `DomainBlock` entity. Severity is always `suspend` since
+    `blocked_servers` doesn't distinguish silence/suspend/reject.
+    """
+    return [
+        {
+            "domain": blocked_server.hostname,
+            "digest": hashlib.sha256(blocked_server.hostname.encode()).hexdigest(),
+            "severity": "suspend",
+            "comment": blocked_server.reason,
+        }
+        for blocked_server in sorted(
+            config.CONFIG.blocked_servers, key=lambda b: b.hostname
+        )
+    ]
 
 
 async def serialize_featured_tags(db_session: AsyncSession) -> list[dict]:
