@@ -29,10 +29,26 @@ from activitypub.boxes import AnyboxObject
 from activitypub.boxes import get_anybox_object_by_ap_id
 from activitypub.boxes import public_outbox_objects_count
 from app import config
+from app import models
 from app.database import AsyncSession
 from app.mastodon import ids
 from app.media import proxied_media_url
 from app.utils.datetime import parse_isoformat
+
+
+async def _is_conversation_muted(
+    db_session: AsyncSession, conversation: str | None
+) -> bool:
+    if conversation is None:
+        return False
+    return (
+        await db_session.scalar(
+            select(models.MutedConversation.id).where(
+                models.MutedConversation.conversation == conversation
+            )
+        )
+    ) is not None
+
 
 # The actor keypair is generated once, during initial setup, and never
 # rotated — its mtime is a reasonable proxy for "when this instance/account
@@ -476,7 +492,9 @@ async def serialize_status(
         "replies_count": obj.replies_count,
         "favourited": favourited,
         "reblogged": reblogged,
-        "muted": False,
+        "muted": await _is_conversation_muted(
+            db_session, obj.conversation or obj.ap_id
+        ),
         "bookmarked": bookmarked,
         "pinned": pinned,
         "reblog": reblog,

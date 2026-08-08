@@ -14,6 +14,8 @@ from sqlalchemy.orm import Session
 from activitypub import activitypub as ap
 from activitypub import boxes
 from activitypub.ap_object import ObjectType
+from activitypub.ap_object import RemoteObject
+from activitypub.tests import factories
 from app import config
 from app import models
 from app.mastodon import ids
@@ -531,3 +533,58 @@ async def test_notifications_kept_when_mute_spares_notifications(
     assert {notif["account"]["id"] for notif in response.json()} == {
         str(follower.actor.id)
     }
+
+
+@pytest.mark.asyncio
+async def test_notifications_hides_muted_conversation(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    follower = setup_remote_actor_as_follower(ra)
+    assert follower.actor is not None
+
+    muted_note = RemoteObject(
+        factories.build_note_object(from_remote_actor=ra, content="@me noisy reply"),
+        ra,
+    )
+    muted_inbox_object = factories.InboxObjectFactory.from_remote_object(
+        muted_note, follower.actor
+    )
+    muted_inbox_object.conversation = "https://example.com/thread-1"
+
+    kept_note = RemoteObject(
+        factories.build_note_object(from_remote_actor=ra, content="@me hi"), ra
+    )
+    kept_inbox_object = factories.InboxObjectFactory.from_remote_object(
+        kept_note, follower.actor
+    )
+    kept_inbox_object.conversation = "https://example.com/thread-2"
+
+    async_db_session.add_all(
+        [
+            models.Notification(
+                notification_type=models.NotificationType.MENTION,
+                actor_id=follower.actor.id,
+                inbox_object_id=muted_inbox_object.id,
+            ),
+            models.Notification(
+                notification_type=models.NotificationType.MENTION,
+                actor_id=follower.actor.id,
+                inbox_object_id=kept_inbox_object.id,
+            ),
+            models.MutedConversation(conversation="https://example.com/thread-1"),
+        ]
+    )
+    await async_db_session.commit()
+
+    token = await _make_access_token(async_db_session, "read:notifications")
+    response = client.get(
+        "/api/v1/notifications", headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 200
+    status_ids = {notif["status"]["id"] for notif in response.json()}
+    assert ids.encode_inbox_id(kept_inbox_object) in status_ids
+    assert ids.encode_inbox_id(muted_inbox_object) not in status_ids

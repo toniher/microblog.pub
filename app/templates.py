@@ -138,6 +138,7 @@ async def render_template(
                     select(func.count(models.Notification.id)).where(
                         models.Notification.is_new.is_(True),
                         models.notification_not_muted(),
+                        models.notification_not_in_muted_conversation(),
                     )
                 )
                 if is_admin

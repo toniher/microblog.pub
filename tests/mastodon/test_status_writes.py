@@ -384,6 +384,42 @@ async def test_bookmark_and_unbookmark(
 
 
 @pytest.mark.asyncio
+async def test_mute_and_unmute_conversation(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    follower = setup_remote_actor_as_follower(ra)
+    assert follower.actor is not None
+
+    remote_note = RemoteObject(
+        factories.build_note_object(from_remote_actor=ra, content="Noisy thread"), ra
+    )
+    inbox_object = factories.InboxObjectFactory.from_remote_object(
+        remote_note, follower.actor
+    )
+    status_id = ids.encode_inbox_id(inbox_object)
+
+    token = await _make_access_token(async_db_session, "write:mutes")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    muted = client.post(f"/api/v1/statuses/{status_id}/mute", headers=headers).json()
+    assert muted["muted"] is True
+
+    # Idempotent: muting an already-muted conversation doesn't error.
+    muted_again = client.post(
+        f"/api/v1/statuses/{status_id}/mute", headers=headers
+    ).json()
+    assert muted_again["muted"] is True
+
+    unmuted = client.post(
+        f"/api/v1/statuses/{status_id}/unmute", headers=headers
+    ).json()
+    assert unmuted["muted"] is False
+
+
+@pytest.mark.asyncio
 async def test_pin_and_unpin_own_status(
     client: TestClient, async_db_session: AsyncSession
 ) -> None:

@@ -903,7 +903,10 @@ async def get_notifications(
     db_session: AsyncSession = Depends(get_db_session),
     cursor: str | None = None,
 ) -> templates.TemplateResponse:
-    where = [models.notification_not_muted()]
+    where = [
+        models.notification_not_muted(),
+        models.notification_not_in_muted_conversation(),
+    ]
     if cursor:
         decoded_cursor = pagination.decode_cursor(cursor)
         where.append(models.Notification.created_at < decoded_cursor)
@@ -956,6 +959,7 @@ async def get_notifications(
                 models.Notification.is_new.is_(True),
                 models.Notification.created_at < decoded_next_cursor,
                 models.notification_not_muted(),
+                models.notification_not_in_muted_conversation(),
             )
         )
 

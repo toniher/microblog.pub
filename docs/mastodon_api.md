@@ -70,6 +70,10 @@ forgotten on the device.
 - **Domain blocks** (`/api/v1/domain_blocks`) — the `blocked_servers` hostnames from
   `profile.toml`, sorted. Read-only: it's static config, so there's no `POST`/`DELETE`
   to add or remove a domain block from a client.
+- **Conversation mute** — mute/unmute the thread a status belongs to
+  (`/api/v1/statuses/:id/mute`/`unmute`), so replies to a noisy thread stop
+  generating notifications. The status entity's `muted` flag reflects it, and it
+  survives replies that arrive after the mute, not just the ones that exist yet.
 - **Featured tags** (`/api/v1/featured_tags`) — hashtags pinned to your profile via
   `featured_tags` in `profile.toml`, shown with their post counts. Read-only: this
   mirrors the config file, so there's no `POST`/`DELETE` to add or remove one from

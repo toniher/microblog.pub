@@ -15,6 +15,7 @@ from sqlalchemy import String
 from sqlalchemy import Table
 from sqlalchemy import UniqueConstraint
 from sqlalchemy import or_
+from sqlalchemy import select
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import relationship
 
@@ -213,6 +214,22 @@ class Marker(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, default=now)
 
 
+class MutedConversation(Base):
+    """A muted thread (Mastodon's `POST /api/v1/statuses/{id}/mute`).
+
+    Keyed on the `conversation` string `InboxObject`/`OutboxObject` already
+    track for threading (see `activitypub/boxes.py`'s `fetch_conversation_root`)
+    rather than the status id itself, so replies that arrive *after* the mute
+    are covered too, not just the ones that exist yet.
+    """
+
+    __tablename__ = "muted_conversation"
+
+    id = Column(Integer, primary_key=True, index=True)
+    conversation = Column(String, nullable=False, unique=True, index=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
+
+
 def notification_not_muted() -> Any:
     """Where-clause dropping notifications sent by a muted actor.
 
@@ -223,6 +240,23 @@ def notification_not_muted() -> Any:
     return or_(
         Notification.actor_id.is_(None),
         Notification.actor_id.not_in(muted_actor_ids(notifications_only=True)),
+    )
+
+
+def notification_not_in_muted_conversation() -> Any:
+    """Where-clause dropping notifications tied to a muted conversation.
+
+    Only inbox-side notifications (mentions/replies) carry a conversation
+    worth checking against `MutedConversation`; anything without an inbox
+    object (follows, webmentions...) is unaffected, same NULL-safe shape as
+    `notification_not_muted`.
+    """
+    muted_inbox_object_ids = select(InboxObject.id).where(
+        InboxObject.conversation.in_(select(MutedConversation.conversation))
+    )
+    return or_(
+        Notification.inbox_object_id.is_(None),
+        Notification.inbox_object_id.not_in(muted_inbox_object_ids),
     )
 
 

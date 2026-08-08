@@ -1367,6 +1367,7 @@ async def notifications_list(
         .where(
             models.Notification.notification_type.in_(allowed_internal_types),
             models.notification_not_muted(),
+            models.notification_not_in_muted_conversation(),
         )
         .options(*_NOTIFICATION_OPTIONS)
         .order_by(models.Notification.id.desc())
@@ -1482,6 +1483,7 @@ async def notifications_unread_count(
             models.Notification.notification_type.in_(allowed_internal_types),
             models.Notification.is_new.is_(True),
             models.notification_not_muted(),
+            models.notification_not_in_muted_conversation(),
         )
         .limit(limit)
         .subquery()
@@ -2359,6 +2361,48 @@ async def statuses_unpin(
             422, "validation_failed", "only your own statuses can be unpinned"
         )
     obj.is_pinned = False
+    await db_session.commit()
+    return JSONResponse(
+        content=await serializers.serialize_status(db_session, obj), status_code=200
+    )
+
+
+@router.post("/api/v1/statuses/{status_id}/mute", response_model=None)
+async def statuses_mute(
+    status_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:mutes")),
+) -> JSONResponse:
+    obj = await _get_visible_status_or_404(request, db_session, status_id)
+    conversation = obj.conversation or obj.ap_id
+    existing = await db_session.scalar(
+        select(models.MutedConversation).where(
+            models.MutedConversation.conversation == conversation
+        )
+    )
+    if existing is None:
+        db_session.add(models.MutedConversation(conversation=conversation))
+        await db_session.commit()
+    return JSONResponse(
+        content=await serializers.serialize_status(db_session, obj), status_code=200
+    )
+
+
+@router.post("/api/v1/statuses/{status_id}/unmute", response_model=None)
+async def statuses_unmute(
+    status_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:mutes")),
+) -> JSONResponse:
+    obj = await _get_visible_status_or_404(request, db_session, status_id)
+    conversation = obj.conversation or obj.ap_id
+    await db_session.execute(
+        delete(models.MutedConversation).where(
+            models.MutedConversation.conversation == conversation
+        )
+    )
     await db_session.commit()
     return JSONResponse(
         content=await serializers.serialize_status(db_session, obj), status_code=200
