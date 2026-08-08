@@ -388,7 +388,7 @@ def _serialize_relationship(
         "requested": meta.is_follow_request_sent if meta else False,
         "domain_blocking": False,
         "endorsed": False,
-        "note": "",
+        "note": actor.note or "",
     }
 
 
@@ -2711,16 +2711,18 @@ async def accounts_note(
     db_session: AsyncSession = Depends(get_db_session),
     token_info: AccessTokenInfo = Depends(require_scope("write:accounts")),
 ) -> JSONResponse:
-    # Not persisted (no model for personal notes about an account) — echo
-    # the submitted comment back for this response only, rather than
-    # silently discarding it into an always-empty "note".
     actor = await _resolve_account_or_404(db_session, account_id)
     form = await request.form()
     comment = form.get("comment")
 
-    relationship = await _relationship_for_actor(db_session, account_id, actor)
-    relationship["note"] = str(comment) if comment else ""
-    return JSONResponse(content=relationship, status_code=200)
+    # An empty/missing comment clears the note, matching Mastodon.
+    actor.note = str(comment) if comment else None
+    await db_session.commit()
+
+    return JSONResponse(
+        content=await _relationship_for_actor(db_session, account_id, actor),
+        status_code=200,
+    )
 
 
 async def _pending_follower_notification(

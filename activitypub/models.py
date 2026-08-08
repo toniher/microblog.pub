@@ -65,6 +65,10 @@ class Actor(Base, BaseActor):
         Boolean, nullable=False, default=False, server_default="0"
     )
 
+    # A personal note about this actor (Mastodon's `accounts/{id}/note`).
+    # Purely local, nothing federated. Null/empty means no note.
+    note = Column(String, nullable=True)
+
     # Last time we tried to backfill this actor's outbox on demand (e.g. a
     # Mastodon client viewing a non-followed actor's profile). Throttles
     # repeat live fetches from the same actor across requests.

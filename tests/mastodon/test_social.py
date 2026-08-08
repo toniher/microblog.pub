@@ -344,7 +344,38 @@ async def test_mutes_requires_read_mutes_scope(
 
 
 @pytest.mark.asyncio
-async def test_account_note_echoes_comment(
+async def test_account_note_is_persisted(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    actor = factories.ActorFactory.from_remote_actor(ra)
+    account_id = ids.encode_account_id(actor)
+
+    token = await _make_access_token(async_db_session, "read:accounts write:accounts")
+    headers = {"Authorization": f"Bearer {token}"}
+    response = client.post(
+        f"/api/v1/accounts/{account_id}/note",
+        headers=headers,
+        data={"comment": "met them at a conference"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["note"] == "met them at a conference"
+
+    # Persisted, not just echoed for this response — a fresh relationship
+    # lookup still reports it.
+    relationships = client.get(
+        "/api/v1/accounts/relationships",
+        headers=headers,
+        params={"id[]": [account_id]},
+    ).json()
+    assert relationships[0]["note"] == "met them at a conference"
+
+
+@pytest.mark.asyncio
+async def test_account_note_empty_comment_clears_it(
     client: TestClient,
     async_db_session: AsyncSession,
     respx_mock: respx.MockRouter,
@@ -354,14 +385,21 @@ async def test_account_note_echoes_comment(
     account_id = ids.encode_account_id(actor)
 
     token = await _make_access_token(async_db_session, "write:accounts")
-    response = client.post(
+    headers = {"Authorization": f"Bearer {token}"}
+    client.post(
         f"/api/v1/accounts/{account_id}/note",
-        headers={"Authorization": f"Bearer {token}"},
+        headers=headers,
         data={"comment": "met them at a conference"},
     )
 
+    response = client.post(
+        f"/api/v1/accounts/{account_id}/note",
+        headers=headers,
+        data={"comment": ""},
+    )
+
     assert response.status_code == 200
-    assert response.json()["note"] == "met them at a conference"
+    assert response.json()["note"] == ""
 
 
 @pytest.mark.asyncio
