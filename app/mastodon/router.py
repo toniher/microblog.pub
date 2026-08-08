@@ -2685,6 +2685,25 @@ async def accounts_unmute(
     )
 
 
+@router.get("/api/v1/domain_blocks", response_model=None)
+async def domain_blocks_index(
+    token_info: AccessTokenInfo = Depends(require_scope("read:blocks")),
+) -> JSONResponse:
+    """Blocked domains.
+
+    Read-only: `blocked_servers` is static TOML (`data/profile.toml`), not a
+    DB table, so there's nothing for POST/DELETE to mutate yet. Mirrors real
+    Mastodon's shape for this endpoint: a plain array of hostnames, sorted
+    for a stable response (config order isn't meaningful).
+    """
+    return JSONResponse(
+        content=sorted(
+            blocked_server.hostname for blocked_server in config.CONFIG.blocked_servers
+        ),
+        status_code=200,
+    )
+
+
 @router.post("/api/v1/accounts/{account_id}/note", response_model=None)
 async def accounts_note(
     account_id: str,

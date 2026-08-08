@@ -13,6 +13,7 @@ from activitypub.actor import LOCAL_ACTOR
 from activitypub.ap_object import ObjectType
 from activitypub.ap_object import RemoteObject
 from activitypub.tests import factories
+from app import config
 from app import models
 from app.mastodon import ids
 from app.utils.datetime import now
@@ -156,6 +157,44 @@ async def test_blocks_requires_read_blocks_scope(
     token = await _make_access_token(async_db_session, "write:blocks")
     response = client.get(
         "/api/v1/blocks", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_domain_blocks_list(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        config.CONFIG,
+        "blocked_servers",
+        [
+            config._BlockedServer(hostname="spam.example"),
+            config._BlockedServer(hostname="abuse.example"),
+        ],
+    )
+
+    token = await _make_access_token(async_db_session, "read:blocks")
+    listed = client.get(
+        "/api/v1/domain_blocks", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert listed.status_code == 200
+    assert listed.json() == ["abuse.example", "spam.example"]
+
+
+def test_domain_blocks_requires_auth(client: TestClient) -> None:
+    assert client.get("/api/v1/domain_blocks").status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_domain_blocks_requires_read_blocks_scope(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    token = await _make_access_token(async_db_session, "write:blocks")
+    response = client.get(
+        "/api/v1/domain_blocks", headers={"Authorization": f"Bearer {token}"}
     )
     assert response.status_code == 403
 

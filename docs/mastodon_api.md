@@ -67,6 +67,9 @@ forgotten on the device.
   disappears from every timeline (their boosts, and other people's boosts of
   them, included) but keeps following you and stays reachable from their
   profile — nothing is federated, so they can't tell.
+- **Domain blocks** (`/api/v1/domain_blocks`) — the `blocked_servers` hostnames from
+  `profile.toml`, sorted. Read-only: it's static config, so there's no `POST`/`DELETE`
+  to add or remove a domain block from a client.
 - **Featured tags** (`/api/v1/featured_tags`) — hashtags pinned to your profile via
   `featured_tags` in `profile.toml`, shown with their post counts. Read-only: this
   mirrors the config file, so there's no `POST`/`DELETE` to add or remove one from
