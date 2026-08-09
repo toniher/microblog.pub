@@ -536,6 +536,20 @@ The lookup supports:
  - username handle like `@testing@testing.microblog.pub`
  - ActivityPub ID, like `https://testing.microblog.pub/o/4bccd2e31fad43a7896b5a33f0b8ded9`
 
+### Post actions
+
+Each post shows a row of admin-only action buttons. Two of them apply to specific kinds of posts:
+
+- `history` — shown on your own posts once they have at least one edit. Opens a page listing
+  every past revision, with the timestamp it was saved at, so you can see what a post looked
+  like before each edit.
+- `fetch replies` — shown on posts from other instances that appear in your inbox (boosts and
+  replies included). Triggers an on-demand fetch of that post's `replies` collection from the
+  remote server, for replies that were never delivered to you directly. It's capped to a few
+  seconds and a couple of new replies per click, so it's meant to be pressed again if a thread
+  has more replies than it pulled in on the first try, rather than left to fetch everything at
+  once.
+
 ## Authoring notes
 
 Notes are authored in [Markdown](https://commonmark.org/). There is no imposed characters limit.
