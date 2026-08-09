@@ -50,6 +50,10 @@ async def test_fetch_replies(async_db_session: AsyncSession, respx_mock) -> None
     ).mock(
         return_value=httpx.Response(200, json={"subject": "acct:replier@reply.example"})
     )
+    # fetch_replies refreshes the root object from its canonical URL first
+    respx_mock.get(root_note["id"]).mock(
+        return_value=httpx.Response(200, json=root_note)
+    )
 
     # When fetching replies for the root note
     fetched_count = await boxes.fetch_replies(async_db_session, requested_object)
@@ -117,6 +121,10 @@ async def test_fetch_replies_caps_new_replies_per_call(
             },
         )
     )
+    # fetch_replies refreshes the root object from its canonical URL first
+    respx_mock.get(root_note["id"]).mock(
+        return_value=httpx.Response(200, json=root_note)
+    )
 
     # When fetching replies for the root note
     fetched_count = await boxes.fetch_replies(async_db_session, requested_object)
@@ -133,7 +141,7 @@ async def test_fetch_replies_caps_new_replies_per_call(
 
 @pytest.mark.asyncio
 async def test_fetch_replies_no_replies_collection(
-    async_db_session: AsyncSession,
+    async_db_session: AsyncSession, respx_mock
 ) -> None:
     # Given a remote note with no replies collection advertised
     root_ra = factories.RemoteActorFactory(
@@ -142,9 +150,75 @@ async def test_fetch_replies_no_replies_collection(
     root_actor = factories.ActorFactory.from_remote_actor(root_ra)
     root_note = factories.build_note_object(root_ra)
     requested_object = RemoteObject(root_note, actor=root_actor)
+    # fetch_replies refreshes the root object from its canonical URL first,
+    # which still doesn't advertise a `replies` collection
+    respx_mock.get(root_note["id"]).mock(
+        return_value=httpx.Response(200, json=root_note)
+    )
 
     # When fetching replies
     fetched_count = await boxes.fetch_replies(async_db_session, requested_object)
 
     # Then nothing is fetched
     assert fetched_count == 0
+
+
+@pytest.mark.asyncio
+async def test_fetch_replies_stale_cache_refreshed_from_remote(
+    async_db_session: AsyncSession, respx_mock
+) -> None:
+    # Given a locally cached copy of a remote note captured before it had
+    # any replies (e.g. saved via an earlier Like/Announce/reply lookup)
+    root_ra = factories.RemoteActorFactory(
+        base_url="https://root4.example", username="root4", public_key="pk5"
+    )
+    root_actor = factories.ActorFactory.from_remote_actor(root_ra)
+    stale_root_note = factories.build_note_object(root_ra)
+    requested_object = RemoteObject(stale_root_note, actor=root_actor)
+    assert "replies" not in requested_object.ap_object
+
+    # And the remote object now advertises a populated replies collection
+    fresh_root_note = dict(stale_root_note)
+    replies_url = fresh_root_note["id"] + "/replies"
+    fresh_root_note["replies"] = replies_url
+    respx_mock.get(fresh_root_note["id"]).mock(
+        return_value=httpx.Response(200, json=fresh_root_note)
+    )
+
+    reply_ra = factories.RemoteActorFactory(
+        base_url="https://reply4.example", username="replier4", public_key="pk6"
+    )
+    reply_note = factories.build_note_object(
+        reply_ra, content="hello back", in_reply_to=stale_root_note["id"]
+    )
+    respx_mock.get(replies_url).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "@context": AS_CTX,
+                "type": "OrderedCollection",
+                "orderedItems": [reply_note],
+            },
+        )
+    )
+    respx_mock.get(reply_ra.ap_id).mock(
+        return_value=httpx.Response(200, json=reply_ra.ap_actor)
+    )
+    respx_mock.get(
+        "https://reply4.example/.well-known/webfinger",
+        params={"resource": "acct%3Areplier4%40reply4.example"},
+    ).mock(
+        return_value=httpx.Response(
+            200, json={"subject": "acct:replier4@reply4.example"}
+        )
+    )
+
+    # When fetching replies for the stale cached object
+    fetched_count = await boxes.fetch_replies(async_db_session, requested_object)
+
+    # Then the reply is still found and saved, despite the stale cache
+    assert fetched_count == 1
+    saved = (
+        await async_db_session.execute(select(activitypub.models.InboxObject))
+    ).scalar_one()
+    assert saved.ap_id == reply_note["id"]

@@ -2792,6 +2792,19 @@ async def fetch_replies(
     likely-to-time-out request; click again to pull in more.
     """
     replies_ref = requested_object.ap_object.get("replies")
+
+    # The cached copy may predate the remote object having (or growing) a
+    # `replies` collection, since we only ever store what was pushed to us
+    # or fetched once. Refresh it from its canonical URL so a stale/missing
+    # pointer doesn't block backfilling forever.
+    if not requested_object.ap_id.startswith(BASE_URL):
+        try:
+            fresh_object = await ap.fetch(requested_object.ap_id)
+        except Exception:
+            logger.exception(f"Failed to refresh {requested_object.ap_id}")
+        else:
+            replies_ref = fresh_object.get("replies") or replies_ref
+
     if not replies_ref:
         return 0
 
