@@ -97,6 +97,24 @@ def build_move_activity(
     }
 
 
+def build_announce_activity(
+    from_remote_actor: actor.RemoteActor,
+    announced_object_ap_id: str,
+    outbox_public_id: str | None = None,
+) -> ap.RawObject:
+    return {
+        "@context": ap.AS_CTX,
+        "type": "Announce",
+        "id": from_remote_actor.ap_id
+        + "/announce/"
+        + (outbox_public_id or uuid4().hex),
+        "actor": from_remote_actor.ap_id,
+        "object": announced_object_ap_id,
+        "to": [ap.AS_PUBLIC],
+        "cc": [from_remote_actor.ap_id + "/followers"],
+    }
+
+
 def build_note_object(
     from_remote_actor: actor.RemoteActor | activitypub.models.Actor,
     outbox_public_id: str | None = None,

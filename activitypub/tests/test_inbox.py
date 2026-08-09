@@ -248,6 +248,60 @@ def test_inbox__create_from_follower(
     assert note_activity_from_inbox.ap_id == ro.activity_object_ap_id
 
 
+def test_inbox__announce_of_unknown_object_sets_conversation(
+    db: Session,
+    client: TestClient,
+    respx_mock: respx.MockRouter,
+) -> None:
+    # Given a remote actor we follow
+    ra = setup_remote_actor(respx_mock)
+    setup_remote_actor_as_following(ra)
+
+    # And a Note from a different, unknown remote actor. The note-path mock
+    # must be registered before the actor's own (path-less) mock: respx
+    # matches routes in registration order, and a path-less URL matches any
+    # path under that host, so a broader route registered first would shadow
+    # this one.
+    other_ra = factories.RemoteActorFactory(
+        base_url="https://note-author.example", username="noteauthor", public_key="pk9"
+    )
+    note_object = factories.build_note_object(from_remote_actor=other_ra)
+    respx_mock.get(note_object["id"]).mock(
+        return_value=httpx.Response(200, json=note_object)
+    )
+    respx_mock.get(other_ra.ap_id).mock(
+        return_value=httpx.Response(200, json=other_ra.ap_actor)
+    )
+
+    # When receiving an Announce of that Note
+    announce_activity = factories.build_announce_activity(
+        from_remote_actor=ra,
+        announced_object_ap_id=note_object["id"],
+    )
+    ro = RemoteObject(announce_activity, ra)
+
+    with mock_httpsig_checker(ra):
+        response = client.post(
+            "/inbox",
+            headers={"Content-Type": ap.AS_CTX},
+            json=ro.ap_object,
+        )
+    assert response.status_code == 202
+
+    # And when processing the incoming activity
+    run_process_next_incoming_activity()
+
+    # Then the announced Note was saved to the inbox with its conversation set
+    note_from_inbox: activitypub.models.InboxObject | None = db.execute(
+        select(activitypub.models.InboxObject).where(
+            activitypub.models.InboxObject.ap_type == "Note"
+        )
+    ).scalar_one_or_none()
+    assert note_from_inbox
+    assert note_from_inbox.ap_id == note_object["id"]
+    assert note_from_inbox.conversation == note_object["context"]
+
+
 def test_inbox__create_already_deleted_object(
     db: Session,
     client: TestClient,

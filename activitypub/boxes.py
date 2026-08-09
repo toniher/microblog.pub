@@ -2344,6 +2344,9 @@ async def _handle_announce_activity(
                     ap_type=announced_object.ap_type,
                     ap_id=announced_object.ap_id,
                     ap_context=announced_object.ap_context,
+                    conversation=await fetch_conversation_root(
+                        db_session, announced_object
+                    ),
                     ap_published_at=announced_object.ap_published_at,
                     ap_object=announced_object.ap_object,
                     visibility=announced_object.visibility,
@@ -2791,6 +2794,21 @@ async def fetch_replies(
     new replies per call so one click can't turn into a multi-minute,
     likely-to-time-out request; click again to pull in more.
     """
+    # Objects saved via an Announce we hadn't seen before never got a
+    # `conversation` backfilled (see _handle_announce_activity), which makes
+    # the replies tree treat them as standalone and skip the lookup below
+    # entirely. Fix that up while we're already here.
+    if (
+        isinstance(
+            requested_object,
+            (activitypub.models.InboxObject, activitypub.models.OutboxObject),
+        )
+        and requested_object.conversation is None
+    ):
+        requested_object.conversation = await fetch_conversation_root(
+            db_session, requested_object
+        )
+
     replies_ref = requested_object.ap_object.get("replies")
 
     # The cached copy may predate the remote object having (or growing) a
