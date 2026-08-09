@@ -69,12 +69,13 @@ directory ships with only a `.gitignore`), so a fresh clone starts without them.
 
 They are downloaded automatically during setup — the `download-twemoji` task is a
 dependency of `configuration-wizard`, so `poetry run inv configuration-wizard`
-(Python) or `make config` (Docker) fetches them. They are fetched **once** and are
-*not* refreshed on a normal start; the Docker entrypoint only re-downloads them when
-the `microblogpub_static` volume is empty (see [Installing](install.md#docker-edition)).
-To refresh manually (e.g. after bumping the pinned version), run `poetry run inv
-download-twemoji` — for Docker, a `docker run` of the same task mounting
-`--volume microblogpub_static:/app/app/static`.
+(Python) or `make config` (Docker) fetches them. For Docker, the entrypoint
+(`misc/docker_start.sh`) also re-runs `download-twemoji` on **every** container
+start, so the `microblogpub_static` volume always ends up with the full, current
+set even if a previous boot left it empty or partially populated (see
+[Installing](install.md#docker-edition)). For a non-Docker install, refresh
+manually (e.g. after bumping the pinned version) with `poetry run inv
+download-twemoji`.
 
 Under the hood the task downloads a release tarball and extracts `assets/svg/`. The
 source is [jdecked/twemoji](https://github.com/jdecked/twemoji), the maintained
