@@ -40,6 +40,7 @@ from activitypub.actor import unmute_actor
 from activitypub.ap_object import RemoteObject
 from activitypub.boxes import AnyboxObject
 from activitypub.boxes import ReplyTreeNode
+from activitypub.boxes import fetch_replies
 from activitypub.boxes import get_anybox_object_by_ap_id
 from activitypub.boxes import get_replies_tree
 from activitypub.boxes import prefetch_actor_outbox
@@ -1003,6 +1004,17 @@ async def statuses_context(
 ) -> JSONResponse:
     obj = await _get_visible_status_or_404(request, db_session, status_id)
     is_admin = await _is_authenticated_admin(request, db_session)
+
+    # Mastodon apps only hit this endpoint when a user actually opens a
+    # thread, so it's a reasonable place to opportunistically backfill
+    # remote replies push delivery never gave us — mirrors the admin UI's
+    # "fetch replies" action. Local (outbox) statuses have nothing to pull.
+    if isinstance(obj, activitypub.models.InboxObject):
+        try:
+            if await fetch_replies(db_session, obj):
+                await db_session.commit()
+        except Exception:
+            logger.exception(f"Failed to backfill replies for {obj.ap_id}")
 
     tree = await get_replies_tree(db_session, obj, is_admin)
     found = _find_node_with_ancestors(tree, obj.ap_id, [])

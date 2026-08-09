@@ -1,6 +1,7 @@
 import base64
 import secrets
 
+import httpx
 import pytest
 import respx
 from fastapi.testclient import TestClient
@@ -118,6 +119,85 @@ async def test_statuses_context(
     reply_context = client.get(f"/api/v1/statuses/{reply_status_id}/context").json()
     assert [s["id"] for s in reply_context["ancestors"]] == [root_status_id]
     assert reply_context["descendants"] == []
+
+
+@pytest.mark.asyncio
+async def test_statuses_context_backfills_remote_replies(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    # Given a remote (inbox) status advertising a replies collection we've
+    # never fetched
+    root_ra = factories.RemoteActorFactory(
+        base_url="https://root-ctx.example",
+        username="rootctx",
+        public_key="pk-ctx-root",
+    )
+    root_actor = factories.ActorFactory.from_remote_actor(root_ra)
+    root_note = factories.build_note_object(root_ra)
+    replies_url = root_note["id"] + "/replies"
+    root_note["replies"] = replies_url
+
+    root_ro = RemoteObject(root_note, actor=root_actor)
+    root_inbox_object = factories.InboxObjectFactory.from_remote_object(
+        root_ro, root_actor
+    )
+    root_status_id = ids.encode_inbox_id(root_inbox_object)
+
+    reply_ra = factories.RemoteActorFactory(
+        base_url="https://reply-ctx.example",
+        username="replyctx",
+        public_key="pk-ctx-reply",
+    )
+    reply_note = factories.build_note_object(
+        reply_ra, content="hello back", in_reply_to=root_note["id"]
+    )
+    # A real thread shares one context/conversation across the whole reply
+    # chain; the factory otherwise mints a fresh one per note.
+    reply_note["context"] = root_note["context"]
+    reply_note["conversation"] = root_note["context"]
+
+    # fetch_replies refreshes the root object from its canonical URL first
+    respx_mock.get(root_note["id"]).mock(
+        return_value=httpx.Response(200, json=root_note)
+    )
+    respx_mock.get(replies_url).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "@context": ap.AS_CTX,
+                "type": "OrderedCollection",
+                "orderedItems": [reply_note],
+            },
+        )
+    )
+    respx_mock.get(reply_ra.ap_id).mock(
+        return_value=httpx.Response(200, json=reply_ra.ap_actor)
+    )
+    respx_mock.get(
+        "https://reply-ctx.example/.well-known/webfinger",
+        params={"resource": "acct%3Areplyctx%40reply-ctx.example"},
+    ).mock(
+        return_value=httpx.Response(
+            200, json={"subject": "acct:replyctx@reply-ctx.example"}
+        )
+    )
+
+    # When a Mastodon client opens the thread via the context endpoint
+    context = client.get(f"/api/v1/statuses/{root_status_id}/context").json()
+
+    # Then the remote reply, never pushed to our inbox, was backfilled and
+    # shows up as a descendant
+    saved_reply = (
+        await async_db_session.execute(
+            select(activitypub.models.InboxObject).where(
+                activitypub.models.InboxObject.ap_id == reply_note["id"]
+            )
+        )
+    ).scalar_one()
+    reply_status_id = ids.encode_inbox_id(saved_reply)
+    assert [s["id"] for s in context["descendants"]] == [reply_status_id]
 
 
 @pytest.mark.asyncio
