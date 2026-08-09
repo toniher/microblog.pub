@@ -2770,6 +2770,7 @@ async def save_object_to_inbox(
 
 
 _FETCH_REPLIES_TIME_BUDGET_SECONDS = 8.0
+_MAX_NEW_REPLIES_PER_CALL = 2
 _REPLIABLE_AP_TYPES = ["Note", "Article", "Page", "Question"]
 
 
@@ -2783,6 +2784,12 @@ async def fetch_replies(
     don't follow never land in our inbox on their own. This lets an admin
     pull them in for one object at a time. It can only surface what the
     remote server chooses to expose via `replies` (some omit or restrict it).
+
+    Saving a reply from an actor we've never seen requires fetching that
+    actor's profile plus a WebFinger lookup, which can each stall for many
+    seconds with no timeout on an unresponsive host. Capped to a couple of
+    new replies per call so one click can't turn into a multi-minute,
+    likely-to-time-out request; click again to pull in more.
     """
     replies_ref = requested_object.ap_object.get("replies")
     if not replies_ref:
@@ -2802,6 +2809,8 @@ async def fetch_replies(
     fetched_count = 0
     started_at = time.monotonic()
     for item in raw_items[:20]:
+        if fetched_count >= _MAX_NEW_REPLIES_PER_CALL:
+            break
         if time.monotonic() - started_at > _FETCH_REPLIES_TIME_BUDGET_SECONDS:
             break
 
