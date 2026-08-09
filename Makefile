@@ -47,6 +47,10 @@ compile-scss:
 compile-translations:
 	-docker run --rm --volume `pwd`/data:/app/data --volume microblogpub_static:/app/app/static microblogpub-server inv compile-translations
 
+.PHONY: download-twemoji
+download-twemoji:
+	-docker run --rm --volume `pwd`/data:/app/data --volume microblogpub_static:/app/app/static microblogpub-server inv download-twemoji
+
 .PHONY: import-mastodon-following-accounts 
 import-mastodon-following-accounts:
 	-docker run --rm --volume `pwd`/data:/app/data --volume microblogpub_static:/app/app/static microblogpub-server inv import-mastodon-following-accounts $(path)

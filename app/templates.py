@@ -443,7 +443,13 @@ def _html2text(content: str) -> str:
 
 
 def _replace_emoji(u: str, _) -> str:
-    filename = "-".join(hex(ord(c))[2:] for c in u)
+    # Twemoji's own naming convention (twemoji.js's grabTheRightIcon): a
+    # variation selector (U+FE0F) is dropped from the filename unless the
+    # sequence is a ZWJ (U+200D) combo, in which case it's kept as-is. Get
+    # this wrong and standalone emoji like the umbrella (U+26F1 U+FE0F) 404
+    # since Twemoji only ships "26f1.svg", not "26f1-fe0f.svg".
+    codepoints = u if "‍" in u else u.replace("️", "")
+    filename = "-".join(hex(ord(c))[2:] for c in codepoints)
     return config.EMOJI_TPL.format(base_url=BASE_URL, filename=filename, raw=u)
 
 

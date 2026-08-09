@@ -73,9 +73,10 @@ dependency of `configuration-wizard`, so `poetry run inv configuration-wizard`
 (`misc/docker_start.sh`) also re-runs `download-twemoji` on **every** container
 start, so the `microblogpub_static` volume always ends up with the full, current
 set even if a previous boot left it empty or partially populated (see
-[Installing](install.md#docker-edition)). For a non-Docker install, refresh
-manually (e.g. after bumping the pinned version) with `poetry run inv
-download-twemoji`.
+[Installing](install.md#docker-edition)). To force a redownload on demand
+without restarting the container, run `make download-twemoji` (Docker) or
+`poetry run inv download-twemoji` (non-Docker installs, or after bumping the
+pinned version).
 
 Under the hood the task downloads a release tarball and extracts `assets/svg/`. The
 source is [jdecked/twemoji](https://github.com/jdecked/twemoji), the maintained
