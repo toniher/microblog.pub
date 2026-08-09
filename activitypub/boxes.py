@@ -2819,6 +2819,11 @@ async def fetch_replies(
         )
         return 0
 
+    logger.info(
+        f"Fetched {len(raw_items)} candidate replies for {requested_object.ap_id}: "
+        f"{[item.get('id') if isinstance(item, dict) else item for item in raw_items]}"
+    )
+
     fetched_count = 0
     started_at = time.monotonic()
     for item in raw_items[:20]:
@@ -2830,6 +2835,7 @@ async def fetch_replies(
         try:
             reply_ap_id = ap.get_id(item)
             if await get_anybox_object_by_ap_id(db_session, reply_ap_id):
+                logger.info(f"Already known, skipping {reply_ap_id}")
                 continue
 
             raw_reply = (
@@ -2838,6 +2844,9 @@ async def fetch_replies(
                 else await ap.fetch(reply_ap_id)
             )
             if ap.as_list(raw_reply["type"])[0] not in _REPLIABLE_AP_TYPES:
+                logger.info(
+                    f"Skipping non-repliable type {raw_reply['type']!r} for {reply_ap_id}"
+                )
                 continue
 
             await save_object_to_inbox(db_session, raw_reply)
