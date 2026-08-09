@@ -62,21 +62,21 @@ msgid "With %(actors)s"
 msgstr "Con %(actors)s"
 
 #: app/templates/admin_edit_history.html:4
-#, fuzzy, python-format
+#, python-format
 msgid "%(name)s - Edit history"
-msgstr "%(name)s - Nuovo post"
+msgstr "%(name)s - Cronologia delle modifiche"
 
 #: app/templates/admin_edit_history.html:10
 msgid "Edit history"
-msgstr ""
+msgstr "Cronologia delle modifiche"
 
 #: app/templates/admin_edit_history.html:12
 msgid "Back to post"
-msgstr ""
+msgstr "Torna al post"
 
 #: app/templates/admin_edit_history.html:22
 msgid "Current version"
-msgstr ""
+msgstr "Versione attuale"
 
 #: app/templates/admin_edit_text.html:6 app/templates/admin_new.html:7
 #, python-format
@@ -826,7 +826,7 @@ msgstr "modifica"
 
 #: app/templates/components/admin_buttons.html:137
 msgid "history"
-msgstr ""
+msgstr "cronologia"
 
 #: app/templates/components/admin_buttons.html:145
 msgid "delete"
