@@ -1576,6 +1576,38 @@ async def admin_actions_edit_text(
     )
 
 
+@router.get("/edit_history/{public_id}", response_model=None)
+async def admin_edit_history(
+    request: Request,
+    public_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
+) -> templates.TemplateResponse:
+    maybe_object = (
+        (
+            await db_session.execute(
+                select(activitypub.models.OutboxObject).where(
+                    activitypub.models.OutboxObject.public_id == public_id,
+                    activitypub.models.OutboxObject.is_deleted.is_(False),
+                )
+            )
+        )
+        .unique()
+        .scalar_one_or_none()
+    )
+    if not maybe_object:
+        raise HTTPException(status_code=404)
+
+    return await templates.render_template(
+        db_session,
+        request,
+        "admin_edit_history.html",
+        {
+            "outbox_object": maybe_object,
+            "revisions": maybe_object.revisions or [],
+        },
+    )
+
+
 @router.post("/actions/vote", response_model=None)
 async def admin_actions_vote(
     request: Request,

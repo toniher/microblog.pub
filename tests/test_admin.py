@@ -258,3 +258,39 @@ def test_admin_pin_enforces_max_pinned_limit(db: Session, client: TestClient) ->
         follow_redirects=False,
     )
     assert response.status_code == 400
+
+
+def test_admin_edit_history(db: Session, client: TestClient) -> None:
+    response = client.post(
+        "/admin/actions/new",
+        data={
+            "content": "hello world",
+            "redirect_url": "http://testserver/",
+            "visibility": ap.VisibilityEnum.PUBLIC.name,
+            "csrf_token": generate_csrf_token(),
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    outbox_object = db.query(activitypub.models.OutboxObject).one()
+
+    response = client.post(
+        f"/admin/actions/edit_text/{outbox_object.public_id}",
+        data={
+            "content": "hello world, edited",
+            "csrf_token": generate_csrf_token(),
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    response = client.get(
+        f"/admin/edit_history/{outbox_object.public_id}",
+        cookies=generate_admin_session_cookies(),
+    )
+    assert response.status_code == 200
+    assert "hello world" in response.text
+    assert "hello world, edited" in response.text

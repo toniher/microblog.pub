@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-01 01:27+0200\n"
+"POT-Creation-Date: 2026-08-09 14:14+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,23 +17,23 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: app/admin.py:1417 app/admin.py:1436 app/admin.py:1544
+#: app/admin.py:1421 app/admin.py:1440 app/admin.py:1548
 msgid "Error: object must have a content"
 msgstr ""
 
-#: app/admin.py:1424
+#: app/admin.py:1428
 msgid "Error: invalid language code"
 msgstr ""
 
-#: app/admin.py:1458
+#: app/admin.py:1462
 msgid "Error: Unable to process upload"
 msgstr ""
 
-#: app/config.py:308
+#: app/config.py:313
 msgid "please try again"
 msgstr ""
 
-#: app/config.py:318
+#: app/config.py:323
 #, python-format
 msgid "The security token has expired, %(please_try_again)s"
 msgstr ""
@@ -58,6 +58,23 @@ msgstr ""
 #: app/templates/admin_direct_messages.html:15
 #, python-format
 msgid "With %(actors)s"
+msgstr ""
+
+#: app/templates/admin_edit_history.html:4
+#, python-format
+msgid "%(name)s - Edit history"
+msgstr ""
+
+#: app/templates/admin_edit_history.html:10
+msgid "Edit history"
+msgstr ""
+
+#: app/templates/admin_edit_history.html:12
+msgid "Back to post"
+msgstr ""
+
+#: app/templates/admin_edit_history.html:22
+msgid "Current version"
 msgstr ""
 
 #: app/templates/admin_edit_text.html:6 app/templates/admin_new.html:7
@@ -269,19 +286,19 @@ msgstr ""
 msgid "Follow"
 msgstr ""
 
-#: app/templates/header.html:44
+#: app/templates/header.html:52
 msgid "Notes"
 msgstr ""
 
-#: app/templates/header.html:46
+#: app/templates/header.html:54
 msgid "Articles"
 msgstr ""
 
-#: app/templates/header.html:49
+#: app/templates/header.html:57
 msgid "Followers"
 msgstr ""
 
-#: app/templates/header.html:52
+#: app/templates/header.html:60
 msgid "Following"
 msgstr ""
 
@@ -646,30 +663,30 @@ msgid_plural "<strong>%(count)s</strong> replies"
 msgstr[0] ""
 msgstr[1] ""
 
-#: app/templates/utils.html:322
+#: app/templates/utils.html:327
 msgid "unlike"
 msgstr ""
 
-#: app/templates/utils.html:339
+#: app/templates/utils.html:344
 msgid "unshare"
 msgstr ""
 
-#: app/templates/utils.html:370
+#: app/templates/utils.html:375
 msgid "Likes"
 msgstr ""
 
-#: app/templates/utils.html:379 app/templates/utils.html:396
+#: app/templates/utils.html:384 app/templates/utils.html:401
 #, python-format
 msgid "and %(count)s more."
 msgid_plural "and %(count)s more."
 msgstr[0] ""
 msgstr[1] ""
 
-#: app/templates/utils.html:387
+#: app/templates/utils.html:392
 msgid "Shares"
 msgstr ""
 
-#: app/templates/utils.html:404
+#: app/templates/utils.html:409
 msgid "Webmentions"
 msgstr ""
 
@@ -787,40 +804,44 @@ msgstr ""
 msgid "edit"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:141
+#: app/templates/components/admin_buttons.html:137
+msgid "history"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:145
 msgid "delete"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:150
-#: app/templates/components/admin_buttons.html:159
+#: app/templates/components/admin_buttons.html:154
+#: app/templates/components/admin_buttons.html:163
 msgid "local delete"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:168
+#: app/templates/components/admin_buttons.html:172
 msgid "share"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:177
+#: app/templates/components/admin_buttons.html:181
 msgid "undo"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:184
+#: app/templates/components/admin_buttons.html:188
 msgid "reply"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:192
+#: app/templates/components/admin_buttons.html:196
 msgid "direct message"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:199
+#: app/templates/components/admin_buttons.html:203
 msgid "mention"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:206
+#: app/templates/components/admin_buttons.html:210
 msgid "profile"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:214
+#: app/templates/components/admin_buttons.html:218
 msgid "expand"
 msgstr ""
 

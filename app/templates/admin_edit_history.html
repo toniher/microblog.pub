@@ -1,0 +1,27 @@
+{% extends "layout.html" %}
+
+{% block head %}
+<title>{{ _("%(name)s - Edit history", name=local_actor.display_name) }}</title>
+{% endblock %}
+
+{% block content %}
+
+<div class="box">
+<h2>{{ _("Edit history") }}</h2>
+
+<p><a href="{{ request.url_for("outbox_by_public_id", public_id=outbox_object.public_id) }}">{{ _("Back to post") }}</a></p>
+
+<ul class="edit-history">
+    {% for revision in revisions %}
+    <li>
+        <p><em>{{ revision.updated | parse_datetime | format_date }}</em></p>
+        <div>{{ revision.ap_object.content | clean_html(outbox_object) | safe }}</div>
+    </li>
+    {% endfor %}
+    <li>
+        <p><em>{{ _("Current version") }}</em></p>
+        <div>{{ outbox_object.ap_object.content | clean_html(outbox_object) | safe }}</div>
+    </li>
+</ul>
+</div>
+{% endblock %}

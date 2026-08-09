@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-01 01:27+0200\n"
+"POT-Creation-Date: 2026-08-09 14:14+0200\n"
 "PO-Revision-Date: 2026-07-17 22:20+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ro\n"
@@ -19,23 +19,23 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: app/admin.py:1417 app/admin.py:1436 app/admin.py:1544
+#: app/admin.py:1421 app/admin.py:1440 app/admin.py:1548
 msgid "Error: object must have a content"
 msgstr "Eroare: conținutul este obligatoriu"
 
-#: app/admin.py:1424
+#: app/admin.py:1428
 msgid "Error: invalid language code"
 msgstr "Eroare: cod de limbă invalid"
 
-#: app/admin.py:1458
+#: app/admin.py:1462
 msgid "Error: Unable to process upload"
 msgstr "Eroare: nu s-a putut procesa încărcarea"
 
-#: app/config.py:308
+#: app/config.py:313
 msgid "please try again"
 msgstr "încercați din nou"
 
-#: app/config.py:318
+#: app/config.py:323
 #, python-format
 msgid "The security token has expired, %(please_try_again)s"
 msgstr "Jetonul de securitate a expirat, %(please_try_again)s"
@@ -61,6 +61,23 @@ msgstr "%(name)s - Mesaje directe"
 #, python-format
 msgid "With %(actors)s"
 msgstr "Cu %(actors)s"
+
+#: app/templates/admin_edit_history.html:4
+#, fuzzy, python-format
+msgid "%(name)s - Edit history"
+msgstr "%(name)s - Publicație nouă"
+
+#: app/templates/admin_edit_history.html:10
+msgid "Edit history"
+msgstr ""
+
+#: app/templates/admin_edit_history.html:12
+msgid "Back to post"
+msgstr ""
+
+#: app/templates/admin_edit_history.html:22
+msgid "Current version"
+msgstr ""
 
 #: app/templates/admin_edit_text.html:6 app/templates/admin_new.html:7
 #, python-format
@@ -274,19 +291,19 @@ msgstr "Gestionează urmăririle"
 msgid "Follow"
 msgstr "Urmărește"
 
-#: app/templates/header.html:44
+#: app/templates/header.html:52
 msgid "Notes"
 msgstr "Note"
 
-#: app/templates/header.html:46
+#: app/templates/header.html:54
 msgid "Articles"
 msgstr "Articole"
 
-#: app/templates/header.html:49
+#: app/templates/header.html:57
 msgid "Followers"
 msgstr "Urmăritori"
 
-#: app/templates/header.html:52
+#: app/templates/header.html:60
 msgid "Following"
 msgstr "Urmăriri"
 
@@ -676,19 +693,19 @@ msgstr[0] "<strong>%(count)s</strong> răspuns"
 msgstr[1] "<strong>%(count)s</strong> răspunsuri"
 msgstr[2] "<strong>%(count)s</strong> de răspunsuri"
 
-#: app/templates/utils.html:322
+#: app/templates/utils.html:327
 msgid "unlike"
 msgstr "anulează aprecierea"
 
-#: app/templates/utils.html:339
+#: app/templates/utils.html:344
 msgid "unshare"
 msgstr "anulează distribuirea"
 
-#: app/templates/utils.html:370
+#: app/templates/utils.html:375
 msgid "Likes"
 msgstr "Aprecieri"
 
-#: app/templates/utils.html:379 app/templates/utils.html:396
+#: app/templates/utils.html:384 app/templates/utils.html:401
 #, python-format
 msgid "and %(count)s more."
 msgid_plural "and %(count)s more."
@@ -696,11 +713,11 @@ msgstr[0] "și încă %(count)s."
 msgstr[1] "și încă %(count)s."
 msgstr[2] "și încă %(count)s."
 
-#: app/templates/utils.html:387
+#: app/templates/utils.html:392
 msgid "Shares"
 msgstr "Distribuiri"
 
-#: app/templates/utils.html:404
+#: app/templates/utils.html:409
 msgid "Webmentions"
 msgstr "Webmentions"
 
@@ -818,40 +835,44 @@ msgstr "anulează fixarea"
 msgid "edit"
 msgstr "editează"
 
-#: app/templates/components/admin_buttons.html:141
+#: app/templates/components/admin_buttons.html:137
+msgid "history"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:145
 msgid "delete"
 msgstr "șterge"
 
-#: app/templates/components/admin_buttons.html:150
-#: app/templates/components/admin_buttons.html:159
+#: app/templates/components/admin_buttons.html:154
+#: app/templates/components/admin_buttons.html:163
 msgid "local delete"
 msgstr "șterge local"
 
-#: app/templates/components/admin_buttons.html:168
+#: app/templates/components/admin_buttons.html:172
 msgid "share"
 msgstr "distribuie"
 
-#: app/templates/components/admin_buttons.html:177
+#: app/templates/components/admin_buttons.html:181
 msgid "undo"
 msgstr "anulează"
 
-#: app/templates/components/admin_buttons.html:184
+#: app/templates/components/admin_buttons.html:188
 msgid "reply"
 msgstr "răspunde"
 
-#: app/templates/components/admin_buttons.html:192
+#: app/templates/components/admin_buttons.html:196
 msgid "direct message"
 msgstr "mesaj direct"
 
-#: app/templates/components/admin_buttons.html:199
+#: app/templates/components/admin_buttons.html:203
 msgid "mention"
 msgstr "menționează"
 
-#: app/templates/components/admin_buttons.html:206
+#: app/templates/components/admin_buttons.html:210
 msgid "profile"
 msgstr "profil"
 
-#: app/templates/components/admin_buttons.html:214
+#: app/templates/components/admin_buttons.html:218
 msgid "expand"
 msgstr "extinde"
 

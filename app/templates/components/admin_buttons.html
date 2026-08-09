@@ -133,6 +133,10 @@
 </form>
 {% endmacro %}
 
+{% macro admin_history_button(request, ap_object) %}
+<a href="{{ request.url_for("admin_edit_history", public_id=ap_object.public_id) }}">{{ _("history") }}</a>
+{% endmacro %}
+
 {% macro admin_delete_button(request, csrf_token, ap_object) %}
 <form action="{{ request.url_for("admin_actions_delete") }}" class="object-delete-form" method="POST">
     {{ hidden_inputs.embed_csrf_token(csrf_token) }}
