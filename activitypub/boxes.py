@@ -2769,6 +2769,66 @@ async def save_object_to_inbox(
     return inbox_object
 
 
+_FETCH_REPLIES_TIME_BUDGET_SECONDS = 8.0
+_REPLIABLE_AP_TYPES = ["Note", "Article", "Page", "Question"]
+
+
+async def fetch_replies(
+    db_session: AsyncSession,
+    requested_object: AnyboxObject | RemoteObject,
+) -> int:
+    """On-demand backfill of a remote object's AS2 `replies` collection.
+
+    ActivityPub delivery is push-based, so replies from actors/servers we
+    don't follow never land in our inbox on their own. This lets an admin
+    pull them in for one object at a time. It can only surface what the
+    remote server chooses to expose via `replies` (some omit or restrict it).
+    """
+    replies_ref = requested_object.ap_object.get("replies")
+    if not replies_ref:
+        return 0
+
+    try:
+        if isinstance(replies_ref, str):
+            raw_items = await ap.parse_collection(url=replies_ref, limit=20)
+        else:
+            raw_items = await ap.parse_collection(payload=replies_ref, limit=20)
+    except Exception:
+        logger.exception(
+            f"Failed to fetch replies collection for {requested_object.ap_id}"
+        )
+        return 0
+
+    fetched_count = 0
+    started_at = time.monotonic()
+    for item in raw_items[:20]:
+        if time.monotonic() - started_at > _FETCH_REPLIES_TIME_BUDGET_SECONDS:
+            break
+
+        try:
+            reply_ap_id = ap.get_id(item)
+            if await get_anybox_object_by_ap_id(db_session, reply_ap_id):
+                continue
+
+            raw_reply = (
+                item
+                if isinstance(item, dict) and "type" in item
+                else await ap.fetch(reply_ap_id)
+            )
+            if ap.as_list(raw_reply["type"])[0] not in _REPLIABLE_AP_TYPES:
+                continue
+
+            await save_object_to_inbox(db_session, raw_reply)
+            fetched_count += 1
+        except Exception:
+            logger.exception(
+                f"Failed to fetch reply {item!r} for {requested_object.ap_id}"
+            )
+            continue
+
+    return fetched_count
+
+
 async def public_outbox_objects_count(db_session: AsyncSession) -> int:
     return await db_session.scalar(
         select(func.count(activitypub.models.OutboxObject.id)).where(

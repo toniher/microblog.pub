@@ -1353,6 +1353,21 @@ async def admin_actions_unbookmark(
     return RedirectResponse(redirect_url, status_code=302)
 
 
+@router.post("/actions/fetch_replies", response_model=None)
+async def admin_actions_fetch_replies(
+    request: Request,
+    ap_object_id: str = Form(),
+    redirect_url: str = Form(),
+    csrf_check: None = Depends(verify_csrf_token),
+    db_session: AsyncSession = Depends(get_db_session),
+) -> RedirectResponse:
+    requested_object = await boxes.get_anybox_object_by_ap_id(db_session, ap_object_id)
+    if requested_object:
+        await boxes.fetch_replies(db_session, requested_object)
+        await db_session.commit()
+    return RedirectResponse(redirect_url, status_code=302)
+
+
 @router.post("/actions/pin", response_model=None)
 async def admin_actions_pin(
     request: Request,

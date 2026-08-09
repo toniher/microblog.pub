@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-09 14:14+0200\n"
+"POT-Creation-Date: 2026-08-09 17:30+0200\n"
 "PO-Revision-Date: 2026-07-17 22:20+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ro\n"
@@ -19,15 +19,15 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: app/admin.py:1421 app/admin.py:1440 app/admin.py:1548
+#: app/admin.py:1436 app/admin.py:1455 app/admin.py:1563
 msgid "Error: object must have a content"
 msgstr "Eroare: conținutul este obligatoriu"
 
-#: app/admin.py:1428
+#: app/admin.py:1443
 msgid "Error: invalid language code"
 msgstr "Eroare: cod de limbă invalid"
 
-#: app/admin.py:1462
+#: app/admin.py:1477
 msgid "Error: Unable to process upload"
 msgstr "Eroare: nu s-a putut procesa încărcarea"
 
@@ -701,11 +701,11 @@ msgstr "anulează aprecierea"
 msgid "unshare"
 msgstr "anulează distribuirea"
 
-#: app/templates/utils.html:375
+#: app/templates/utils.html:378
 msgid "Likes"
 msgstr "Aprecieri"
 
-#: app/templates/utils.html:384 app/templates/utils.html:401
+#: app/templates/utils.html:387 app/templates/utils.html:404
 #, python-format
 msgid "and %(count)s more."
 msgid_plural "and %(count)s more."
@@ -713,11 +713,11 @@ msgstr[0] "și încă %(count)s."
 msgstr[1] "și încă %(count)s."
 msgstr[2] "și încă %(count)s."
 
-#: app/templates/utils.html:392
+#: app/templates/utils.html:395
 msgid "Shares"
 msgstr "Distribuiri"
 
-#: app/templates/utils.html:409
+#: app/templates/utils.html:412
 msgid "Webmentions"
 msgstr "Webmentions"
 
@@ -875,6 +875,10 @@ msgstr "profil"
 #: app/templates/components/admin_buttons.html:218
 msgid "expand"
 msgstr "extinde"
+
+#: app/templates/components/admin_buttons.html:227
+msgid "fetch replies"
+msgstr "recuperează răspunsurile"
 
 #: app/templates/components/attachments.html:4
 msgid "show/hide sensitive content"

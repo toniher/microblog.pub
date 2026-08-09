@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-09 14:14+0200\n"
+"POT-Creation-Date: 2026-08-09 17:30+0200\n"
 "PO-Revision-Date: 2026-07-17 22:20+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: it\n"
@@ -18,15 +18,15 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: app/admin.py:1421 app/admin.py:1440 app/admin.py:1548
+#: app/admin.py:1436 app/admin.py:1455 app/admin.py:1563
 msgid "Error: object must have a content"
 msgstr "Errore: il contenuto è obbligatorio"
 
-#: app/admin.py:1428
+#: app/admin.py:1443
 msgid "Error: invalid language code"
 msgstr "Errore: codice lingua non valido"
 
-#: app/admin.py:1462
+#: app/admin.py:1477
 msgid "Error: Unable to process upload"
 msgstr "Errore: impossibile elaborare il caricamento"
 
@@ -691,22 +691,22 @@ msgstr "rimuovi mi piace"
 msgid "unshare"
 msgstr "annulla condivisione"
 
-#: app/templates/utils.html:375
+#: app/templates/utils.html:378
 msgid "Likes"
 msgstr "Mi piace"
 
-#: app/templates/utils.html:384 app/templates/utils.html:401
+#: app/templates/utils.html:387 app/templates/utils.html:404
 #, python-format
 msgid "and %(count)s more."
 msgid_plural "and %(count)s more."
 msgstr[0] "e %(count)s in più."
 msgstr[1] "e %(count)s in più."
 
-#: app/templates/utils.html:392
+#: app/templates/utils.html:395
 msgid "Shares"
 msgstr "Condivisioni"
 
-#: app/templates/utils.html:409
+#: app/templates/utils.html:412
 msgid "Webmentions"
 msgstr "Webmentions"
 
@@ -864,6 +864,10 @@ msgstr "profilo"
 #: app/templates/components/admin_buttons.html:218
 msgid "expand"
 msgstr "espandi"
+
+#: app/templates/components/admin_buttons.html:227
+msgid "fetch replies"
+msgstr "recupera le risposte"
 
 #: app/templates/components/attachments.html:4
 msgid "show/hide sensitive content"
