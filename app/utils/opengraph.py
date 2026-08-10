@@ -19,6 +19,7 @@ from activitypub.actor import fetch_actor
 from activitypub.models import InboxObject
 from activitypub.models import OutboxObject
 from app import config
+from app import http_client
 from app.database import AsyncSession
 from app.utils.url import is_url_valid
 from app.utils.url import make_abs
@@ -129,14 +130,13 @@ async def external_urls(
 
 
 async def _og_meta_from_url(url: str) -> OpenGraphMeta | None:
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            url,
-            headers={
-                "User-Agent": config.USER_AGENT,
-            },
-            follow_redirects=True,
-        )
+    resp = await http_client.get_client().get(
+        url,
+        headers={
+            "User-Agent": config.USER_AGENT,
+        },
+        follow_redirects=True,
+    )
 
     resp.raise_for_status()
 

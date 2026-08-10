@@ -18,6 +18,7 @@ from activitypub import activitypub as ap
 from activitypub.actor import LOCAL_ACTOR
 from activitypub.actor import _actor_hash
 from app import config
+from app import http_client
 from app import ldsig
 from app.config import KEY_PATH
 from app.database import AsyncSession
@@ -207,14 +208,13 @@ async def process_next_outgoing_activity(
             }
             logger.info(f"{webmention_payload=}")
             check_url(next_activity.recipient)
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    next_activity.recipient,  # type: ignore
-                    data=webmention_payload,
-                    headers={
-                        "User-Agent": config.USER_AGENT,
-                    },
-                )
+            resp = await http_client.get_client().post(
+                next_activity.recipient,  # type: ignore
+                data=webmention_payload,
+                headers={
+                    "User-Agent": config.USER_AGENT,
+                },
+            )
             resp.raise_for_status()
         else:
             payload = ap.wrap_object_if_needed(next_activity.anybox_object.ap_object)

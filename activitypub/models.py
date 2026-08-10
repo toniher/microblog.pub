@@ -134,6 +134,15 @@ def not_from_muted_actors() -> list[Any]:
 
 class InboxObject(Base, BaseObject):
     __tablename__ = "inbox"
+    __table_args__ = (
+        Index("ix_inbox_ap_published_at", "ap_published_at"),
+        Index(
+            "ix_inbox_stream",
+            "is_deleted",
+            "is_hidden_from_stream",
+            "ap_published_at",
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=now)
@@ -227,6 +236,16 @@ MAX_PINNED_OBJECTS = 5
 
 class OutboxObject(Base, BaseObject):
     __tablename__ = "outbox"
+    __table_args__ = (
+        Index("ix_outbox_ap_published_at", "ap_published_at"),
+        Index(
+            "ix_outbox_homepage",
+            "visibility",
+            "is_deleted",
+            "is_hidden_from_homepage",
+            "ap_published_at",
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=now)

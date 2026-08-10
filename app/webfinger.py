@@ -6,41 +6,42 @@ import httpx
 from loguru import logger
 
 from app import config
+from app import http_client
 from app.utils.url import check_url
 
 
 async def get_webfinger_via_host_meta(host: str) -> str | None:
     resp: httpx.Response | None = None
     is_404 = False
-    async with httpx.AsyncClient() as client:
-        for i, proto in enumerate({"http", "https"}):
-            try:
-                url = f"{proto}://{host}/.well-known/host-meta"
-                check_url(url)
-                resp = await client.get(
-                    url,
-                    headers={
-                        "User-Agent": config.USER_AGENT,
-                    },
-                    follow_redirects=True,
-                )
-                resp.raise_for_status()
-                break
-            except httpx.HTTPStatusError as http_error:
-                logger.exception("HTTP error")
-                if http_error.response.status_code in [403, 404, 410]:
-                    is_404 = True
-                    continue
-                raise
-            except httpx.HTTPError:
-                logger.exception("req failed")
-                # If we tried https first and the domain is "http only"
-                if i == 0:
-                    continue
-                break
+    client = http_client.get_client()
+    for i, proto in enumerate({"http", "https"}):
+        try:
+            url = f"{proto}://{host}/.well-known/host-meta"
+            check_url(url)
+            resp = await client.get(
+                url,
+                headers={
+                    "User-Agent": config.USER_AGENT,
+                },
+                follow_redirects=True,
+            )
+            resp.raise_for_status()
+            break
+        except httpx.HTTPStatusError as http_error:
+            logger.exception("HTTP error")
+            if http_error.response.status_code in [403, 404, 410]:
+                is_404 = True
+                continue
+            raise
+        except httpx.HTTPError:
+            logger.exception("req failed")
+            # If we tried https first and the domain is "http only"
+            if i == 0:
+                continue
+            break
 
-        if is_404:
-            return None
+    if is_404:
+        return None
 
     if resp:
         tree = ET.fromstring(resp.text)
@@ -85,32 +86,32 @@ async def webfinger(
     is_404 = False
 
     resp: httpx.Response | None = None
-    async with httpx.AsyncClient() as client:
-        for i, url in enumerate(urls):
-            try:
-                check_url(url)
-                resp = await client.get(
-                    url,
-                    params={"resource": resource},
-                    headers={
-                        "User-Agent": config.USER_AGENT,
-                    },
-                    follow_redirects=True,
-                )
-                resp.raise_for_status()
-                break
-            except httpx.HTTPStatusError as http_error:
-                logger.exception("HTTP error")
-                if http_error.response.status_code in [403, 404, 410]:
-                    is_404 = True
-                    continue
-                raise
-            except httpx.HTTPError:
-                logger.exception("req failed")
-                # If we tried https first and the domain is "http only"
-                if i == 0:
-                    continue
-                break
+    client = http_client.get_client()
+    for i, url in enumerate(urls):
+        try:
+            check_url(url)
+            resp = await client.get(
+                url,
+                params={"resource": resource},
+                headers={
+                    "User-Agent": config.USER_AGENT,
+                },
+                follow_redirects=True,
+            )
+            resp.raise_for_status()
+            break
+        except httpx.HTTPStatusError as http_error:
+            logger.exception("HTTP error")
+            if http_error.response.status_code in [403, 404, 410]:
+                is_404 = True
+                continue
+            raise
+        except httpx.HTTPError:
+            logger.exception("req failed")
+            # If we tried https first and the domain is "http only"
+            if i == 0:
+                continue
+            break
 
     if is_404:
         if not webfinger_url and host:

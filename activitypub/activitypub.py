@@ -11,6 +11,7 @@ from starlette.responses import JSONResponse
 
 # TODO: What can we refactor in the library from these imports and config?
 from app import config
+from app import http_client
 from app.config import ALSO_KNOWN_AS
 from app.config import AP_CONTENT_TYPE  # noqa: F401
 from app.config import MOVED_TO
@@ -193,17 +194,16 @@ async def fetch(
     logger.info(f"Fetching {url} ({params=})")
     check_url(url)
 
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            url,
-            headers={
-                "User-Agent": config.USER_AGENT,
-                "Accept": config.AP_CONTENT_TYPE,
-            },
-            params=params,
-            follow_redirects=True,
-            auth=None if disable_httpsig else auth,
-        )
+    resp = await http_client.get_client().get(
+        url,
+        headers={
+            "User-Agent": config.USER_AGENT,
+            "Accept": config.AP_CONTENT_TYPE,
+        },
+        params=params,
+        follow_redirects=True,
+        auth=None if disable_httpsig else auth,
+    )
 
     # Special handling for deleted object
     if resp.status_code == 410:
@@ -407,15 +407,14 @@ async def post(url: str, payload: dict[str, Any]) -> httpx.Response:
     logger.info(f"Posting {url} ({payload=})")
     check_url(url)
 
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            url,
-            headers={
-                "User-Agent": config.USER_AGENT,
-                "Content-Type": config.AP_CONTENT_TYPE,
-            },
-            json=payload,
-            auth=auth,
-        )
+    resp = await http_client.get_client().post(
+        url,
+        headers={
+            "User-Agent": config.USER_AGENT,
+            "Content-Type": config.AP_CONTENT_TYPE,
+        },
+        json=payload,
+        auth=auth,
+    )
     resp.raise_for_status()
     return resp

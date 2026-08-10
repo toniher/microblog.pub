@@ -2,11 +2,11 @@ from dataclasses import dataclass
 from typing import Any
 from typing import Optional
 
-import httpx
 from bs4 import BeautifulSoup  # type: ignore
 from loguru import logger
 
 from app import config
+from app import http_client
 from app.utils.datetime import now
 from app.utils.url import check_url
 from app.utils.url import is_url_valid
@@ -14,19 +14,18 @@ from app.utils.url import make_abs
 
 
 async def _discover_webmention_endoint(url: str) -> str | None:
-    async with httpx.AsyncClient() as client:
-        try:
-            resp = await client.get(
-                url,
-                headers={
-                    "User-Agent": config.USER_AGENT,
-                },
-                follow_redirects=True,
-            )
-            resp.raise_for_status()
-        except Exception:
-            logger.exception(f"Failed to discover webmention endpoint for {url}")
-            return None
+    try:
+        resp = await http_client.get_client().get(
+            url,
+            headers={
+                "User-Agent": config.USER_AGENT,
+            },
+            follow_redirects=True,
+        )
+        resp.raise_for_status()
+    except Exception:
+        logger.exception(f"Failed to discover webmention endpoint for {url}")
+        return None
 
     for k, v in resp.links.items():
         if k and "webmention" in k:

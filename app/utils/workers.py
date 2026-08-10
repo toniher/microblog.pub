@@ -5,6 +5,7 @@ from typing import TypeVar
 
 from loguru import logger
 
+from app import http_client
 from app.database import AsyncSession
 from app.database import async_session
 
@@ -66,6 +67,7 @@ class Worker(Generic[T]):
         except asyncio.TimeoutError:
             logger.info("Tasks failed to cancel")
 
+        await http_client.aclose_all()
         logger.info("stopping loop")
 
     async def _shutdown(self, sig: signal.Signals) -> None:

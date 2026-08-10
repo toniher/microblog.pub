@@ -17,8 +17,10 @@ from datetime import datetime
 from datetime import timezone
 from urllib.parse import urlparse
 
+from sqlalchemy import event
 from sqlalchemy import func
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 import activitypub.models
 from activitypub import activitypub as ap
@@ -36,19 +38,44 @@ from app.mastodon import ids
 from app.media import proxied_media_url
 from app.utils.datetime import parse_isoformat
 
+_CACHE_KEY = "_mastodon_serializer_cache"
+
+
+def _request_cache(db_session: AsyncSession) -> dict:
+    """Per-request memoization for values `serialize_status`/`serialize_account`
+    would otherwise re-fetch once per status on a timeline (see `_owner_counts`
+    and `_is_conversation_muted`). Scoped to `db_session.info` since a fresh
+    session is created per request (`get_db_session`), so session lifetime is
+    request lifetime here. Invalidated on every commit (see the `after_commit`
+    listener below) so a handler that writes then re-serializes never reads
+    stale cached values.
+    """
+    return db_session.info.setdefault(_CACHE_KEY, {})
+
+
+@event.listens_for(Session, "after_commit")
+def _invalidate_request_cache(session: Session) -> None:
+    session.info.pop(_CACHE_KEY, None)
+
+
+async def _muted_conversations(db_session: AsyncSession) -> set[str]:
+    cache = _request_cache(db_session)
+    if (muted := cache.get("muted_conversations")) is None:
+        muted = set(
+            (
+                await db_session.scalars(select(models.MutedConversation.conversation))
+            ).all()
+        )
+        cache["muted_conversations"] = muted
+    return muted
+
 
 async def _is_conversation_muted(
     db_session: AsyncSession, conversation: str | None
 ) -> bool:
     if conversation is None:
         return False
-    return (
-        await db_session.scalar(
-            select(models.MutedConversation.id).where(
-                models.MutedConversation.conversation == conversation
-            )
-        )
-    ) is not None
+    return conversation in (await _muted_conversations(db_session))
 
 
 # The actor keypair is generated once, during initial setup, and never
@@ -93,15 +120,20 @@ def _owner_created_at() -> datetime:
 
 
 async def _owner_counts(db_session: AsyncSession) -> tuple[int, int, int]:
-    followers_count = (
-        await db_session.scalar(select(func.count(activitypub.models.Follower.id))) or 0
-    )
-    following_count = (
-        await db_session.scalar(select(func.count(activitypub.models.Following.id)))
-        or 0
-    )
-    statuses_count = await public_outbox_objects_count(db_session)
-    return followers_count, following_count, statuses_count
+    cache = _request_cache(db_session)
+    if (counts := cache.get("owner_counts")) is None:
+        followers_count = (
+            await db_session.scalar(select(func.count(activitypub.models.Follower.id)))
+            or 0
+        )
+        following_count = (
+            await db_session.scalar(select(func.count(activitypub.models.Following.id)))
+            or 0
+        )
+        statuses_count = await public_outbox_objects_count(db_session)
+        counts = (followers_count, following_count, statuses_count)
+        cache["owner_counts"] = counts
+    return counts
 
 
 def serialize_extended_description() -> dict:

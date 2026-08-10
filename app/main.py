@@ -1,4 +1,5 @@
 import base64
+import contextlib
 import mimetypes
 import os
 import sys
@@ -6,6 +7,7 @@ import time
 from datetime import timezone
 from io import BytesIO
 from typing import Any
+from typing import AsyncGenerator
 from typing import MutableMapping
 from typing import Type
 
@@ -54,6 +56,7 @@ from activitypub.boxes import public_outbox_objects_count
 from activitypub.incoming_activities import new_ap_incoming_activity
 from app import admin
 from app import config
+from app import http_client
 from app import httpsig
 from app import indieauth
 from app import media
@@ -199,8 +202,17 @@ def _check_0rtt_early_data(request: Request) -> None:
         raise fastapi.HTTPException(status_code=425, detail="Too early")
 
 
+@contextlib.asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    yield
+    await http_client.aclose_all()
+
+
 app = FastAPI(
-    docs_url=None, redoc_url=None, dependencies=[Depends(_check_0rtt_early_data)]
+    docs_url=None,
+    redoc_url=None,
+    dependencies=[Depends(_check_0rtt_early_data)],
+    lifespan=_lifespan,
 )
 app.mount(
     "/custom_emoji",
@@ -1469,7 +1481,6 @@ async def serve_proxy_media(
     exp: int,
     sig: str,
     encoded_url: str,
-    background_tasks: fastapi.BackgroundTasks,
 ) -> StreamingResponse | PlainTextResponse:
     # Decode the base64-encoded URL
     url = base64.urlsafe_b64decode(encoded_url).decode()
@@ -1482,19 +1493,9 @@ async def serve_proxy_media(
         # gets a clean 404 instead of an unhandled 500.
         return PlainTextResponse(status_code=404)
 
-    proxy_client = httpx.AsyncClient(
-        # Redirects are followed manually in _proxy_get so each hop is
-        # re-validated against the SSRF guard (check_url).
-        follow_redirects=False,
-        timeout=httpx.Timeout(timeout=10.0),
-        transport=httpx.AsyncHTTPTransport(retries=1),
+    proxy_resp = await _proxy_get(
+        http_client.get_proxy_client(), request, url, stream=True
     )
-
-    async def _close_proxy_client():
-        await proxy_client.aclose()
-
-    background_tasks.add_task(_close_proxy_client)
-    proxy_resp = await _proxy_get(proxy_client, request, url, stream=True)
 
     if proxy_resp.status_code >= 300:
         logger.info(f"failed to proxy {url}, got {proxy_resp.status_code}")
@@ -1533,7 +1534,6 @@ async def serve_proxy_media_resized(
     sig: str,
     encoded_url: str,
     size: int,
-    background_tasks: fastapi.BackgroundTasks,
 ) -> PlainTextResponse:
     if size not in {50, 740}:
         raise ValueError("Unsupported size")
@@ -1559,19 +1559,9 @@ async def serve_proxy_media_resized(
             headers=resp_headers,
         )
 
-    proxy_client = httpx.AsyncClient(
-        # Redirects are followed manually in _proxy_get so each hop is
-        # re-validated against the SSRF guard (check_url).
-        follow_redirects=False,
-        timeout=httpx.Timeout(timeout=10.0),
-        transport=httpx.AsyncHTTPTransport(retries=1),
+    proxy_resp = await _proxy_get(
+        http_client.get_proxy_client(), request, url, stream=False
     )
-
-    async def _close_proxy_client():
-        await proxy_client.aclose()
-
-    background_tasks.add_task(_close_proxy_client)
-    proxy_resp = await _proxy_get(proxy_client, request, url, stream=False)
     if proxy_resp.status_code >= 300:
         logger.info(f"failed to proxy {url}, got {proxy_resp.status_code}")
         await proxy_resp.aclose()
