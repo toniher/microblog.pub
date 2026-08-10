@@ -238,9 +238,17 @@ class OutboxObject(Base, BaseObject):
     __tablename__ = "outbox"
     __table_args__ = (
         Index("ix_outbox_ap_published_at", "ap_published_at"),
+        # Deliberately does NOT lead with `visibility`: the Mastodon outbox
+        # timeline (`_fetch_outbox_timeline_page`) never constrains it, and
+        # SQLite can't use an index whose leading column is unconstrained.
+        # Leading with the two flags both queries do share lets this one index
+        # serve the homepage/articles pages *and* the Mastodon timelines, with
+        # `ap_published_at` trailing so it also satisfies the ORDER BY. The
+        # homepage's `visibility` predicate becomes a post-filter, which is
+        # cheap here since nearly every outbox row on a single-user instance
+        # is public.
         Index(
             "ix_outbox_homepage",
-            "visibility",
             "is_deleted",
             "is_hidden_from_homepage",
             "ap_published_at",

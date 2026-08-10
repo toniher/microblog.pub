@@ -1,22 +1,36 @@
 """Shared httpx clients, reused across requests instead of one-per-call.
 
 A fresh ``httpx.AsyncClient()`` per call means a fresh connection pool, so no
-TCP/TLS connection (and no HTTP/2 session, despite the ``http2`` extra being
-installed) ever survives long enough to be reused. Clients are cached per
-running event loop rather than as a single module-level instance: an httpx
+TCP/TLS connection ever survives long enough to be reused. Clients are cached
+per running event loop rather than as a single module-level instance: an httpx
 connection pool is bound to the loop it was created on, and pytest-asyncio
 gives each test its own loop, so a single shared instance would break (or
 silently stop pooling) across tests.
+
+The registries are weak-keyed so a finished loop (and with it its client and
+pool) can be collected instead of pinned for the life of the process —
+``aclose_all()`` only runs at app/worker shutdown, which never fires under
+pytest.
 """
 
 import asyncio
+import weakref
 
 import httpx
 
 _LIMITS = httpx.Limits(max_keepalive_connections=20, max_connections=100)
 
-_clients: dict[asyncio.AbstractEventLoop, httpx.AsyncClient] = {}
-_proxy_clients: dict[asyncio.AbstractEventLoop, httpx.AsyncClient] = {}
+# ALPN-negotiated with automatic HTTP/1.1 fallback, so enabling this is safe
+# against servers that don't speak it. Only worth doing now that connections
+# are actually reused — the `http2` extra was inert before.
+_HTTP2 = True
+
+_clients: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, httpx.AsyncClient]" = (
+    weakref.WeakKeyDictionary()
+)
+_proxy_clients: (
+    "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, httpx.AsyncClient]"
+) = weakref.WeakKeyDictionary()
 
 
 def get_client() -> httpx.AsyncClient:
@@ -26,7 +40,7 @@ def get_client() -> httpx.AsyncClient:
     loop = asyncio.get_running_loop()
     client = _clients.get(loop)
     if client is None or client.is_closed:
-        client = httpx.AsyncClient(limits=_LIMITS)
+        client = httpx.AsyncClient(limits=_LIMITS, http2=_HTTP2)
         _clients[loop] = client
     return client
 
@@ -42,8 +56,10 @@ def get_proxy_client() -> httpx.AsyncClient:
         client = httpx.AsyncClient(
             follow_redirects=False,
             timeout=httpx.Timeout(timeout=10.0),
-            transport=httpx.AsyncHTTPTransport(retries=1),
-            limits=_LIMITS,
+            # `limits`/`http2` have to be set on the transport, not the client:
+            # httpx returns an explicitly-passed `transport` as-is and drops
+            # the client-level values on the floor.
+            transport=httpx.AsyncHTTPTransport(retries=1, limits=_LIMITS, http2=_HTTP2),
         )
         _proxy_clients[loop] = client
     return client
@@ -51,6 +67,11 @@ def get_proxy_client() -> httpx.AsyncClient:
 
 async def aclose_all() -> None:
     for registry in (_clients, _proxy_clients):
-        for client in registry.values():
-            await client.aclose()
+        for client in list(registry.values()):
+            # A client bound to an already-closed loop can't be awaited; it has
+            # nothing left to release anyway, so don't let it abort shutdown.
+            try:
+                await client.aclose()
+            except Exception:  # noqa: BLE001
+                pass
         registry.clear()
