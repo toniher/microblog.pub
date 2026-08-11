@@ -147,6 +147,17 @@ class Config(pydantic.BaseModel):
     # Used by the Mastodon client API's /api/v1/instance and /api/v2/instance
     contact_email: str | None = None
 
+    # Outgoing HTTP connection pooling, see `app/http_client.py`. The defaults
+    # are the built-in behaviour; only set these to depart from it.
+    #
+    # `http_client_pooling = false` stops connections from being reused between
+    # requests (and, with them, HTTP/2 negotiation), which restores the
+    # one-connection-per-request behaviour used before pooling was introduced.
+    http_client_pooling: bool = True
+    http_client_http2: bool = True
+    http_client_max_connections: int = 100
+    http_client_max_keepalive_connections: int = 20
+
 
 def load_config() -> Config:
     try:
@@ -207,6 +218,12 @@ CUSTOM_CONTENT_SECURITY_POLICY = CONFIG.custom_content_security_policy
 CONTACT_EMAIL = CONFIG.contact_email
 
 INBOX_RETENTION_DAYS = CONFIG.inbox_retention_days
+
+HTTP_CLIENT_POOLING = CONFIG.http_client_pooling
+HTTP_CLIENT_HTTP2 = CONFIG.http_client_http2
+HTTP_CLIENT_MAX_CONNECTIONS = CONFIG.http_client_max_connections
+HTTP_CLIENT_MAX_KEEPALIVE_CONNECTIONS = CONFIG.http_client_max_keepalive_connections
+
 SESSION_TIMEOUT = CONFIG.session_timeout
 CUSTOM_FOOTER = (
     markdown(CONFIG.custom_footer.replace("{version}", VERSION))

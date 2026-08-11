@@ -208,6 +208,41 @@ disabled_notifications = ["like", "announce"]
  - `block`
  - `unblock`
 
+### Outgoing HTTP connections
+
+Requests the server makes to other instances — fetching ActivityPub objects, delivering
+activities, webfinger lookups, and proxying remote media — go through shared HTTP
+clients that keep connections alive and reuse them, negotiating HTTP/2 where the remote
+end supports it.
+
+This is enabled by default and needs no configuration. All four settings below are
+optional; omit them to keep the default behaviour.
+
+```toml
+http_client_pooling = true
+http_client_http2 = true
+http_client_max_connections = 100
+http_client_max_keepalive_connections = 20
+```
+
+ - `http_client_pooling` — when `false`, no connection is kept open past the response
+   that used it, so every request opens a fresh one. This also disables HTTP/2, since
+   running several requests over a single multiplexed connection is a form of
+   connection sharing as well.
+ - `http_client_http2` — when `false`, connections are still pooled and reused, but only
+   HTTP/1.1 is negotiated. Has no effect if `http_client_pooling` is `false`.
+ - `http_client_max_connections` — upper bound on connections open at once, across all
+   remote hosts.
+ - `http_client_max_keepalive_connections` — how many idle connections are kept around
+   for reuse.
+
+One visible side effect of pooling: because a page's remote images usually come from a
+single host, they are now fetched over one shared connection and tend to finish
+together, rather than trickling in one by one as they did when every request opened its
+own connection. The page finishes loading sooner, but it renders in one go instead of
+progressively. Setting `http_client_pooling = false` restores the old behaviour at the
+cost of re-establishing a connection for every request.
+
 ### Customization
 
 #### Default emoji

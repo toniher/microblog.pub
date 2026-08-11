@@ -11,6 +11,10 @@ The registries are weak-keyed so a finished loop (and with it its client and
 pool) can be collected instead of pinned for the life of the process —
 ``aclose_all()`` only runs at app/worker shutdown, which never fires under
 pytest.
+
+All of this is tunable from ``data/profile.toml`` (see "Outgoing HTTP
+connections" in the user guide); the defaults below are what the app does when
+none of those settings are present.
 """
 
 import asyncio
@@ -18,12 +22,29 @@ import weakref
 
 import httpx
 
-_LIMITS = httpx.Limits(max_keepalive_connections=20, max_connections=100)
+from app.config import HTTP_CLIENT_HTTP2
+from app.config import HTTP_CLIENT_MAX_CONNECTIONS
+from app.config import HTTP_CLIENT_MAX_KEEPALIVE_CONNECTIONS
+from app.config import HTTP_CLIENT_POOLING
+
+# With pooling disabled, no connection is held open past the response that used
+# it, which is the one-connection-per-request behaviour from before these
+# clients were shared. HTTP/2 goes with it rather than being left on: running
+# several requests over a single multiplexed connection is connection sharing
+# too, so honouring `http_client_pooling = false` means dropping back to
+# HTTP/1.1. The *client* stays shared either way — it is the connection reuse
+# that the setting turns off, not the object caching.
+_HTTP2 = HTTP_CLIENT_HTTP2 and HTTP_CLIENT_POOLING
 
 # ALPN-negotiated with automatic HTTP/1.1 fallback, so enabling this is safe
 # against servers that don't speak it. Only worth doing now that connections
 # are actually reused — the `http2` extra was inert before.
-_HTTP2 = True
+_LIMITS = httpx.Limits(
+    max_keepalive_connections=(
+        HTTP_CLIENT_MAX_KEEPALIVE_CONNECTIONS if HTTP_CLIENT_POOLING else 0
+    ),
+    max_connections=HTTP_CLIENT_MAX_CONNECTIONS,
+)
 
 _clients: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, httpx.AsyncClient]" = (
     weakref.WeakKeyDictionary()
