@@ -1,3 +1,4 @@
+from datetime import timedelta
 from unittest import mock
 
 import pytest
@@ -6,7 +7,9 @@ from sqlalchemy.orm import Session
 
 from activitypub import activitypub as ap
 from activitypub.actor import LOCAL_ACTOR
+from activitypub.tests import factories
 from app import templates
+from app.utils.datetime import now
 
 _ACCEPTED_AP_HEADERS = [
     "application/activity+json",
@@ -16,10 +19,47 @@ _ACCEPTED_AP_HEADERS = [
 ]
 
 
+def _create_public_note(index: int) -> None:
+    factories.OutboxObjectFactory(
+        public_id=f"note-{index}",
+        ap_type="Note",
+        ap_id=f"http://localhost:8000/o/note-{index}",
+        ap_object={"type": "Note", "content": f"hello {index}"},
+        visibility=ap.VisibilityEnum.PUBLIC,
+        ap_published_at=now() - timedelta(seconds=index),
+    )
+
+
 def test_index__html(db: Session, client: TestClient):
     response = client.get("/")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
+
+
+def test_index__html_has_next_page_when_more_than_a_page_of_notes(
+    db: Session, client: TestClient
+) -> None:
+    # `index` fetches `page_size + 1` rows to derive `has_next_page` instead
+    # of a separate `COUNT(*)` -- this locks in the off-by-one boundary.
+    for i in range(21):
+        _create_public_note(i)
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "?page=2" in response.text
+
+
+def test_index__html_no_next_page_when_exactly_a_page_of_notes(
+    db: Session, client: TestClient
+) -> None:
+    for i in range(20):
+        _create_public_note(i)
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "?page=2" not in response.text
 
 
 def _use_shipped_templates_only(

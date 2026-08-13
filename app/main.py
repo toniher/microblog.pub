@@ -379,12 +379,12 @@ async def index(
         ),
     )
     q = select(activitypub.models.OutboxObject).where(*where)
-    total_count = await db_session.scalar(
-        select(func.count(activitypub.models.OutboxObject.id)).where(*where)
-    )
     page_size = 20
     page_offset = (page - 1) * page_size
 
+    # Fetch one extra row instead of a separate `COUNT(*)` to know whether a
+    # next page exists -- avoids a second full-table scan of the same
+    # `WHERE` on every page load.
     outbox_objects_result = await db_session.scalars(
         q.options(
             joinedload(
@@ -404,9 +404,11 @@ async def index(
         .order_by(activitypub.models.OutboxObject.is_pinned.desc())
         .order_by(activitypub.models.OutboxObject.ap_published_at.desc())
         .offset(page_offset)
-        .limit(page_size)
+        .limit(page_size + 1)
     )
     outbox_objects = outbox_objects_result.unique().all()
+    has_next_page = len(outbox_objects) > page_size
+    outbox_objects = outbox_objects[:page_size]
 
     return await templates.render_template(
         db_session,
@@ -416,7 +418,7 @@ async def index(
             "request": request,
             "objects": outbox_objects,
             "current_page": page,
-            "has_next_page": page_offset + len(outbox_objects) < total_count,
+            "has_next_page": has_next_page,
             "has_previous_page": page > 1,
         },
     )
