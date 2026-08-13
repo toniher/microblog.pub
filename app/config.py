@@ -158,6 +158,29 @@ class Config(pydantic.BaseModel):
     http_client_max_connections: int = 100
     http_client_max_keepalive_connections: int = 20
 
+    # Batched, concurrent federation delivery, see `activitypub/outgoing_activities.py`.
+    # Per-recipient delivery ordering always holds, regardless of these values:
+    # activities queued for the same inbox are delivered strictly in order.
+    outgoing_delivery_batch_size: int = pydantic.Field(default=20, ge=1)
+    outgoing_delivery_concurrency: int = pydantic.Field(default=10, ge=1)
+    outgoing_delivery_per_host_concurrency: int = pydantic.Field(default=2, ge=1)
+
+    @pydantic.model_validator(mode="after")
+    def _validate_outgoing_delivery_concurrency(self) -> "Config":
+        if (
+            self.outgoing_delivery_per_host_concurrency
+            > self.outgoing_delivery_concurrency
+        ):
+            raise ValueError(
+                "outgoing_delivery_per_host_concurrency must be <= "
+                "outgoing_delivery_concurrency"
+            )
+        if self.outgoing_delivery_concurrency > self.http_client_max_connections:
+            raise ValueError(
+                "outgoing_delivery_concurrency must be <= http_client_max_connections"
+            )
+        return self
+
 
 def load_config() -> Config:
     try:
@@ -223,6 +246,10 @@ HTTP_CLIENT_POOLING = CONFIG.http_client_pooling
 HTTP_CLIENT_HTTP2 = CONFIG.http_client_http2
 HTTP_CLIENT_MAX_CONNECTIONS = CONFIG.http_client_max_connections
 HTTP_CLIENT_MAX_KEEPALIVE_CONNECTIONS = CONFIG.http_client_max_keepalive_connections
+
+OUTGOING_DELIVERY_BATCH_SIZE = CONFIG.outgoing_delivery_batch_size
+OUTGOING_DELIVERY_CONCURRENCY = CONFIG.outgoing_delivery_concurrency
+OUTGOING_DELIVERY_PER_HOST_CONCURRENCY = CONFIG.outgoing_delivery_per_host_concurrency
 
 SESSION_TIMEOUT = CONFIG.session_timeout
 CUSTOM_FOOTER = (

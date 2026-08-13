@@ -4,7 +4,6 @@ from datetime import datetime
 from datetime import timedelta
 
 from loguru import logger
-from sqlalchemy import func
 from sqlalchemy import select
 
 import activitypub.models
@@ -75,25 +74,21 @@ async def fetch_next_incoming_activity(
         activitypub.models.IncomingActivity.is_errored.is_(False),
         activitypub.models.IncomingActivity.is_processed.is_(False),
     ]
-    q_count = await db_session.scalar(
-        select(func.count(activitypub.models.IncomingActivity.id)).where(*where)
-    )
-    if q_count > 0:
-        logger.info(f"{q_count} incoming activities ready to process")
-    if not q_count:
-        # logger.debug("No activities to process")
-        return None
-
-    next_activity = (
-        await db_session.execute(
-            select(activitypub.models.IncomingActivity)
-            .where(*where)
-            .limit(1)
-            .order_by(activitypub.models.IncomingActivity.next_try.asc())
+    return (
+        (
+            await db_session.execute(
+                select(activitypub.models.IncomingActivity)
+                .where(*where)
+                .limit(1)
+                .order_by(
+                    activitypub.models.IncomingActivity.next_try.asc(),
+                    activitypub.models.IncomingActivity.id,
+                )
+            )
         )
-    ).scalar_one()
-
-    return next_activity
+        .scalars()
+        .first()
+    )
 
 
 async def process_next_incoming_activity(

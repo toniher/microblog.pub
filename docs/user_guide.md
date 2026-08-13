@@ -243,6 +243,32 @@ own connection. The page finishes loading sooner, but it renders in one go inste
 progressively. Setting `http_client_pooling = false` restores the old behaviour at the
 cost of re-establishing a connection for every request.
 
+### Outgoing federation delivery
+
+Activities queued for delivery (to followers, mentioned actors, webmention targets…) are
+sent out in batches, with several deliveries in flight at once instead of one at a time.
+
+This is enabled by default and needs no configuration. All three settings below are
+optional; omit them to keep the default behaviour.
+
+```toml
+outgoing_delivery_batch_size = 20
+outgoing_delivery_concurrency = 10
+outgoing_delivery_per_host_concurrency = 2
+```
+
+ - `outgoing_delivery_batch_size` — how many due activities are fetched per poll.
+ - `outgoing_delivery_concurrency` — how many deliveries run at once, across all
+   recipients. Must not exceed `http_client_max_connections`.
+ - `outgoing_delivery_per_host_concurrency` — how many deliveries run at once against a
+   single remote host. Must not exceed `outgoing_delivery_concurrency`.
+
+Delivery order to a given recipient inbox is always preserved regardless of these
+values — activities queued for the same inbox are still delivered one at a time, in
+order, so a boost can never overtake the post it boosts, for example. Only deliveries
+to *different* recipients run concurrently. Setting `outgoing_delivery_concurrency = 1`
+restores fully serial delivery, one activity at a time.
+
 ### Customization
 
 #### Default emoji

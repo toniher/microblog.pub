@@ -432,6 +432,14 @@ class Following(Base):
 
 class IncomingActivity(Base):
     __tablename__ = "incoming_activity"
+    __table_args__ = (
+        Index(
+            "ix_incoming_activity_queue",
+            "is_errored",
+            "is_processed",
+            "next_try",
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=now)
@@ -455,6 +463,14 @@ class IncomingActivity(Base):
 
 class OutgoingActivity(Base):
     __tablename__ = "outgoing_activity"
+    __table_args__ = (
+        Index(
+            "ix_outgoing_activity_queue",
+            "is_errored",
+            "is_sent",
+            "next_try",
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=now)

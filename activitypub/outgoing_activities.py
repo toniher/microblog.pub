@@ -1,15 +1,16 @@
 import asyncio
+import dataclasses
 import email
 import time
 import traceback
 from datetime import datetime
 from datetime import timedelta
 from typing import MutableMapping
+from urllib.parse import urlparse
 
 import httpx
 from cachetools import TTLCache
 from loguru import logger
-from sqlalchemy import func
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
@@ -159,129 +160,357 @@ def _set_next_try(
         outgoing_activity.next_try = next_try or _exp_backoff(outgoing_activity.tries)
 
 
-async def fetch_next_outgoing_activity(
+@dataclasses.dataclass(frozen=True)
+class _DeliveryRequest:
+    activity_id: int
+    recipient: str
+    host: str
+    webmention_payload: dict[str, str | None] | None
+    ap_payload: ap.RawObject | None
+
+
+@dataclasses.dataclass(frozen=True)
+class _DeliveryOutcome:
+    activity_id: int
+    response: httpx.Response | None = None
+    exception: Exception | None = None
+    formatted_traceback: str | None = None
+    retry_after: datetime | None = None
+    skip_reason: str | None = None
+
+
+async def fetch_next_outgoing_activities(
     db_session: AsyncSession,
-) -> activitypub.models.OutgoingActivity | None:
+    limit: int,
+) -> list[activitypub.models.OutgoingActivity]:
     where = [
         activitypub.models.OutgoingActivity.next_try <= now(),
         activitypub.models.OutgoingActivity.is_errored.is_(False),
         activitypub.models.OutgoingActivity.is_sent.is_(False),
     ]
-    q_count = await db_session.scalar(
-        select(func.count(activitypub.models.OutgoingActivity.id)).where(*where)
-    )
-    if q_count > 0:
-        logger.info(f"{q_count} outgoing activities ready to process")
-    if not q_count:
-        # logger.debug("No activities to process")
-        return None
-
-    next_activity = (
-        await db_session.execute(
-            select(activitypub.models.OutgoingActivity)
-            .where(*where)
-            .limit(1)
-            .options(
-                joinedload(activitypub.models.OutgoingActivity.inbox_object),
-                joinedload(activitypub.models.OutgoingActivity.outbox_object),
+    return list(
+        (
+            await db_session.execute(
+                select(activitypub.models.OutgoingActivity)
+                .where(*where)
+                .limit(limit)
+                .options(
+                    joinedload(activitypub.models.OutgoingActivity.inbox_object),
+                    joinedload(activitypub.models.OutgoingActivity.outbox_object),
+                )
+                .order_by(
+                    activitypub.models.OutgoingActivity.next_try,
+                    activitypub.models.OutgoingActivity.id,
+                )
             )
-            .order_by(activitypub.models.OutgoingActivity.next_try)
         )
-    ).scalar_one()
-    return next_activity
+        .scalars()
+        .all()
+    )
 
 
-async def process_next_outgoing_activity(
+async def fetch_next_outgoing_activity(
     db_session: AsyncSession,
+) -> activitypub.models.OutgoingActivity | None:
+    activities = await fetch_next_outgoing_activities(db_session, 1)
+    return activities[0] if activities else None
+
+
+def _build_delivery_request(
     next_activity: activitypub.models.OutgoingActivity,
-) -> None:
-    next_activity.tries = next_activity.tries + 1  # type: ignore
-    next_activity.last_try = now()
+) -> _DeliveryRequest:
+    if next_activity.id is None or next_activity.recipient is None:
+        raise ValueError("Should never happen")
 
-    logger.info(f"recipient={next_activity.recipient}")
+    activity_id: int = next_activity.id
+    recipient: str = next_activity.recipient
+    host: str = urlparse(recipient).netloc
 
+    if next_activity.webmention_target and next_activity.outbox_object:
+        webmention_payload = {
+            "source": next_activity.outbox_object.url,
+            "target": next_activity.webmention_target,
+        }
+        logger.info(f"{webmention_payload=}")
+        return _DeliveryRequest(
+            activity_id=activity_id,
+            recipient=recipient,
+            host=host,
+            webmention_payload=webmention_payload,
+            ap_payload=None,
+        )
+
+    payload = ap.wrap_object_if_needed(next_activity.anybox_object.ap_object)
+    # `wrap_object_if_needed` returns the ORM's dict by identity for
+    # Update/Delete, and the same OutboxObject may be shared across a whole
+    # recipient fan-out via the session identity map — copy before mutating.
+    payload = dict(payload)
+
+    # Use LD sig if the activity may need to be forwarded by recipients
+    if next_activity.anybox_object.is_from_outbox and payload["type"] in [
+        "Create",
+        "Update",
+        "Delete",
+    ]:
+        # But only if the object is public (to help with deniability/privacy)
+        if next_activity.outbox_object.visibility == ap.VisibilityEnum.PUBLIC:  # type: ignore  # noqa: E501
+            if p := _LD_SIG_CACHE.get(payload["id"]):
+                payload = p
+            else:
+                ldsig.generate_signature(payload, k)
+                _LD_SIG_CACHE[payload["id"]] = payload
+
+    logger.info(f"{payload=}")
+
+    return _DeliveryRequest(
+        activity_id=activity_id,
+        recipient=recipient,
+        host=host,
+        webmention_payload=None,
+        ap_payload=payload,
+    )
+
+
+async def _deliver(req: _DeliveryRequest) -> _DeliveryOutcome:
     try:
-        if next_activity.webmention_target and next_activity.outbox_object:
-            webmention_payload = {
-                "source": next_activity.outbox_object.url,
-                "target": next_activity.webmention_target,
-            }
-            logger.info(f"{webmention_payload=}")
-            check_url(next_activity.recipient)
+        await asyncio.to_thread(check_url, req.recipient)
+        if req.webmention_payload is not None:
             resp = await http_client.get_client().post(
-                next_activity.recipient,  # type: ignore
-                data=webmention_payload,
+                req.recipient,
+                data=req.webmention_payload,
                 headers={
                     "User-Agent": config.USER_AGENT,
                 },
             )
             resp.raise_for_status()
         else:
-            payload = ap.wrap_object_if_needed(next_activity.anybox_object.ap_object)
-
-            # Use LD sig if the activity may need to be forwarded by recipients
-            if next_activity.anybox_object.is_from_outbox and payload["type"] in [
-                "Create",
-                "Update",
-                "Delete",
-            ]:
-                # But only if the object is public (to help with deniability/privacy)
-                if next_activity.outbox_object.visibility == ap.VisibilityEnum.PUBLIC:  # type: ignore  # noqa: E501
-                    if p := _LD_SIG_CACHE.get(payload["id"]):
-                        payload = p
-                    else:
-                        ldsig.generate_signature(payload, k)
-                        _LD_SIG_CACHE[payload["id"]] = payload
-
-            logger.info(f"{payload=}")
-
-            resp = await ap.post(next_activity.recipient, payload)  # type: ignore
+            if req.ap_payload is None:
+                raise ValueError("Should never happen")
+            resp = await ap.post(req.recipient, req.ap_payload)
     except httpx.HTTPStatusError as http_error:
         logger.exception("Failed")
-        next_activity.last_status_code = http_error.response.status_code
-        next_activity.last_response = http_error.response.text
-        next_activity.error = traceback.format_exc()
-
-        if http_error.response.status_code in [429, 503]:
-            retry_after: datetime | None = None
+        retry_after: datetime | None = None
+        if http_error.response.status_code in (429, 503):
             if retry_after_value := http_error.response.headers.get("Retry-After"):
                 retry_after = _parse_retry_after(retry_after_value)
-            _set_next_try(next_activity, retry_after)
-        elif http_error.response.status_code == 401:
-            _set_next_try(next_activity)
-        elif 400 <= http_error.response.status_code < 500:
-            logger.info(f"status_code={http_error.response.status_code} not retrying")
-            next_activity.is_errored = True
-            next_activity.next_try = None
-        else:
-            _set_next_try(next_activity)
-    except Exception:
+        return _DeliveryOutcome(
+            activity_id=req.activity_id,
+            exception=http_error,
+            formatted_traceback=traceback.format_exc(),
+            retry_after=retry_after,
+        )
+    except Exception as exc:
         logger.exception("Failed")
-        next_activity.error = traceback.format_exc()
-        _set_next_try(next_activity)
+        return _DeliveryOutcome(
+            activity_id=req.activity_id,
+            exception=exc,
+            formatted_traceback=traceback.format_exc(),
+        )
     else:
         logger.info("Success")
-        next_activity.is_sent = True
-        next_activity.last_status_code = resp.status_code
-        next_activity.last_response = resp.text
+        return _DeliveryOutcome(activity_id=req.activity_id, response=resp)
 
-    await db_session.commit()
+
+def _is_host_level_failure(exc: Exception) -> bool:
+    """A failure that other requests to the same recipient would also hit.
+
+    Short-circuiting the rest of a same-recipient group on these saves N-1
+    pointless attempts against a throttled/unreachable host, without
+    touching activity-specific permanent failures (4xx other than 429).
+    """
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code in (429, 503)
+    return isinstance(exc, httpx.TransportError)
+
+
+async def _deliver_group(
+    group: list[_DeliveryRequest],
+    global_sem: asyncio.Semaphore,
+    per_host_sems: dict[str, asyncio.Semaphore],
+) -> list[_DeliveryOutcome]:
+    """Deliver requests for a single recipient, strictly in order.
+
+    Two activities queued for the same inbox must arrive in order (an
+    `Undo(Follow)` racing ahead of `Follow`, or a `Delete` racing ahead of a
+    `Create`, would leave the wrong state on the remote permanently) — so a
+    group is never itself parallelized, only run concurrently with other
+    groups.
+    """
+    outcomes: list[_DeliveryOutcome] = []
+    skip_outcome: _DeliveryOutcome | None = None
+
+    for req in group:
+        if skip_outcome is not None:
+            # Still consumes the attempt (tries was already incremented in
+            # the prepare phase) so `_MAX_RETRIES` accounting isn't skewed.
+            outcomes.append(
+                dataclasses.replace(skip_outcome, activity_id=req.activity_id)
+            )
+            continue
+
+        async with global_sem, per_host_sems[req.host]:
+            outcome = await _deliver(req)
+        outcomes.append(outcome)
+
+        if outcome.exception is not None and _is_host_level_failure(outcome.exception):
+            skip_outcome = _DeliveryOutcome(
+                activity_id=req.activity_id,
+                skip_reason=f"skipped: {req.host} is unavailable",
+                retry_after=outcome.retry_after,
+            )
+
+    return outcomes
+
+
+async def _deliver_batch(
+    delivery_requests: list[_DeliveryRequest],
+) -> list[_DeliveryOutcome]:
+    if not delivery_requests:
+        return []
+
+    groups: dict[str, list[_DeliveryRequest]] = {}
+    for req in delivery_requests:
+        groups.setdefault(req.recipient, []).append(req)
+
+    # Built fresh per batch: a module-level `asyncio.Semaphore` caches the
+    # event loop it was created on, which breaks across pytest-asyncio's
+    # per-test event loops.
+    global_sem = asyncio.Semaphore(config.OUTGOING_DELIVERY_CONCURRENCY)
+    per_host_sems: dict[str, asyncio.Semaphore] = {}
+    for req in delivery_requests:
+        if req.host not in per_host_sems:
+            per_host_sems[req.host] = asyncio.Semaphore(
+                config.OUTGOING_DELIVERY_PER_HOST_CONCURRENCY
+            )
+
+    grouped_outcomes = await asyncio.gather(
+        *(_deliver_group(group, global_sem, per_host_sems) for group in groups.values())
+    )
+    return [
+        outcome for group_outcomes in grouped_outcomes for outcome in group_outcomes
+    ]
+
+
+def _apply_delivery_outcome(
+    activity: activitypub.models.OutgoingActivity,
+    outcome: _DeliveryOutcome,
+) -> None:
+    if outcome.skip_reason is not None:
+        activity.error = outcome.skip_reason
+        _set_next_try(activity, outcome.retry_after)
+    elif outcome.exception is not None:
+        exc = outcome.exception
+        if isinstance(exc, httpx.HTTPStatusError):
+            activity.last_status_code = exc.response.status_code
+            activity.last_response = exc.response.text
+            activity.error = outcome.formatted_traceback
+
+            if exc.response.status_code in [429, 503]:
+                _set_next_try(activity, outcome.retry_after)
+            elif exc.response.status_code == 401:
+                _set_next_try(activity)
+            elif 400 <= exc.response.status_code < 500:
+                logger.info(f"status_code={exc.response.status_code} not retrying")
+                activity.is_errored = True
+                activity.next_try = None
+            else:
+                _set_next_try(activity)
+        else:
+            activity.error = outcome.formatted_traceback
+            _set_next_try(activity)
+    else:
+        resp = outcome.response
+        if resp is None:
+            raise ValueError("Should never happen")
+        activity.is_sent = True
+        activity.last_status_code = resp.status_code
+        activity.last_response = resp.text
+
+
+async def process_outgoing_activities_batch(
+    db_session: AsyncSession,
+    activities: list[activitypub.models.OutgoingActivity],
+) -> None:
+    if not activities:
+        return None
+
+    activities_by_id = {activity.id: activity for activity in activities}
+    delivery_requests: list[_DeliveryRequest] = []
+    outcomes: list[_DeliveryOutcome] = []
+
+    for next_activity in activities:
+        next_activity.tries = next_activity.tries + 1  # type: ignore
+        next_activity.last_try = now()
+
+        logger.info(f"recipient={next_activity.recipient}")
+
+        try:
+            delivery_requests.append(_build_delivery_request(next_activity))
+        except Exception as exc:
+            logger.exception("Failed to prepare delivery")
+            outcomes.append(
+                _DeliveryOutcome(
+                    activity_id=next_activity.id,  # type: ignore
+                    exception=exc,
+                    formatted_traceback=traceback.format_exc(),
+                )
+            )
+
+    try:
+        await db_session.commit()
+    except Exception:
+        await db_session.rollback()
+        raise
+
+    outcomes.extend(await _deliver_batch(delivery_requests))
+
+    for outcome in outcomes:
+        _apply_delivery_outcome(activities_by_id[outcome.activity_id], outcome)
+
+    # Defensive sweep: every row fetched into this batch must leave it either
+    # sent, errored, or with an advanced `next_try` -- otherwise the next
+    # poll would refetch it immediately and busy-loop.
+    for activity in activities:
+        if (
+            not activity.is_sent
+            and not activity.is_errored
+            and (activity.next_try is None or activity.next_try <= now())
+        ):
+            logger.warning(f"Activity {activity.id} made no progress, forcing backoff")
+            _set_next_try(activity)
+
+    try:
+        await db_session.commit()
+    except Exception:
+        await db_session.rollback()
+        raise
+
     return None
 
 
-class OutgoingActivityWorker(Worker[activitypub.models.OutgoingActivity]):
-    async def process_message(
-        self,
-        db_session: AsyncSession,
-        next_activity: activitypub.models.OutgoingActivity,
-    ) -> None:
-        await process_next_outgoing_activity(db_session, next_activity)
+async def process_next_outgoing_activity(
+    db_session: AsyncSession,
+    next_activity: activitypub.models.OutgoingActivity,
+) -> None:
+    await process_outgoing_activities_batch(db_session, [next_activity])
 
-    async def get_next_message(
+
+class OutgoingActivityWorker(Worker[activitypub.models.OutgoingActivity]):
+    batch_size = config.OUTGOING_DELIVERY_BATCH_SIZE
+
+    async def get_next_messages(
         self,
         db_session: AsyncSession,
-    ) -> activitypub.models.OutgoingActivity | None:
-        return await fetch_next_outgoing_activity(db_session)
+        limit: int,
+    ) -> list[activitypub.models.OutgoingActivity]:
+        return await fetch_next_outgoing_activities(db_session, limit)
+
+    async def process_messages(
+        self,
+        db_session: AsyncSession,
+        messages: list[activitypub.models.OutgoingActivity],
+    ) -> None:
+        await process_outgoing_activities_batch(db_session, messages)
 
     async def startup(self, db_session: AsyncSession) -> None:
         await _send_actor_update_if_needed(db_session)
