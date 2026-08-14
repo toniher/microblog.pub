@@ -601,6 +601,7 @@ async def accounts_show(
 async def _respond_with_status_list(
     request: Request, db_session: AsyncSession, objects: list
 ) -> JSONResponse:
+    await serializers.prefetch_status_relations(db_session, objects)
     statuses = [await serializers.serialize_status(db_session, obj) for obj in objects]
     response = JSONResponse(content=statuses, status_code=200)
     link_header = pagination.build_link_header(
@@ -1025,6 +1026,14 @@ async def statuses_context(
         requested_node, ancestor_nodes = found
         descendant_nodes = _flatten_descendants(requested_node)
 
+    await serializers.prefetch_status_relations(
+        db_session,
+        [
+            node.ap_object
+            for node in ancestor_nodes + descendant_nodes
+            if node.ap_object is not None
+        ],
+    )
     ancestors = [
         await serializers.serialize_status(db_session, node.ap_object)
         for node in ancestor_nodes
@@ -1811,6 +1820,9 @@ async def conversations_list(
     if (cursor_int := _safe_id_int(params.min_id or params.since_id)) is not None:
         threads = [t for t in threads if _status_id_int(t[0]) > cursor_int]
     threads = threads[: params.limit]
+    await serializers.prefetch_status_relations(
+        db_session, [last for last, _, _ in threads]
+    )
 
     serialized = [
         await _serialize_conversation(db_session, last, actor_ids, unread)
@@ -2997,9 +3009,9 @@ async def _search_statuses(
         obj for obj in combined if obj.content and query_lower in obj.content.lower()
     ]
     matches.sort(key=_status_id_int, reverse=True)
-    return [
-        await serializers.serialize_status(db_session, obj) for obj in matches[:limit]
-    ]
+    page = matches[:limit]
+    await serializers.prefetch_status_relations(db_session, page)
+    return [await serializers.serialize_status(db_session, obj) for obj in page]
 
 
 async def _resolve_remote(db_session: AsyncSession, query: str):

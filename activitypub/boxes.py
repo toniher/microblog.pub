@@ -4,6 +4,7 @@ import datetime
 import time
 import uuid
 from collections import defaultdict
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
@@ -1237,6 +1238,90 @@ async def get_anybox_object_by_ap_id(
         return await get_outbox_object_by_ap_id(db_session, ap_id)
     else:
         return await get_inbox_object_by_ap_id(db_session, ap_id)
+
+
+async def get_inbox_objects_by_ap_ids(
+    db_session: AsyncSession, ap_ids: Collection[str]
+) -> list[activitypub.models.InboxObject]:
+    """Batched `get_inbox_object_by_ap_id`.
+
+    The eager-load options must stay in sync with the single-object getter:
+    callers of the batched form expect the same relationships to be loaded,
+    and under the async session a missed `joinedload` is not a slow lazy
+    SELECT but a `MissingGreenlet` at attribute access.
+    """
+    if not ap_ids:
+        return []
+    return list(
+        (
+            await db_session.scalars(
+                select(activitypub.models.InboxObject)
+                .where(activitypub.models.InboxObject.ap_id.in_(ap_ids))
+                .options(
+                    joinedload(activitypub.models.InboxObject.actor),
+                    joinedload(activitypub.models.InboxObject.relates_to_inbox_object),
+                    joinedload(activitypub.models.InboxObject.relates_to_outbox_object),
+                )
+            )
+        )
+        .unique()
+        .all()
+    )
+
+
+async def get_outbox_objects_by_ap_ids(
+    db_session: AsyncSession, ap_ids: Collection[str]
+) -> list[activitypub.models.OutboxObject]:
+    """Batched `get_outbox_object_by_ap_id` — see the note there on options."""
+    if not ap_ids:
+        return []
+    return list(
+        (
+            await db_session.scalars(
+                select(activitypub.models.OutboxObject)
+                .where(activitypub.models.OutboxObject.ap_id.in_(ap_ids))
+                .options(
+                    joinedload(
+                        activitypub.models.OutboxObject.outbox_object_attachments
+                    ).options(
+                        joinedload(activitypub.models.OutboxObjectAttachment.upload)
+                    ),
+                    joinedload(
+                        activitypub.models.OutboxObject.relates_to_inbox_object
+                    ).options(
+                        joinedload(activitypub.models.InboxObject.actor),
+                    ),
+                    joinedload(
+                        activitypub.models.OutboxObject.relates_to_outbox_object
+                    ).options(
+                        joinedload(
+                            activitypub.models.OutboxObject.outbox_object_attachments
+                        ).options(
+                            joinedload(activitypub.models.OutboxObjectAttachment.upload)
+                        ),
+                    ),
+                )
+            )
+        )
+        .unique()
+        .all()
+    )
+
+
+async def get_anybox_objects_by_ap_ids(
+    db_session: AsyncSession, ap_ids: Collection[str]
+) -> list[AnyboxObject]:
+    """Batched `get_anybox_object_by_ap_id`.
+
+    Splits on the same `BASE_URL` rule as the single-object variant, so the
+    inbox/outbox routing lives in exactly one place.
+    """
+    local = {ap_id for ap_id in ap_ids if ap_id.startswith(BASE_URL)}
+    remote = {ap_id for ap_id in ap_ids if not ap_id.startswith(BASE_URL)}
+    objects: list[AnyboxObject] = []
+    objects.extend(await get_outbox_objects_by_ap_ids(db_session, local))
+    objects.extend(await get_inbox_objects_by_ap_ids(db_session, remote))
+    return objects
 
 
 async def get_webmention_by_id(

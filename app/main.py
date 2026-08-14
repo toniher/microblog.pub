@@ -515,9 +515,11 @@ async def _build_followx_collection(
     page: bool | None,
     next_cursor: str | None,
 ) -> ap.RawObject:
-    total_items = await db_session.scalar(select(func.count(model_cls.id)))
-
     if not page and not next_cursor:
+        # `totalItems` belongs to the OrderedCollection only — the
+        # OrderedCollectionPage built below never carries it, so the COUNT
+        # stays inside this branch.
+        total_items = await db_session.scalar(select(func.count(model_cls.id)))
         return {
             "@context": ap.AS_CTX,
             "id": ID + path,
@@ -537,12 +539,16 @@ async def _build_followx_collection(
     next_cursor = None
     if (
         items
-        and await db_session.scalar(
-            select(func.count(model_cls.id)).where(
-                model_cls.created_at < items[-1].created_at
+        and (
+            # Existence probe, not a tally: a `limit(1)` stops at the first older
+            # row where a COUNT would walk every one of them.
+            await db_session.scalar(
+                select(model_cls.id)
+                .where(model_cls.created_at < items[-1].created_at)
+                .limit(1)
             )
         )
-        > 0
+        is not None
     ):
         next_cursor = pagination.encode_cursor(items[-1].created_at)
 
@@ -1127,12 +1133,15 @@ async def tag_by_name(
         activitypub.models.OutboxObject.visibility == ap.VisibilityEnum.PUBLIC,
         activitypub.models.OutboxObject.is_deleted.is_(False),
     ]
-    tagged_count = await db_session.scalar(
-        select(func.count(activitypub.models.OutboxObject.id))
-        .join(activitypub.models.TaggedOutboxObject)
-        .where(*where)
-    )
     if is_activitypub_requested(request):
+        # Only the AP collection reports `totalItems`; the HTML branch below
+        # derives its 404 from the objects it fetches anyway, so this JOINed
+        # COUNT stays inside the branch that needs it.
+        tagged_count = await db_session.scalar(
+            select(func.count(activitypub.models.OutboxObject.id))
+            .join(activitypub.models.TaggedOutboxObject)
+            .where(*where)
+        )
         if not tagged_count:
             raise HTTPException(status_code=404)
 

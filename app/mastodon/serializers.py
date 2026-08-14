@@ -13,6 +13,7 @@ wrapper interface.
 
 import hashlib
 import mimetypes
+from collections.abc import Iterable
 from datetime import datetime
 from datetime import timezone
 from urllib.parse import urlparse
@@ -30,6 +31,7 @@ from activitypub.ap_object import Attachment
 from activitypub.ap_object import Object as APObjectView
 from activitypub.boxes import AnyboxObject
 from activitypub.boxes import get_anybox_object_by_ap_id
+from activitypub.boxes import get_anybox_objects_by_ap_ids
 from activitypub.boxes import public_outbox_objects_count
 from app import config
 from app import models
@@ -76,6 +78,63 @@ async def _is_conversation_muted(
     if conversation is None:
         return False
     return conversation in (await _muted_conversations(db_session))
+
+
+def _anybox_cache(db_session: AsyncSession) -> dict[str, AnyboxObject | None]:
+    return _request_cache(db_session).setdefault("anybox_objects", {})
+
+
+async def _get_anybox_object(
+    db_session: AsyncSession, ap_id: str
+) -> AnyboxObject | None:
+    """Request-cached `get_anybox_object_by_ap_id`.
+
+    `None` is cached too: a reply whose parent was never fetched is common,
+    and without negative caching every serialization of it would re-query.
+    """
+    cache = _anybox_cache(db_session)
+    if ap_id not in cache:
+        cache[ap_id] = await get_anybox_object_by_ap_id(db_session, ap_id)
+    return cache[ap_id]
+
+
+def _related_ap_ids(objects: Iterable[AnyboxObject]) -> set[str]:
+    """The ap_ids `serialize_status` resolves for each object: the boost
+    target and the in-reply-to parent."""
+    ap_ids = set()
+    for obj in objects:
+        if obj.in_reply_to:
+            ap_ids.add(obj.in_reply_to)
+        if obj.ap_type == "Announce" and obj.activity_object_ap_id:
+            ap_ids.add(obj.activity_object_ap_id)
+    return ap_ids
+
+
+async def prefetch_status_relations(
+    db_session: AsyncSession, objects: Iterable[AnyboxObject]
+) -> None:
+    """Load a page's boost targets and in-reply-to parents in two `IN (...)`
+    queries, into the same cache `_get_anybox_object` reads.
+
+    Call this before serializing a list of statuses; `serialize_status` stays
+    correct without it, just one query per relation per status again.
+    """
+    cache = _anybox_cache(db_session)
+    pending = _related_ap_ids(objects) - cache.keys()
+
+    # Two rounds: the statuses themselves, then the boost targets they
+    # resolved, since serialize_status follows those targets' own
+    # `in_reply_to`. Depth stops there — the recursive call passes
+    # `_resolve_reblog=False`.
+    for _ in range(2):
+        if not pending:
+            return
+        fetched = await get_anybox_objects_by_ap_ids(db_session, pending)
+        for obj in fetched:
+            cache[obj.ap_id] = obj
+        for ap_id in pending:
+            cache.setdefault(ap_id, None)
+        pending = _related_ap_ids(fetched) - cache.keys()
 
 
 # The actor keypair is generated once, during initial setup, and never
@@ -514,14 +573,14 @@ async def serialize_status(
 
     reblog = None
     if _resolve_reblog and obj.ap_type == "Announce" and obj.activity_object_ap_id:
-        target = await get_anybox_object_by_ap_id(db_session, obj.activity_object_ap_id)
+        target = await _get_anybox_object(db_session, obj.activity_object_ap_id)
         if target is not None:
             reblog = await serialize_status(db_session, target, _resolve_reblog=False)
 
     in_reply_to_id = None
     in_reply_to_account_id = None
     if obj.in_reply_to:
-        parent = await get_anybox_object_by_ap_id(db_session, obj.in_reply_to)
+        parent = await _get_anybox_object(db_session, obj.in_reply_to)
         if parent is not None:
             in_reply_to_id = (
                 ids.encode_outbox_id(parent)
