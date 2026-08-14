@@ -1,3 +1,4 @@
+import asyncio
 import functools
 import ipaddress
 import socket
@@ -88,6 +89,18 @@ def check_url(url: str) -> None:
         raise InvalidURLError(f'"{url}" is invalid')
 
     return None
+
+
+async def check_url_async(url: str) -> None:
+    """Offload `check_url` to a worker thread so a DNS cache miss against a slow
+    or unreachable host doesn't stall the whole event loop (`numprocs = 1`).
+    `functools.lru_cache`'s C implementation is thread-safe, so the offload is
+    sound even though most calls just hit the cache."""
+    await asyncio.to_thread(check_url, url)
+
+
+async def is_url_valid_async(url: str) -> bool:
+    return await asyncio.to_thread(is_url_valid, url)
 
 
 @functools.lru_cache(maxsize=256)

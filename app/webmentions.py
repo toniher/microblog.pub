@@ -1,3 +1,4 @@
+import asyncio
 from urllib.parse import urlparse
 
 import httpx
@@ -24,7 +25,7 @@ from app.database import get_db_session
 from app.utils import microformats
 from app.utils.facepile import Face
 from app.utils.facepile import WebmentionReply
-from app.utils.url import check_url
+from app.utils.url import check_url_async
 from app.utils.url import is_url_valid
 
 router = APIRouter()
@@ -56,8 +57,8 @@ async def webmention_endpoint(
         if source == target:
             raise ValueError("source URL is the same as target")
 
-        check_url(source)
-        check_url(target)
+        await check_url_async(source)
+        await check_url_async(target)
         parsed_target_url = urlparse(target)
     except Exception:
         logger.exception("Invalid webmention request")
@@ -105,7 +106,12 @@ async def webmention_endpoint(
         raise HTTPException(status_code=500, detail=f"Fetch to process {source}")
 
     data, html = data_and_html
-    is_target_found_in_source = is_source_containing_target(html, target)
+    # is_source_containing_target does a DNS lookup per <a href> in the fetched
+    # source HTML (via is_url_valid); offload to a thread rather than block the
+    # event loop on a page with many links.
+    is_target_found_in_source = await asyncio.to_thread(
+        is_source_containing_target, html, target
+    )
 
     data, html = data_and_html
     if is_webmention_deleted or not is_target_found_in_source:

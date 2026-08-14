@@ -22,6 +22,7 @@ from app import config
 from app import http_client
 from app.database import AsyncSession
 from app.utils.url import is_url_valid
+from app.utils.url import is_url_valid_async
 from app.utils.url import make_abs
 
 
@@ -115,7 +116,7 @@ async def external_urls(
                 if (
                     ph.scheme in {"http", "https"}
                     and ph.hostname != note_host
-                    and is_url_valid(h)
+                    and await is_url_valid_async(h)
                     and (
                         not mimetype
                         or mimetype.split("/")[0] not in ["image", "video", "audio"]

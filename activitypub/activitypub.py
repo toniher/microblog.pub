@@ -19,7 +19,7 @@ from app.httpsig import auth
 from app.key import get_pubkey_as_pem
 from app.source import dedup_tags
 from app.source import hashtagify
-from app.utils.url import check_url
+from app.utils.url import check_url_async
 
 # TODO: MOVE the AP API currently fully implemented in the app.main file!!!
 # TODO: MOVE all that is core AP operations / not HTTP related to 'boxes'
@@ -192,7 +192,7 @@ async def fetch(
     disable_httpsig: bool = False,
 ) -> RawObject:
     logger.info(f"Fetching {url} ({params=})")
-    check_url(url)
+    await check_url_async(url)
 
     resp = await http_client.get_client().get(
         url,
@@ -405,7 +405,7 @@ def remove_context(raw_object: RawObject) -> RawObject:
 
 async def post(url: str, payload: dict[str, Any]) -> httpx.Response:
     logger.info(f"Posting {url} ({payload=})")
-    check_url(url)
+    await check_url_async(url)
 
     resp = await http_client.get_client().post(
         url,

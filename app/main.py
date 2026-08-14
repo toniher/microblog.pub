@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import contextlib
 import mimetypes
@@ -90,11 +91,15 @@ from app.utils.facepile import WebmentionReply
 from app.utils.facepile import merge_faces
 from app.utils.highlight import HIGHLIGHT_CSS_HASH
 from app.utils.url import InvalidURLError
-from app.utils.url import check_url
+from app.utils.url import check_url_async
 from app.webfinger import get_remote_follow_template
 
-# Only images <1MB will be cached, so 32MB of data will be cached
-_RESIZED_CACHE: MutableMapping[tuple[str, int], tuple[bytes, str, Any]] = LFUCache(32)
+# Only images <1MB will be cached, so 128MB of data will be cached. Keyed on
+# (url, size, is_webp) rather than (url, size) so a non-webp client's entry
+# can be served, and can no longer poison the slot a webp client would hit.
+_RESIZED_CACHE: MutableMapping[tuple[str, int, bool], tuple[bytes, str, Any]] = (
+    LFUCache(128)
+)
 
 
 # TODO(ts):
@@ -219,7 +224,25 @@ app.mount(
     StaticFiles(directory="data/custom_emoji"),
     name="custom_emoji",
 )
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+
+class _CachedStaticFiles(StaticFiles):
+    # CSS/JS are cache-busted via `?v={{ CSS_HASH }}`/`?v={{ JS_HASH }}`
+    # (app/config.py), so a long max-age is safe: a content change gets a new
+    # URL rather than invalidating this one.
+    def file_response(
+        self,
+        full_path: str | os.PathLike[str],
+        stat_result: os.stat_result,
+        scope: MutableMapping[str, Any],
+        status_code: int = 200,
+    ) -> Response:
+        response = super().file_response(full_path, stat_result, scope, status_code)
+        response.headers.update(_add_cache_control(dict(response.headers)))
+        return response
+
+
+app.mount("/static", _CachedStaticFiles(directory="app/static"), name="static")
 
 
 @app.get("/img/{filename}", response_model=None)
@@ -433,6 +456,7 @@ async def articles(
 ) -> templates.TemplateResponse | ActivityPubResponse:
     # TODO: special ActivityPub collection for Article
 
+    page = page or 1
     where = (
         activitypub.models.OutboxObject.visibility == ap.VisibilityEnum.PUBLIC,
         activitypub.models.OutboxObject.is_deleted.is_(False),
@@ -440,7 +464,12 @@ async def articles(
         activitypub.models.OutboxObject.ap_type == "Article",
     )
     q = select(activitypub.models.OutboxObject).where(*where)
+    page_size = 20
+    page_offset = (page - 1) * page_size
 
+    # Fetch one extra row instead of a separate `COUNT(*)` to know whether a
+    # next page exists -- avoids a second full-table scan of the same
+    # `WHERE` on every page load.
     outbox_objects_result = await db_session.scalars(
         q.options(
             joinedload(
@@ -456,9 +485,14 @@ async def articles(
                     activitypub.models.OutboxObject.outbox_object_attachments
                 ).options(joinedload(activitypub.models.OutboxObjectAttachment.upload)),
             ),
-        ).order_by(activitypub.models.OutboxObject.ap_published_at.desc())
+        )
+        .order_by(activitypub.models.OutboxObject.ap_published_at.desc())
+        .offset(page_offset)
+        .limit(page_size + 1)
     )
     outbox_objects = outbox_objects_result.unique().all()
+    has_next_page = len(outbox_objects) > page_size
+    outbox_objects = outbox_objects[:page_size]
 
     return await templates.render_template(
         db_session,
@@ -467,6 +501,9 @@ async def articles(
         {
             "request": request,
             "objects": outbox_objects,
+            "current_page": page,
+            "has_next_page": has_next_page,
+            "has_previous_page": page > 1,
         },
     )
 
@@ -1448,7 +1485,7 @@ async def _proxy_get(
         next_url = str(httpx.URL(url).join(location))
         await proxy_resp.aclose()
         try:
-            check_url(next_url)
+            await check_url_async(next_url)
         except InvalidURLError:
             logger.warning(f"refusing to follow redirect to {next_url!r}")
             # Return the redirect response so the caller's >= 300 guard bails
@@ -1486,7 +1523,7 @@ async def serve_proxy_media(
 ) -> StreamingResponse | PlainTextResponse:
     # Decode the base64-encoded URL
     url = base64.urlsafe_b64decode(encoded_url).decode()
-    check_url(url)
+    await check_url_async(url)
     try:
         media.verify_proxied_media_sig(exp, url, sig)
     except media.InvalidProxySignatureError:
@@ -1529,6 +1566,32 @@ async def serve_proxy_media(
     )
 
 
+def _resize_image(
+    content: bytes, size: int, is_webp_supported: bool
+) -> tuple[bytes, str]:
+    """Decode/thumbnail/encode a proxied image. Pure CPU work — run via
+    `asyncio.to_thread` from the async handler, never called inline."""
+    i = Image.open(BytesIO(content))
+    if getattr(i, "is_animated", False):
+        raise ValueError
+    i.thumbnail((size, size))
+    is_webp = False
+    try:
+        resized_buf = BytesIO()
+        i.save(resized_buf, format="webp" if is_webp_supported else i.format)
+        is_webp = is_webp_supported
+    except Exception:
+        logger.exception("Failed to create thumbnail")
+        resized_buf = BytesIO()
+        i.save(resized_buf, format=i.format)
+    resized_buf.seek(0)
+    resized_content = resized_buf.read()
+    resized_mimetype = "image/webp" if is_webp else i.get_format_mimetype()  # type: ignore
+    if resized_mimetype is None:
+        resized_mimetype = "application/octet-stream"
+    return resized_content, resized_mimetype
+
+
 @app.get("/proxy/media/{exp}/{sig}/{encoded_url}/{size}", response_model=None)
 async def serve_proxy_media_resized(
     request: Request,
@@ -1544,7 +1607,7 @@ async def serve_proxy_media_resized(
 
     # Decode the base64-encoded URL
     url = base64.urlsafe_b64decode(encoded_url).decode()
-    check_url(url)
+    await check_url_async(url)
     try:
         media.verify_proxied_media_sig(exp, url, sig)
     except media.InvalidProxySignatureError:
@@ -1553,7 +1616,7 @@ async def serve_proxy_media_resized(
         # gets a clean 404 instead of an unhandled 500.
         return PlainTextResponse(status_code=404)
 
-    if (cached_resp := _RESIZED_CACHE.get((url, size))) and is_webp_supported:
+    if cached_resp := _RESIZED_CACHE.get((url, size, is_webp_supported)):
         resized_content, resized_mimetype, resp_headers = cached_resp
         return PlainTextResponse(
             resized_content,
@@ -1585,28 +1648,12 @@ async def serve_proxy_media_resized(
     )
 
     try:
-        out = BytesIO(proxy_resp.content)
-        i = Image.open(out)
-        if getattr(i, "is_animated", False):
-            raise ValueError
-        i.thumbnail((size, size))
-        is_webp = False
-        try:
-            resized_buf = BytesIO()
-            i.save(resized_buf, format="webp" if is_webp_supported else i.format)
-            is_webp = is_webp_supported
-        except Exception:
-            logger.exception("Failed to create thumbnail")
-            resized_buf = BytesIO()
-            i.save(resized_buf, format=i.format)
-        resized_buf.seek(0)
-        resized_content = resized_buf.read()
-        resized_mimetype = (
-            "image/webp" if is_webp else i.get_format_mimetype()  # type: ignore
+        resized_content, resized_mimetype = await asyncio.to_thread(
+            _resize_image, proxy_resp.content, size, is_webp_supported
         )
         # Only cache images < 1MB
         if len(resized_content) < 2**20:
-            _RESIZED_CACHE[(url, size)] = (
+            _RESIZED_CACHE[(url, size, is_webp_supported)] = (
                 resized_content,
                 resized_mimetype,
                 _strip_content_type(proxy_resp_headers),

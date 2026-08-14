@@ -25,12 +25,14 @@ from app.config import KEY_PATH
 from app.database import AsyncSession
 from app.key import Key
 from app.utils.datetime import now
-from app.utils.url import check_url
+from app.utils.url import check_url_async
 from app.utils.workers import Worker
 
 _MAX_RETRIES = 16
 
-_LD_SIG_CACHE: MutableMapping[str, ap.RawObject] = TTLCache(maxsize=5, ttl=60 * 5)
+_LD_SIG_CACHE: MutableMapping[str, ap.RawObject] = TTLCache(
+    maxsize=config.OUTGOING_DELIVERY_BATCH_SIZE, ttl=60 * 5
+)
 
 
 k = Key(config.ID, f"{config.ID}#main-key")
@@ -273,7 +275,7 @@ def _build_delivery_request(
 
 async def _deliver(req: _DeliveryRequest) -> _DeliveryOutcome:
     try:
-        await asyncio.to_thread(check_url, req.recipient)
+        await check_url_async(req.recipient)
         if req.webmention_payload is not None:
             resp = await http_client.get_client().post(
                 req.recipient,

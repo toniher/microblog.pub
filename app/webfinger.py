@@ -7,7 +7,7 @@ from loguru import logger
 
 from app import config
 from app import http_client
-from app.utils.url import check_url
+from app.utils.url import check_url_async
 
 
 async def get_webfinger_via_host_meta(host: str) -> str | None:
@@ -17,7 +17,7 @@ async def get_webfinger_via_host_meta(host: str) -> str | None:
     for i, proto in enumerate({"http", "https"}):
         try:
             url = f"{proto}://{host}/.well-known/host-meta"
-            check_url(url)
+            await check_url_async(url)
             resp = await client.get(
                 url,
                 headers={
@@ -89,7 +89,7 @@ async def webfinger(
     client = http_client.get_client()
     for i, url in enumerate(urls):
         try:
-            check_url(url)
+            await check_url_async(url)
             resp = await client.get(
                 url,
                 params={"resource": resource},

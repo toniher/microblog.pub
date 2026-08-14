@@ -8,8 +8,8 @@ from loguru import logger
 from app import config
 from app import http_client
 from app.utils.datetime import now
-from app.utils.url import check_url
-from app.utils.url import is_url_valid
+from app.utils.url import check_url_async
+from app.utils.url import is_url_valid_async
 from app.utils.url import make_abs
 
 
@@ -46,12 +46,12 @@ async def discover_webmention_endpoint(url: str) -> str | None:
     Passes all the tests at https://webmention.rocks!
 
     """
-    check_url(url)
+    await check_url_async(url)
 
     wurl = await _discover_webmention_endoint(url)
     if wurl is None:
         return None
-    if not is_url_valid(wurl):
+    if not await is_url_valid_async(wurl):
         return None
     return wurl
 

@@ -3,6 +3,7 @@ from datetime import timezone
 from functools import lru_cache
 from typing import Any
 from typing import Callable
+from typing import MutableMapping
 from urllib.parse import urlparse
 
 import bleach
@@ -13,6 +14,7 @@ from babel.dates import format_date
 from babel.dates import format_datetime
 from babel.dates import format_timedelta
 from bs4 import BeautifulSoup  # type: ignore
+from cachetools import TTLCache
 from dateutil.parser import parse
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
@@ -75,6 +77,21 @@ def _media_proxy_url(url: str | None) -> str:
     if not url:
         return BASE_URL + "/static/nopic.png"
     return proxied_media_url(url)
+
+
+# These three counts (articles/followers/following) run on every rendered
+# page, public or admin, and change only when the owner posts/follows/is
+# followed — a short TTL absorbs that cost without event-based invalidation
+# wired through every write path that touches them.
+_COUNTS_CACHE_TTL = 30
+_counts_cache: MutableMapping[str, int] = TTLCache(maxsize=8, ttl=_COUNTS_CACHE_TTL)
+
+
+async def _cached_count(db_session: AsyncSession, cache_key: str, stmt: Any) -> int:
+    if (count := _counts_cache.get(cache_key)) is None:
+        count = await db_session.scalar(stmt) or 0
+        _counts_cache[cache_key] = count
+    return count
 
 
 def is_current_user_admin(request: Request) -> bool:
@@ -144,21 +161,27 @@ async def render_template(
                 if is_admin
                 else 0
             ),
-            "articles_count": await db_session.scalar(
+            "articles_count": await _cached_count(
+                db_session,
+                "articles_count",
                 select(func.count(activitypub.models.OutboxObject.id)).where(
                     activitypub.models.OutboxObject.visibility
                     == ap.VisibilityEnum.PUBLIC,
                     activitypub.models.OutboxObject.is_deleted.is_(False),
                     activitypub.models.OutboxObject.is_hidden_from_homepage.is_(False),
                     activitypub.models.OutboxObject.ap_type == "Article",
-                )
+                ),
             ),
             "local_actor": LOCAL_ACTOR,
-            "followers_count": await db_session.scalar(
-                select(func.count(activitypub.models.Follower.id))
+            "followers_count": await _cached_count(
+                db_session,
+                "followers_count",
+                select(func.count(activitypub.models.Follower.id)),
             ),
-            "following_count": await db_session.scalar(
-                select(func.count(activitypub.models.Following.id))
+            "following_count": await _cached_count(
+                db_session,
+                "following_count",
+                select(func.count(activitypub.models.Following.id)),
             ),
             "actor_types": ap.ACTOR_TYPES,
             "custom_footer": CUSTOM_FOOTER,

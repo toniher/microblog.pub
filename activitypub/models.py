@@ -148,7 +148,7 @@ class InboxObject(Base, BaseObject):
     created_at = Column(DateTime(timezone=True), nullable=False, default=now)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=now)
 
-    actor_id = Column(Integer, ForeignKey("actor.id"), nullable=False)
+    actor_id = Column(Integer, ForeignKey("actor.id"), nullable=False, index=True)
     actor: Mapped[Actor] = relationship(Actor, uselist=False)
 
     server = Column(String, nullable=False)
@@ -166,7 +166,7 @@ class InboxObject(Base, BaseObject):
     activity_object_ap_id = Column(String, nullable=True, index=True)
 
     visibility = Column(Enum(ap.VisibilityEnum), nullable=False)
-    conversation = Column(String, nullable=True)
+    conversation = Column(String, nullable=True, index=True)
 
     has_local_mention = Column(
         Boolean, nullable=False, default=False, server_default="0"
@@ -177,6 +177,7 @@ class InboxObject(Base, BaseObject):
         Integer,
         ForeignKey("inbox.id"),
         nullable=True,
+        index=True,
     )
     relates_to_inbox_object: Mapped[Optional["InboxObject"]] = relationship(
         "InboxObject",
@@ -188,6 +189,7 @@ class InboxObject(Base, BaseObject):
         Integer,
         ForeignKey("outbox.id"),
         nullable=True,
+        index=True,
     )
     relates_to_outbox_object: Mapped[Optional["OutboxObject"]] = relationship(
         "OutboxObject",
@@ -195,7 +197,9 @@ class InboxObject(Base, BaseObject):
         uselist=False,
     )
 
-    undone_by_inbox_object_id = Column(Integer, ForeignKey("inbox.id"), nullable=True)
+    undone_by_inbox_object_id = Column(
+        Integer, ForeignKey("inbox.id"), nullable=True, index=True
+    )
 
     # Link the oubox AP ID to allow undo without any extra query
     liked_via_outbox_object_ap_id = Column(String, nullable=True)
@@ -277,7 +281,7 @@ class OutboxObject(Base, BaseObject):
 
     ap_published_at = Column(DateTime(timezone=True), nullable=False, default=now)
     visibility = Column(Enum(ap.VisibilityEnum), nullable=False)
-    conversation = Column(String, nullable=True)
+    conversation = Column(String, nullable=True, index=True)
 
     likes_count = Column(Integer, nullable=False, default=0)
     announces_count = Column(Integer, nullable=False, default=0)
@@ -301,6 +305,7 @@ class OutboxObject(Base, BaseObject):
         Integer,
         ForeignKey("inbox.id"),
         nullable=True,
+        index=True,
     )
     relates_to_inbox_object: Mapped[Optional["InboxObject"]] = relationship(
         "InboxObject",
@@ -311,6 +316,7 @@ class OutboxObject(Base, BaseObject):
         Integer,
         ForeignKey("outbox.id"),
         nullable=True,
+        index=True,
     )
     relates_to_outbox_object: Mapped[Optional["OutboxObject"]] = relationship(
         "OutboxObject",
@@ -323,6 +329,7 @@ class OutboxObject(Base, BaseObject):
         Integer,
         ForeignKey("actor.id"),
         nullable=True,
+        index=True,
     )
     relates_to_actor: Mapped[Optional["Actor"]] = relationship(
         "Actor",
@@ -330,7 +337,9 @@ class OutboxObject(Base, BaseObject):
         uselist=False,
     )
 
-    undone_by_outbox_object_id = Column(Integer, ForeignKey("outbox.id"), nullable=True)
+    undone_by_outbox_object_id = Column(
+        Integer, ForeignKey("outbox.id"), nullable=True, index=True
+    )
 
     @property
     def actor(self) -> BaseActor:
@@ -477,11 +486,13 @@ class OutgoingActivity(Base):
 
     recipient = Column(String, nullable=False)
 
-    outbox_object_id = Column(Integer, ForeignKey("outbox.id"), nullable=True)
+    outbox_object_id = Column(
+        Integer, ForeignKey("outbox.id"), nullable=True, index=True
+    )
     outbox_object = relationship(OutboxObject, uselist=False)
 
     # Can also reference an inbox object if it needds to be forwarded
-    inbox_object_id = Column(Integer, ForeignKey("inbox.id"), nullable=True)
+    inbox_object_id = Column(Integer, ForeignKey("inbox.id"), nullable=True, index=True)
     inbox_object = relationship(InboxObject, uselist=False)
 
     # The source will be the outbox object URL

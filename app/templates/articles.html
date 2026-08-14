@@ -16,4 +16,16 @@
 {% endfor %}
 </ul>
 
+{% if has_previous_page or has_next_page %}
+    <div class="box" hx-boost="true" hx-indicator="body">
+        {% if has_previous_page %}
+        <a href="{{ url_for("articles") }}?page={{ current_page - 1 }}">{{ _("Previous") }}</a>
+        {% endif %}
+
+        {% if has_next_page %}
+        <a href="{{ url_for("articles") }}?page={{ current_page + 1 }}">{{ _("Next") }}</a>
+        {% endif %}
+    </div>
+{% endif %}
+
 {% endblock %}
