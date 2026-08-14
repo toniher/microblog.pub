@@ -661,6 +661,17 @@ a.label-btn {
 
 .video-wrapper {
     position: relative;
+
+    video {
+        max-width: 100%;
+        height: auto;
+        // A 4K portrait clip would otherwise blow out the column height.
+        max-height: 70vh;
+    }
+}
+
+audio.u-audio {
+    width: 100%;
 }
 
 .video-gif-overlay {

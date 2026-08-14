@@ -79,7 +79,22 @@ forgotten on the device.
   mirrors the config file, so there's no `POST`/`DELETE` to add or remove one from
   a client.
 - **Search** (`/api/v2/search`) — accounts, statuses, and hashtags.
-- **Media uploads**, including descriptions/alt text.
+- **Media uploads**, including descriptions/alt text — images, video and audio.
+  Video/audio gets a real duration, a poster frame (extracted with `ffmpeg`,
+  reused as `preview_url` and the AP `icon`), and a blurhash, the same as
+  images. There's no transcoding: a file that uploads cleanly must already be
+  playable in mainstream browsers, so an instance-side compatibility check
+  runs against the codec/container/chroma subsampling (not just the mime
+  type) and rejects confidently-broken files — e.g. HEVC from an iPhone, or a
+  QuickTime `.mov` — with a `422` naming the specific problem and what to do
+  about it (typically: re-encode as H.264/AAC in an MP4). `ffmpeg` is
+  optional; without it, uploads are still accepted, just without duration,
+  poster, blurhash or compatibility checking. `supported_mime_types` and the
+  size limits in `/api/v1/instance`'s `media_attachments` are real and
+  enforced, not just advisory. Uploads are still processed synchronously —
+  `POST /api/v2/media` never returns Mastodon's `206`/still-processing shape,
+  so a very large upload occupies the request for the whole transfer + probe
+  + poster extraction.
 - **Instance "about" extras** — `/api/v1/instance/rules` (empty, none configured),
   `/extended_description` (the same bio text as the instance description), the
   public `/instance/domain_blocks` transparency list (hostname, digest, reason —

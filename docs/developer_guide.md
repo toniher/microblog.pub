@@ -31,6 +31,37 @@ inv -l
 The uploads are stored in the `data/` directory, using a simple content-addressed storage system (file contents hash is BLOB filename).
 Files metadata are stored in the database.
 
+`{content_hash}_resized` is always a webp: for an image it's a thumbnail of the original; for
+video it's a poster frame extracted with `ffmpeg` (see below) and thumbnailed the same way, so
+`Upload.has_thumbnail` and the `/attachments/thumbnails/...` route work identically for both —
+no separate "poster" concept.
+
+#### Video and audio uploads
+
+`app/ffmpeg.py` is a thin subprocess wrapper (argv-only, `-protocol_whitelist file`, explicit
+timeouts) over the `ffprobe`/`ffmpeg` binaries — never a Python binding, so there's no new
+dependency and `shutil.which`-based degradation is free. It does three things, all read-only
+(no transcoding):
+
+- **Probe** (`ffmpeg.probe`) — duration, width/height (rotation-corrected), whether a real
+  video/audio stream is present (guarding against an MP3's embedded cover art, which ffprobe
+  reports as an `attached_pic` video stream), and a compatibility verdict.
+- **Poster extraction** (`ffmpeg.extract_poster`) — a single PNG frame from partway through the
+  clip, later re-encoded to the same webp thumbnail format as images.
+- **Compatibility classification** (`ffmpeg.classify_compatibility`) — rejects a file only on
+  confident, well-understood incompatibilities (HEVC and other non-`{h264,vp8,vp9,av1}` codecs,
+  4:4:4/4:2:2 chroma, the QuickTime `.mov` container brand). Everything else — including
+  "verdict unavailable" (no `ffmpeg`, probe failure, timeout) — is accepted. This fail-open rule
+  is deliberate: a false-positive rejection blocks a legitimate post, so the classifier only
+  refuses what it's sure about.
+
+`ffmpeg` is an optional runtime dependency (`app.ffmpeg.is_available()`); without it, video/audio
+uploads still work, they just get no duration, no poster/blurhash, and no compatibility
+rejection. `save_upload` (`app/uploads.py`) enforces size limits (`max_image_upload_size`/
+`max_video_upload_size` in `data/profile.toml`) before any byte is written to disk, and unlinks
+a written-then-rejected file so an incompatible upload never leaves an orphaned row or file
+behind.
+
 ### Mastodon client API
 
 `app/mastodon/` implements a subset of the [Mastodon client REST
@@ -53,6 +84,7 @@ following migrations added only in this fork:
 | `6aafc8f7dd54` | 2026-07-11 | Add `upload.description` (alt text for uploaded media). |
 | `bd38c89e83de` | 2026-07-15 | Add `actor.outbox_backfilled_at`, tracking when a remote actor's outbox was last backfilled on demand. |
 | `33d3ae2dedac` | 2026-07-15 | Add `actor.followers_count`, `actor.following_count`, `actor.statuses_count`, and `actor.counts_refreshed_at`, caching remote actor counts instead of re-fetching them on every request. |
+| `43e8f29aa190` | 2026-08-14 | Add `upload.duration` and `upload.has_audio`, populated from ffmpeg/ffprobe for video/audio uploads (see [Video and audio uploads](#video-and-audio-uploads)). |
 
 Running `poetry run inv migrate-db` (or `inv update`, see [Updating](install.md#updating))
 applies any migration not yet present in your local database, regardless of

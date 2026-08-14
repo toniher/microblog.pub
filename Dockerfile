@@ -21,7 +21,10 @@ RUN poetry install --only main
 
 FROM python-base AS production
 RUN apt-get update
-RUN apt-get install -y --no-install-recommends libjpeg-dev libxslt1-dev libxml2-dev libxslt-dev
+# ffmpeg: optional at runtime (app.ffmpeg.is_available() fails open), but
+# bundled here so video/audio uploads get duration/poster/compatibility
+# checking out of the box. Adds ~250 MiB even with --no-install-recommends.
+RUN apt-get install -y --no-install-recommends libjpeg-dev libxslt1-dev libxml2-dev libxslt-dev ffmpeg
 RUN groupadd --gid 1000 microblogpub \
   && useradd --uid 1000 --gid microblogpub --shell /bin/bash microblogpub
 COPY --from=builder-base $PYSETUP_PATH $PYSETUP_PATH

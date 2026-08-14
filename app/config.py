@@ -52,6 +52,7 @@ try:
         ROOT_DIR / "app" / "static" / "common-admin.js",
         ROOT_DIR / "app" / "static" / "new.js",
         ROOT_DIR / "app" / "static" / "htmx-config.js",
+        ROOT_DIR / "app" / "static" / "media_preflight.js",
     ]:
         dat += j.read_bytes()
     JS_HASH = hashlib.md5(dat, usedforsecurity=False).hexdigest()
@@ -165,6 +166,13 @@ class Config(pydantic.BaseModel):
     outgoing_delivery_concurrency: int = pydantic.Field(default=10, ge=1)
     outgoing_delivery_per_host_concurrency: int = pydantic.Field(default=2, ge=1)
 
+    # Enforced in app/uploads.py's save_upload, before any byte is written to
+    # disk. Defaults match what `_INSTANCE_CONFIGURATION` in
+    # app/mastodon/router.py has always advertised. Audio shares the video
+    # limit (matching Mastodon) rather than adding a third knob.
+    max_image_upload_size: int = pydantic.Field(default=10_485_760, ge=1)  # 10 MiB
+    max_video_upload_size: int = pydantic.Field(default=41_943_040, ge=1)  # 40 MiB
+
     @pydantic.model_validator(mode="after")
     def _validate_outgoing_delivery_concurrency(self) -> "Config":
         if (
@@ -250,6 +258,9 @@ HTTP_CLIENT_MAX_KEEPALIVE_CONNECTIONS = CONFIG.http_client_max_keepalive_connect
 OUTGOING_DELIVERY_BATCH_SIZE = CONFIG.outgoing_delivery_batch_size
 OUTGOING_DELIVERY_CONCURRENCY = CONFIG.outgoing_delivery_concurrency
 OUTGOING_DELIVERY_PER_HOST_CONCURRENCY = CONFIG.outgoing_delivery_per_host_concurrency
+
+MAX_IMAGE_UPLOAD_SIZE = CONFIG.max_image_upload_size
+MAX_VIDEO_UPLOAD_SIZE = CONFIG.max_video_upload_size
 
 SESSION_TIMEOUT = CONFIG.session_timeout
 CUSTOM_FOOTER = (

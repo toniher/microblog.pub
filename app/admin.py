@@ -46,6 +46,8 @@ from app.database import get_db_session
 from app.i18n import gettext_default
 from app.lookup import lookup
 from app.templates import is_current_user_admin
+from app.uploads import IncompatibleMediaError
+from app.uploads import UploadTooLargeError
 from app.uploads import save_upload
 from app.utils import pagination
 from app.utils.emoji import EMOJIS_BY_NAME
@@ -1461,7 +1463,24 @@ async def admin_actions_new(
     if len(files) >= 1:
         for f in files:
             if f.filename is not None and f.filename != "":
-                upload = await save_upload(db_session, f)
+                try:
+                    upload = await save_upload(db_session, f)
+                except UploadTooLargeError as exc:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=(
+                            f"{gettext_default('Error: file is too large')} "
+                            f"({exc.limit} bytes max)"
+                        ),
+                    )
+                except IncompatibleMediaError as exc:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=(
+                            f"{gettext_default('Error: unable to process upload')}: "
+                            f"{exc.reason}"
+                        ),
+                    )
                 if upload is not None:
                     alt = raw_form_data.get("alt_" + f.filename)
                     uploads.append(

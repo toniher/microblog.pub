@@ -269,6 +269,25 @@ order, so a boost can never overtake the post it boosts, for example. Only deliv
 to *different* recipients run concurrently. Setting `outgoing_delivery_concurrency = 1`
 restores fully serial delivery, one activity at a time.
 
+### Upload size limits
+
+Both settings below are optional; omit them to keep the defaults, which match what's
+advertised to Mastodon clients out of the box.
+
+```toml
+max_image_upload_size = 10485760  # 10 MiB
+max_video_upload_size = 41943040  # 40 MiB
+```
+
+ - `max_image_upload_size` — the largest an image upload may be, in bytes.
+ - `max_video_upload_size` — the largest a video *or audio* upload may be, in bytes
+   (audio shares this limit rather than getting a third setting, matching Mastodon).
+
+A file over its limit is rejected before any of it is written to disk. If you're behind a
+reverse proxy, make sure its own body-size cap (e.g. nginx's `client_max_body_size`, see
+[Reverse proxy](install.md#reverse-proxy)) is at least as large, or it will reject a
+large-but-valid upload before the app ever sees it.
+
 ### Customization
 
 #### Default emoji
@@ -627,6 +646,28 @@ You can add attachments/upload files.
 When attaching pictures, EXIF metadata (like GPS location) will be removed automatically before being stored.
 
 Consider marking attachments as sensitive using the checkbox if needed.
+
+### Attaching video and audio
+
+Video and audio attachments work the same way as pictures: pick a file and it uploads with the
+note. There's no re-encoding — the file you upload is the file that gets served and federated,
+so it needs to already play in mainstream browsers (Firefox/Chrome). As soon as you pick a
+video or audio file, the compose form checks it *in your browser* and shows an instant preview
+(duration, dimensions) or a warning if this browser can't play it back. That check only reflects
+your own browser though — Safari plays some formats (like HEVC from an iPhone) that Firefox and
+Chrome don't — so the instance itself also checks the file's actual codec/container when you
+submit, and rejects it with a specific reason if it's confidently unsupported.
+
+If a video or audio upload is rejected, the error names the actual problem (e.g. "hevc video is
+not playable in most browsers"). The fix is almost always the same: re-encode the file as
+H.264 video / AAC audio in an MP4 container, which plays everywhere. A QuickTime `.mov` container
+is rejected even if the video inside is otherwise fine — remux it to `.mp4` (`ffmpeg -i in.mov -c
+copy out.mp4` re-containers without re-encoding, so it's fast and lossless).
+
+Video gets a poster frame (a still pulled from partway through the clip) shown before playback
+starts, the same way an image gets a thumbnail. This requires `ffmpeg` to be installed on the
+server (see [Installation](install.md)) — without it, video/audio still uploads, just without a
+poster, duration, or compatibility warning at all (uploads are never rejected in that case).
 
 ## Webmentions
 

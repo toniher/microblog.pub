@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+import activitypub.models
 from activitypub import activitypub as ap
 from activitypub.actor import LOCAL_ACTOR
 from activitypub.tests import factories
@@ -206,3 +207,43 @@ def test_admin_login__analytics_html_not_shown(client, db) -> None:
     ):
         response = client.get("/admin/login")
     assert "__ANALYTICS_TEST__" not in response.text
+
+
+def test_public_page_renders_video_attachment(db: Session, client: TestClient) -> None:
+    upload = activitypub.models.Upload(
+        content_type="video/mp4",
+        content_hash="deadbeef" * 8,
+        has_thumbnail=True,
+        blurhash="U58E0g",
+        width=1280,
+        height=720,
+        duration=12.5,
+        has_audio=False,
+    )
+    db.add(upload)
+    db.flush()
+
+    note = factories.OutboxObjectFactory(
+        public_id="video-note",
+        ap_type="Note",
+        ap_id="http://localhost:8000/o/video-note",
+        ap_object={"type": "Note", "content": "a clip"},
+        visibility=ap.VisibilityEnum.PUBLIC,
+        ap_published_at=now(),
+    )
+    db.add(
+        activitypub.models.OutboxObjectAttachment(
+            filename="clip.mp4",
+            outbox_object_id=note.id,
+            upload_id=upload.id,
+        )
+    )
+    db.commit()
+
+    response = client.get(f"/o/{note.public_id}")
+
+    assert response.status_code == 200
+    html = response.text
+    assert 'width="1280" height="720"' in html
+    assert 'data-has-audio="false"' in html
+    assert "/attachments/thumbnails/" in html  # poster= + resized image src

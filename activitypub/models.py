@@ -7,6 +7,7 @@ from sqlalchemy import Boolean
 from sqlalchemy import Column
 from sqlalchemy import DateTime
 from sqlalchemy import Enum
+from sqlalchemy import Float
 from sqlalchemy import ForeignKey
 from sqlalchemy import Index
 from sqlalchemy import Integer
@@ -25,6 +26,7 @@ from activitypub.actor import LOCAL_ACTOR
 from activitypub.actor import Actor as BaseActor
 from activitypub.ap_object import Attachment
 from activitypub.ap_object import Object as BaseObject
+from activitypub.ap_object import format_xsd_duration
 from app.config import BASE_URL
 from app.database import Base
 from app.utils.datetime import as_utc
@@ -353,30 +355,40 @@ class OutboxObject(Base, BaseObject):
     def attachments(self) -> list[Attachment]:
         out = []
         for attachment in self.outbox_object_attachments:
-            url = (
+            upload = attachment.upload
+            url = BASE_URL + f"/attachments/{upload.content_hash}/{attachment.filename}"
+            resized_url = (
                 BASE_URL
-                + f"/attachments/{attachment.upload.content_hash}/{attachment.filename}"
+                + (
+                    "/attachments/thumbnails/"
+                    f"{upload.content_hash}/{attachment.filename}"
+                )
+                if upload.has_thumbnail
+                else None
             )
             out.append(
                 Attachment.model_validate(
                     {
                         "type": "Document",
-                        "mediaType": attachment.upload.content_type,
+                        "mediaType": upload.content_type,
                         "name": attachment.alt or attachment.filename,
                         "url": url,
-                        "width": attachment.upload.width,
-                        "height": attachment.upload.height,
+                        "width": upload.width,
+                        "height": upload.height,
                         "proxiedUrl": url,
-                        "resizedUrl": (
-                            BASE_URL
-                            + (
-                                "/attachments/thumbnails/"
-                                f"{attachment.upload.content_hash}"
-                                f"/{attachment.filename}"
-                            )
-                            if attachment.upload.has_thumbnail
+                        "resizedUrl": resized_url,
+                        "blurhash": upload.blurhash,
+                        "duration": (
+                            format_xsd_duration(float(upload.duration))
+                            if upload.duration is not None
                             else None
                         ),
+                        "posterUrl": (
+                            resized_url
+                            if resized_url and upload.content_type.startswith("video")
+                            else None
+                        ),
+                        "hasAudio": upload.has_audio,
                     }
                 )
             )
@@ -549,10 +561,16 @@ class Upload(Base):
     # OutboxObjectAttachment.alt, this must survive independently of any post.
     description = Column(String, nullable=True)
 
-    # Only set for images
+    # Only set for images and video (blurhash), or video/audio (width/height,
+    # video only)
     blurhash = Column(String, nullable=True)
     width = Column(Integer, nullable=True)
     height = Column(Integer, nullable=True)
+
+    # Only set for video/audio; NULL when ffmpeg is unavailable or the probe
+    # failed.
+    duration = Column(Float, nullable=True)
+    has_audio = Column(Boolean, nullable=True)
 
     @property
     def is_image(self) -> bool:

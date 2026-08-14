@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "microblogpub"
-version = "2.4.4"
+version = "2.5.0"
 description = "Self-hosted, single-user, ActivityPub-powered microblog"
 authors = [
     "Thomas Sileo <t@a4.io>",
@@ -17,6 +17,10 @@ package-mode = false
 python = "^3.10"
 Jinja2 = "^3.1.4"
 fastapi = ">=0.115,<1.0"
+# Explicit floor for HTTP Range support (video seeking) and its later
+# hardening — fastapi's own constraint (>=0.37.2) permits versions with no
+# Range support at all. See serve_attachment in app/main.py.
+starlette = ">=0.49.1"
 pydantic = "^2.9"
 pycryptodome = "^3.20"
 bcrypt = "^4.2"

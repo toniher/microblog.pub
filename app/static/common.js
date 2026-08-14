@@ -1,7 +1,27 @@
 function hasAudio (video) {
-    return video.mozHasAudio ||
-    Boolean(video.webkitAudioDecodedByteCount) ||
-    Boolean(video.audioTracks && video.audioTracks.length);
+    // Server-provided answer (local attachments carry Upload.has_audio, see
+    // attachments.html) takes priority over sniffing.
+    if (video.dataset.hasAudio === "true") {
+        return true;
+    }
+    if (video.dataset.hasAudio === "false") {
+        return false;
+    }
+
+    // No server-provided answer (a remote attachment) — fall back to
+    // sniffing. None of these properties exist in Chromium, so an
+    // indeterminate result must default to "has audio" rather than silently
+    // stripping controls from every short video.
+    if (typeof video.mozHasAudio === 'boolean') {
+        return video.mozHasAudio;
+    }
+    if (typeof video.webkitAudioDecodedByteCount === 'number') {
+        return video.webkitAudioDecodedByteCount > 0;
+    }
+    if (video.audioTracks) {
+        return video.audioTracks.length > 0;
+    }
+    return true;
 }
 
 function setVideoInGIFMode(video) {

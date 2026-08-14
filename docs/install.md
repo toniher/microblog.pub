@@ -205,6 +205,13 @@ Install deps.
 poetry install
 ```
 
+**Recommended**: install `ffmpeg` (e.g. `apt install ffmpeg`). It's an optional runtime
+dependency used only to read video/audio metadata, extract a poster frame, and check that an
+uploaded video/audio file will actually play in mainstream browsers (see [Video and audio
+uploads](developer_guide.md#video-and-audio-uploads)). Without it, video/audio still uploads —
+just with no duration, no poster/blurhash, and **no compatibility checking at all** (nothing is
+ever rejected). The Docker image already includes it.
+
 Setup config.
 
 ```bash
@@ -254,6 +261,10 @@ If you don't have a reverse proxy setup yet, [NGINX + certbot](https://www.nginx
 
 ```nginx
 server {
+    # nginx's own cap needs to be at or above the app-level upload limits
+    # (max_image_upload_size/max_video_upload_size in data/profile.toml,
+    # 10 MiB/40 MiB by default) — otherwise nginx rejects a large-but-valid
+    # upload before the app ever sees it.
     client_max_body_size 4G;
 
     location / {

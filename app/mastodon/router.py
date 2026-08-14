@@ -69,6 +69,8 @@ from app.mastodon import pagination
 from app.mastodon import serializers
 from app.mastodon.errors import MastodonError
 from app.mastodon.scopes import require_scope
+from app.uploads import IncompatibleMediaError
+from app.uploads import UploadTooLargeError
 from app.uploads import save_upload
 from app.utils.datetime import as_utc
 from app.utils.datetime import now
@@ -77,9 +79,11 @@ from app.utils.emoji import EMOJIS
 router = APIRouter()
 _TIMELINE_OBJECT_TYPES = ["Announce", "Article", "Note", "Page", "Question", "Video"]
 
-# Advisory client hints only — nothing here is enforced server-side. The
-# backend has no hard cap on note/article length, so max_characters is set
-# generously rather than mirroring Mastodon's 500.
+# The size limits below are real (enforced in app/uploads.py's save_upload,
+# reading the same app.config constants) — everything else here is an
+# advisory client hint only. The backend has no hard cap on note/article
+# length, so max_characters is set generously rather than mirroring
+# Mastodon's 500.
 _INSTANCE_CONFIGURATION = {
     "statuses": {
         "max_characters": 100_000,
@@ -93,10 +97,23 @@ _INSTANCE_CONFIGURATION = {
             "image/png",
             "image/gif",
             "image/webp",
+            # video/quicktime is deliberately absent: the compatibility
+            # classifier (app/ffmpeg.py) rejects the `qt  ` container brand.
+            "video/mp4",
+            "video/webm",
+            "video/ogg",
+            "audio/mpeg",
+            "audio/mp4",
+            "audio/ogg",
+            "audio/wav",
+            "audio/x-wav",
+            "audio/webm",
+            "audio/flac",
+            "audio/aac",
         ],
-        "image_size_limit": 10_485_760,
+        "image_size_limit": config.MAX_IMAGE_UPLOAD_SIZE,
         "image_matrix_limit": 16_777_216,
-        "video_size_limit": 41_943_040,
+        "video_size_limit": config.MAX_VIDEO_UPLOAD_SIZE,
         "video_frame_rate_limit": 60,
         "video_matrix_limit": 2_304_000,
     },
@@ -1978,7 +1995,14 @@ async def media_create(
     # request.form() always returns Starlette's base UploadFile, never
     # FastAPI's subclass (that only comes from `File(...)` dependency
     # injection) — save_upload only touches attributes both share.
-    upload = await save_upload(db_session, cast(FastAPIUploadFile, file))
+    try:
+        upload = await save_upload(db_session, cast(FastAPIUploadFile, file))
+    except UploadTooLargeError as exc:
+        raise MastodonError(
+            422, "validation_failed", f"file exceeds the {exc.limit} byte limit"
+        )
+    except IncompatibleMediaError as exc:
+        raise MastodonError(422, "validation_failed", exc.reason)
     if upload is None:
         raise MastodonError(422, "validation_failed", "unable to process upload")
 

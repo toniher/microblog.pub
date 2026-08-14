@@ -1,6 +1,7 @@
 import enum
 import hashlib
 import mimetypes
+import re
 from datetime import datetime
 from functools import cached_property
 from typing import Any
@@ -146,6 +147,7 @@ class Object:
                             if obj.get("mediaType", "").startswith("image")
                             else None
                         ),
+                        "posterUrl": _extract_poster_url(obj),
                         **obj,
                     }
                 )
@@ -153,6 +155,7 @@ class Object:
 
         # Also add any video Link (for PeerTube compat)
         if self.ap_type == "Video":
+            video_poster_url = _extract_poster_url(self.ap_object)
             for link in ap.as_list(self.ap_object.get("url", [])):
                 if (isinstance(link, dict)) and link.get("type") == "Link":
                     if link.get("mediaType", "").startswith("video"):
@@ -163,6 +166,7 @@ class Object:
                                 mediaType=link["mediaType"],
                                 url=link["href"],
                                 proxiedUrl=proxied_url,
+                                posterUrl=video_poster_url,
                             )
                         )
                         break
@@ -176,6 +180,7 @@ class Object:
                                         mediaType=tag["mediaType"],
                                         url=tag["href"],
                                         proxiedUrl=proxied_url,
+                                        posterUrl=video_poster_url,
                                     )
                                 )
                                 break
@@ -319,6 +324,43 @@ class BaseModel(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(alias_generator=_to_camel)
 
 
+_XSD_DURATION_RE = re.compile(
+    r"^PT(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?(?:(?P<seconds>\d+(?:\.\d+)?)S)?$"
+)
+
+
+def _parse_xsd_duration(value: str) -> float | None:
+    """Parse the subset of xsd:duration used for media (PT[nH][nM][n.nS])."""
+    match = _XSD_DURATION_RE.match(value)
+    if not match:
+        return None
+    hours = float(match.group("hours") or 0)
+    minutes = float(match.group("minutes") or 0)
+    seconds = float(match.group("seconds") or 0)
+    return hours * 3600 + minutes * 60 + seconds
+
+
+def format_xsd_duration(seconds: float) -> str:
+    """The inverse of _parse_xsd_duration, e.g. 88.654 -> "PT88.654S"."""
+    return f"PT{seconds:.3f}S"
+
+
+def _extract_poster_url(obj: dict[str, Any]) -> str | None:
+    """Proxy the attachment's (or the top-level object's, for PeerTube)
+    `icon`/`image` as a poster URL — either may be a single dict or a list.
+    """
+    for key in ("icon", "image"):
+        candidate = obj.get(key)
+        if not candidate:
+            continue
+        for item in ap.as_list(candidate):
+            if isinstance(item, str):
+                return proxied_media_url(item)
+            if isinstance(item, dict) and isinstance(item.get("url"), str):
+                return proxied_media_url(item["url"])
+    return None
+
+
 class Attachment(BaseModel):
     type: str
     media_type: str | None = None
@@ -332,6 +374,15 @@ class Attachment(BaseModel):
     width: int | None = None
     height: int | None = None
 
+    blurhash: str | None = None
+    duration: str | None = None  # xsd:duration, e.g. "PT88.654S"
+    poster_url: str | None = None  # proxied AP `icon`/`image` url (video only)
+
+    # Only populated for local attachments (from Upload.has_audio) — remote
+    # AP payloads don't carry an equivalent field, so it stays None ("cannot
+    # tell") rather than being guessed at.
+    has_audio: bool | None = None
+
     @property
     def mimetype(self) -> str:
         mimetype = self.media_type
@@ -342,6 +393,12 @@ class Attachment(BaseModel):
             return "unknown"
 
         return mimetype.split("/")[-1]
+
+    @property
+    def duration_seconds(self) -> float | None:
+        if not self.duration:
+            return None
+        return _parse_xsd_duration(self.duration)
 
 
 class RemoteObject(Object):

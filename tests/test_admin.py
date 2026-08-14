@@ -77,6 +77,27 @@ def test_public_works_authenticated(client: TestClient) -> None:
     assert resp.status_code == 200
 
 
+def test_admin_new_post_rejects_oversized_upload(
+    client: TestClient, monkeypatch
+) -> None:
+    monkeypatch.setattr("app.uploads.config.MAX_IMAGE_UPLOAD_SIZE", 10)
+
+    response = client.post(
+        "/admin/actions/new",
+        data={
+            "content": "hello",
+            "redirect_url": "http://testserver/",
+            "visibility": ap.VisibilityEnum.PUBLIC.name,
+            "csrf_token": generate_csrf_token(),
+        },
+        files={"files": ("photo.png", b"\x89PNG" + b"x" * 100, "image/png")},
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 422
+    assert "too large" in response.json()["detail"].lower()
+
+
 def test_admin_blocks_lists_blocked_actors(
     db: Session, client: TestClient, respx_mock: respx.MockRouter
 ) -> None:

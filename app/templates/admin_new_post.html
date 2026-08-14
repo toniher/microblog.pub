@@ -99,7 +99,7 @@
     </p>
     <input type="hidden" name="in_reply_to" value="{{ request.query_params.in_reply_to }}">
     <p>
-        <input id="files" name="files" type="file" class="width-95" multiple>
+        <input id="files" name="files" type="file" class="width-95" multiple accept="image/*,video/*,audio/*">
     </p>
     <div id="alts"></div>
     <p>
@@ -108,4 +108,5 @@
 </form>
 </div>
 <script src="/static/new.js?v={{ JS_HASH }}"></script>
+<script src="/static/media_preflight.js?v={{ JS_HASH }}"></script>
 {% endblock %}

@@ -356,35 +356,120 @@ _VISIBILITY_MAP = {
 }
 
 
-def _media_type_category(attachment: Attachment) -> str:
-    media_type = attachment.media_type
+# Matches the `video.duration <= 10.0` GIF-mode threshold in
+# app/static/common.js, so a status looks the same whether a client renders
+# it via this `type` or via the web UI's own client-side heuristic.
+_GIFV_MAX_DURATION = 10.0
+
+
+def _mastodon_media_type(
+    media_type: str | None,
+    url: str,
+    *,
+    duration: float | None = None,
+    has_audio: bool | None = None,
+) -> str:
     if not media_type:
-        media_type, _ = mimetypes.guess_type(attachment.url)
+        media_type, _ = mimetypes.guess_type(url)
     if not media_type:
         return "unknown"
     top_level = media_type.split("/", 1)[0]
+    if (
+        top_level == "video"
+        and has_audio is False
+        and duration is not None
+        and duration <= _GIFV_MAX_DURATION
+    ):
+        return "gifv"
     return top_level if top_level in ("image", "video", "audio") else "unknown"
+
+
+def _thumbnail_box(width: int, height: int, max_size: int = 740) -> tuple[int, int]:
+    """Approximates the box PIL's `Image.thumbnail((740, 740))` produces, so
+    `meta.small` matches the dimensions of the webp actually served."""
+    if width <= max_size and height <= max_size:
+        return width, height
+    ratio = min(max_size / width, max_size / height)
+    return max(1, round(width * ratio)), max(1, round(height * ratio))
+
+
+def _format_length(duration: float) -> str:
+    """Mastodon's `meta.length`, e.g. 88.65 -> "0:01:28.65"."""
+    hours, remainder = divmod(duration, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{int(hours)}:{int(minutes):02d}:{seconds:05.2f}"
+
+
+def _media_meta(
+    width: int | None,
+    height: int | None,
+    duration: float | None,
+    has_thumbnail: bool,
+) -> dict:
+    meta: dict = {}
+    original: dict = {}
+
+    if width and height:
+        size = f"{width}x{height}"
+        aspect = width / height
+        original.update(
+            {"width": width, "height": height, "size": size, "aspect": aspect}
+        )
+        meta.update({"width": width, "height": height, "size": size, "aspect": aspect})
+
+    if duration is not None:
+        original["duration"] = duration
+        meta["duration"] = duration
+        meta["length"] = _format_length(duration)
+
+    if original:
+        meta["original"] = original
+
+    if has_thumbnail and width and height:
+        small_width, small_height = _thumbnail_box(width, height)
+        meta["small"] = {
+            "width": small_width,
+            "height": small_height,
+            "size": f"{small_width}x{small_height}",
+            "aspect": small_width / small_height,
+        }
+
+    return meta
 
 
 def serialize_media_attachment(
     attachment: Attachment, index: int, status_id: str
 ) -> dict:
     url = attachment.proxied_url or attachment.url
-    meta = {}
-    if attachment.width and attachment.height:
-        meta["original"] = {"width": attachment.width, "height": attachment.height}
+    duration = attachment.duration_seconds
+    media_type = _mastodon_media_type(
+        attachment.media_type,
+        attachment.url,
+        duration=duration,
+        has_audio=attachment.has_audio,
+    )
+
+    has_thumbnail = bool(attachment.poster_url or attachment.resized_url)
+    preview_url = attachment.poster_url or attachment.resized_url
+    if preview_url is None and media_type not in ("video", "audio", "gifv"):
+        # Images degrade to the full-size URL when no thumbnail exists;
+        # video/audio never do (Mastodon's preview_url is nullable, and a
+        # client shouldn't be handed raw media to render as a poster).
+        preview_url = url
 
     return {
         # Not independently addressable in this backend (no separate media
         # lookup for already-attached media) — scoped to the parent status.
         "id": f"{status_id}-{index}",
-        "type": _media_type_category(attachment),
+        "type": media_type,
         "url": url,
-        "preview_url": attachment.resized_url or url,
+        "preview_url": preview_url,
         "remote_url": attachment.url,
-        "meta": meta,
+        "meta": _media_meta(
+            attachment.width, attachment.height, duration, has_thumbnail
+        ),
         "description": attachment.name,
-        "blurhash": None,
+        "blurhash": attachment.blurhash,
     }
 
 
@@ -705,19 +790,17 @@ def serialize_upload(upload: activitypub.models.Upload) -> dict:
     """
     filename = synthetic_filename(upload)
     url = f"{config.BASE_URL}/attachments/{upload.content_hash}/{filename}"
+    duration = float(upload.duration) if upload.duration is not None else None
+
+    mastodon_type = _mastodon_media_type(
+        upload.content_type, url, duration=duration, has_audio=upload.has_audio
+    )
+
     preview_url = (
         f"{config.BASE_URL}/attachments/thumbnails/{upload.content_hash}/{filename}"
         if upload.has_thumbnail
-        else url
+        else (None if mastodon_type in ("video", "audio", "gifv") else url)
     )
-
-    media_type = upload.content_type or ""
-    top_level = media_type.split("/", 1)[0]
-    mastodon_type = top_level if top_level in ("image", "video", "audio") else "unknown"
-
-    meta = {}
-    if upload.width and upload.height:
-        meta["original"] = {"width": upload.width, "height": upload.height}
 
     return {
         "id": ids.encode_upload_id(upload),
@@ -725,7 +808,9 @@ def serialize_upload(upload: activitypub.models.Upload) -> dict:
         "url": url,
         "preview_url": preview_url,
         "remote_url": None,
-        "meta": meta,
+        "meta": _media_meta(
+            upload.width, upload.height, duration, bool(upload.has_thumbnail)
+        ),
         "description": upload.description,
         "blurhash": upload.blurhash,
     }

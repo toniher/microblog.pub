@@ -238,7 +238,7 @@ class _CachedStaticFiles(StaticFiles):
         status_code: int = 200,
     ) -> Response:
         response = super().file_response(full_path, stat_result, scope, status_code)
-        response.headers.update(_add_cache_control(dict(response.headers)))
+        response.headers.update(_add_cache_control(dict(response.headers), status_code))
         return response
 
 
@@ -1519,7 +1519,14 @@ def _strip_content_type(headers: dict[str, str]) -> dict[str, str]:
     return {k: v for k, v in headers.items() if k.lower() != "content-type"}
 
 
-def _add_cache_control(headers: dict[str, str]) -> dict[str, str]:
+def _add_cache_control(
+    headers: dict[str, str], status_code: int = 200
+) -> dict[str, str]:
+    # A 206 partial response must never be cached under the full-resource
+    # key — a shared cache storing it and replaying it as 200 would serve a
+    # truncated file.
+    if status_code == 206:
+        return {**headers, "Cache-Control": "no-store"}
     return {**headers, "Cache-Control": "max-age=31536000"}
 
 
@@ -1569,7 +1576,8 @@ async def serve_proxy_media(
                     "date",
                     "last-modified",
                 ],
-            )
+            ),
+            proxy_resp.status_code,
         ),
         background=BackgroundTask(proxy_resp.aclose),
     )
@@ -1653,7 +1661,8 @@ async def serve_proxy_media_resized(
                 "expires",
                 "last-modified",
             ],
-        )
+        ),
+        proxy_resp.status_code,
     )
 
     try:
@@ -1727,7 +1736,12 @@ async def serve_attachment_thumbnail(
 
     is_webp_supported = "image/webp" in str(request.headers.get("accept"))
 
-    if is_webp_supported:
+    # The original file is only a valid "thumbnail" fallback for an image
+    # (a client that doesn't send `Accept: image/webp`). For video/audio the
+    # original *is* the full media file — serving it here would hand a
+    # remote fetcher (or a client with no webp support) the entire video as
+    # a poster image, since `_resized` is always a webp.
+    if is_webp_supported or not upload.is_image:
         return FileResponse(
             UPLOAD_DIR / (content_hash + "_resized"),
             media_type="image/webp",
