@@ -43,6 +43,16 @@
 
         var probe = document.createElement(isVideo ? "video" : "audio");
         probe.preload = "metadata";
+
+        // canPlayType() is a synchronous capability query — it doesn't touch
+        // the file at all, so it isn't affected by browser-specific bugs in
+        // loading/demuxing a blob: URL (seen in the wild: Gecko-based
+        // browsers occasionally fail to probe a local blob's metadata even
+        // when they can decode the codec just fine once actually served).
+        // Use it to sanity-check a metadata-load failure before blaming the
+        // file's codec/container.
+        var canPlayGuess = file.type ? probe.canPlayType(file.type) : "";
+
         var objectUrl = URL.createObjectURL(file);
         probe.src = objectUrl;
 
@@ -61,11 +71,26 @@
         });
 
         probe.addEventListener("error", function () {
-            row.textContent = (
-                file.name + ": this browser could not play this file " +
-                "(unsupported codec/container) — it may be rejected on " +
-                "upload. Re-encoding as H.264/AAC in an MP4 is the safest bet."
-            );
+            var errorCode = probe.error && probe.error.code;
+            // MEDIA_ERR_SRC_NOT_SUPPORTED (4) with no canPlayType() support
+            // either is the only combination that actually indicates this
+            // browser can't handle the format. Anything else (a network/
+            // decode error, or a "maybe"/"probably" from canPlayType despite
+            // the error) is more likely a local blob-loading quirk than a
+            // real codec/container problem, so say that instead of guessing.
+            if (errorCode === 4 && !canPlayGuess) {
+                row.textContent = (
+                    file.name + ": this browser could not play this file " +
+                    "(unsupported codec/container) — it may be rejected on " +
+                    "upload. Re-encoding as H.264/AAC in an MP4 is the safest bet."
+                );
+            } else {
+                row.textContent = (
+                    file.name + ": couldn't generate a local preview in this " +
+                    "browser (this check isn't authoritative — it may still " +
+                    "upload and play fine; the server has the final say)."
+                );
+            }
             cleanup();
         });
     }
