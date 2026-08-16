@@ -271,17 +271,24 @@ restores fully serial delivery, one activity at a time.
 
 ### Upload size limits
 
-Both settings below are optional; omit them to keep the defaults, which match what's
+All settings below are optional; omit them to keep the defaults, which match what's
 advertised to Mastodon clients out of the box.
 
 ```toml
 max_image_upload_size = 10485760  # 10 MiB
 max_video_upload_size = 41943040  # 40 MiB
+max_image_pixels = 16777216       # 16 MP
 ```
 
  - `max_image_upload_size` — the largest an image upload may be, in bytes.
  - `max_video_upload_size` — the largest a video *or audio* upload may be, in bytes
    (audio shares this limit rather than getting a third setting, matching Mastodon).
+ - `max_image_pixels` — the largest an image upload may be in *pixels* (width × height).
+
+The pixel cap is not redundant with the byte cap: a 7 MB JPEG straight off a phone
+decodes to a 12 megapixel bitmap, and EXIF-stripping and thumbnailing both cost memory
+and CPU in proportion to pixel count, not file size. The limit is checked from the image
+header, before any pixel is decoded, so an oversized image costs nothing to reject.
 
 A file over its limit is rejected before any of it is written to disk. If you're behind a
 reverse proxy, make sure its own body-size cap (e.g. nginx's `client_max_body_size`, see

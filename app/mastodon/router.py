@@ -112,7 +112,7 @@ _INSTANCE_CONFIGURATION = {
             "audio/aac",
         ],
         "image_size_limit": config.MAX_IMAGE_UPLOAD_SIZE,
-        "image_matrix_limit": 16_777_216,
+        "image_matrix_limit": config.MAX_IMAGE_PIXELS,
         "video_size_limit": config.MAX_VIDEO_UPLOAD_SIZE,
         "video_frame_rate_limit": 60,
         "video_matrix_limit": 2_304_000,

@@ -173,6 +173,12 @@ class Config(pydantic.BaseModel):
     max_image_upload_size: int = pydantic.Field(default=10_485_760, ge=1)  # 10 MiB
     max_video_upload_size: int = pydantic.Field(default=41_943_040, ge=1)  # 40 MiB
 
+    # A separate cap from the byte limit above, and not derivable from it: a
+    # 7 MB JPEG decodes to a 12 MP bitmap, and EXIF-stripping/thumbnailing
+    # cost is linear in pixels, not in file size. Matches the
+    # `image_matrix_limit` that _INSTANCE_CONFIGURATION advertises.
+    max_image_pixels: int = pydantic.Field(default=16_777_216, ge=1)  # 16 MP
+
     @pydantic.model_validator(mode="after")
     def _validate_outgoing_delivery_concurrency(self) -> "Config":
         if (
@@ -261,6 +267,7 @@ OUTGOING_DELIVERY_PER_HOST_CONCURRENCY = CONFIG.outgoing_delivery_per_host_concu
 
 MAX_IMAGE_UPLOAD_SIZE = CONFIG.max_image_upload_size
 MAX_VIDEO_UPLOAD_SIZE = CONFIG.max_video_upload_size
+MAX_IMAGE_PIXELS = CONFIG.max_image_pixels
 
 SESSION_TIMEOUT = CONFIG.session_timeout
 CUSTOM_FOOTER = (

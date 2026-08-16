@@ -207,3 +207,79 @@ async def test_image_upload_unaffected_by_restructure(
     assert upload.width == 10 and upload.height == 8
     assert upload.duration is None
     assert upload.has_audio is None
+
+
+@pytest.mark.asyncio
+async def test_too_many_pixels_is_rejected_before_decoding(
+    async_db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A small file can still be a huge bitmap, so the pixel cap is checked
+    from the header — independently of the byte cap, which this image passes.
+    """
+    from PIL import Image
+
+    monkeypatch.setattr("app.uploads.config.MAX_IMAGE_PIXELS", 100)
+
+    buf = io.BytesIO()
+    Image.new("RGB", (40, 40), color=(1, 2, 3)).save(buf, format="PNG")
+    assert len(buf.getvalue()) < 10_485_760  # well under the byte limit
+
+    files_before = set(UPLOAD_DIR.glob("*"))
+
+    with pytest.raises(IncompatibleMediaError) as exc_info:
+        await save_upload(
+            async_db_session, _upload_file(buf.getvalue(), "image/png", "huge.png")
+        )
+    assert "megapixel" in exc_info.value.reason
+
+    # The rejection happens inside _process_image_upload, which runs after the
+    # raw bytes are hashed but before anything is written for an image.
+    assert set(UPLOAD_DIR.glob("*")) == files_before
+
+
+@pytest.mark.asyncio
+async def test_palette_png_keeps_its_colors(
+    async_db_session: AsyncSession,
+) -> None:
+    """The EXIF strip used to rebuild a mode-"P" image without copying its
+    palette, silently remapping every colour to the default palette.
+    """
+    from PIL import Image
+
+    original = Image.new("RGB", (12, 12), color=(200, 40, 90)).convert(
+        "P", palette=Image.Palette.ADAPTIVE
+    )
+    buf = io.BytesIO()
+    original.save(buf, format="PNG")
+
+    upload = await save_upload(
+        async_db_session, _upload_file(buf.getvalue(), "image/png", "pal.png")
+    )
+    assert upload is not None
+    assert upload.content_hash is not None
+
+    with Image.open(UPLOAD_DIR / upload.content_hash) as stored:
+        assert stored.mode == "P"
+        assert stored.convert("RGB").getpixel((0, 0)) == (200, 40, 90)
+
+
+def test_blurhash_is_stable_across_source_sizes() -> None:
+    """The blurhash is now encoded from a downscaled copy; on real content
+    that must land on the same hash as the full-size source would.
+    """
+    from PIL import Image
+
+    from app.uploads import _blurhash_of
+
+    # A smooth gradient, i.e. exactly what a 4x3-component blur represents.
+    large = Image.new("RGB", (900, 600))
+    large.putdata(
+        [
+            (int(255 * x / 900), int(255 * y / 600), 128)
+            for y in range(600)
+            for x in range(900)
+        ]
+    )
+    small = large.resize((150, 100))
+
+    assert _blurhash_of(large) == _blurhash_of(small)

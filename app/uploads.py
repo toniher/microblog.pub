@@ -25,6 +25,13 @@ UPLOAD_DIR = ROOT_DIR / "data" / "uploads"
 
 _THUMBNAIL_MAX_SIZE = (740, 740)
 
+# A blurhash is a 4x3-component blur, so a small source is visually
+# indistinguishable from the original — and much cheaper: blurhash-python's
+# encode() builds a `width * height * 3` Python list before handing the
+# pixels to its C core, which on a 12 MP phone photo means ~350 MB of RSS and
+# ~7s of GIL-holding work. Downscaling first makes it milliseconds.
+_BLURHASH_MAX_SIZE = (128, 128)
+
 
 class UploadTooLargeError(Exception):
     def __init__(self, limit: int) -> None:
@@ -80,6 +87,16 @@ def _hash_and_measure(f: BinaryIO, size_limit: int) -> tuple[str, int]:
     return h.hexdigest(), size
 
 
+def _blurhash_of(image: Image.Image) -> str:
+    """Encode `image`'s blurhash from a downscaled copy.
+
+    Always hand `encode()` a throwaway copy: it closes the image it is given.
+    """
+    small = image.copy()
+    small.thumbnail(_BLURHASH_MAX_SIZE)
+    return blurhash.encode(small, x_components=4, y_components=3)
+
+
 def _process_image_upload(f: UploadFile, dest_filename: Path) -> _ProcessedUpload:
     """Strip EXIF, generate a webp thumbnail and blurhash for a non-GIF image.
 
@@ -87,26 +104,47 @@ def _process_image_upload(f: UploadFile, dest_filename: Path) -> _ProcessedUploa
     there.
     """
     with Image.open(f.file) as _original_image:
+        # Image.open() only reads the header, so this rejects a decompression
+        # bomb before a single pixel is decoded. The byte-size limit is not a
+        # proxy for this: a 7 MB JPEG is a 12 MP bitmap, and every step below
+        # is linear in pixel count.
+        width, height = _original_image.size
+        if width * height > config.MAX_IMAGE_PIXELS:
+            raise IncompatibleMediaError(
+                f"image is {width * height / 1_000_000:.1f} megapixels, over "
+                f"the {config.MAX_IMAGE_PIXELS / 1_000_000:.1f} megapixel "
+                "limit — resize it before uploading"
+            )
+
         # Fix image orientation (as we will remove the info from the EXIF
         # metadata)
         original_image = ImageOps.exif_transpose(_original_image)
         # exif_transpose only returns None for a None input.
         assert original_image is not None
 
-        # Re-creating the image drop the EXIF metadata
+        # Re-creating the image drop the EXIF metadata. paste() copies the
+        # pixels inside Pillow; putdata(getdata()) round-tripped every pixel
+        # through a Python tuple, which cost ~950 MB of RSS on a 12 MP photo
+        # — enough to OOM a small instance. It also loses the palette on a
+        # mode-"P" PNG, which the explicit putpalette() below fixes.
         destination_image = Image.new(
             original_image.mode,
             original_image.size,
         )
-        destination_image.putdata(original_image.getdata())
+        if original_image.mode == "P":
+            palette = original_image.getpalette()
+            if palette is not None:
+                destination_image.putpalette(palette)
+        destination_image.paste(original_image)
         destination_image.save(
             dest_filename,
             format=_original_image.format,  # type: ignore
         )
 
-        with open(dest_filename, "rb") as dest_f:
-            image_blurhash = blurhash.encode(dest_f, x_components=4, y_components=3)
+        image_blurhash = _blurhash_of(destination_image)
 
+        # exif_transpose may have swapped the axes, so re-read the size
+        # rather than reusing the pre-transpose one read above.
         width, height = destination_image.size
         has_thumbnail = False
         try:
@@ -173,10 +211,7 @@ def _process_av_upload(dest_filename: Path, content_hash: str) -> _ProcessedUplo
             if not width or not height:
                 width, height = poster_image.size
 
-            with open(poster_path, "rb") as poster_f:
-                image_blurhash = blurhash.encode(
-                    poster_f, x_components=4, y_components=3
-                )
+            image_blurhash = _blurhash_of(poster_image)
 
             thumbnail_image = poster_image.copy()
             thumbnail_image.thumbnail(_THUMBNAIL_MAX_SIZE)
