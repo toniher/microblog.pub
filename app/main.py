@@ -1591,6 +1591,16 @@ def _resize_image(
     i = Image.open(BytesIO(content))
     if getattr(i, "is_animated", False):
         raise ValueError
+    # `content` came from a remote instance, so the pixel count is theirs to
+    # choose. Pillow only warns at its own MAX_IMAGE_PIXELS and does not raise
+    # until twice that (~179 MP, a ~0.5 GB bitmap), which is far past what a
+    # thumbnail source needs. Checked from the header, before decoding.
+    width, height = i.size
+    if width * height > config.MAX_IMAGE_PIXELS:
+        raise ValueError(
+            f"proxied image is {width * height / 1_000_000:.1f} megapixels, "
+            f"over the {config.MAX_IMAGE_PIXELS / 1_000_000:.1f} limit"
+        )
     i.thumbnail((size, size))
     is_webp = False
     try:

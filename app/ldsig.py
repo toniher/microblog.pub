@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import hashlib
 import typing
@@ -12,12 +13,25 @@ from pyld import jsonld  # type: ignore
 from activitypub import activitypub as ap
 from app.database import AsyncSession
 from app.httpsig import _get_public_key
+from app.utils.url import check_url
 
 if typing.TYPE_CHECKING:
     from app.key import Key
 
 
-requests_loader = pyld.documentloader.requests.requests_document_loader()
+# (connect, read), the requests idiom. pyld dereferences the payload's
+# `@context` over the network, and for an inbox POST that URL is chosen by
+# whoever sent the activity. requests_document_loader() forwards its kwargs
+# straight to requests.get(), which without a `timeout` waits forever: a host
+# that accepts the TCP connection and then says nothing parks the caller for
+# good, with no way back short of a restart. pyld's resolved-context LRU
+# (100 entries, per-process, cold after every restart) does not help, since a
+# novel URL is a guaranteed miss.
+_LOADER_TIMEOUT = (3.05, 10)
+
+requests_loader = pyld.documentloader.requests.requests_document_loader(
+    timeout=_LOADER_TIMEOUT
+)
 
 
 def _loader(url, options={}):
@@ -30,6 +44,12 @@ def _loader(url, options={}):
             "https://raw.githubusercontent.com/web-payments/web-payments.org"
             "/master/contexts/identity-v1.jsonld"
         )
+
+    # The same SSRF guard every other remote fetch in the app goes through.
+    # This URL is attacker-supplied, so without it a crafted `@context` turns
+    # signature verification into a probe of the host's private network.
+    check_url(url)
+
     return requests_loader(url, options)
 
 
@@ -62,6 +82,17 @@ def _doc_hash(doc: ap.RawObject) -> str:
     return h.hexdigest()
 
 
+async def doc_hash_async(doc: ap.RawObject) -> str:
+    """`_doc_hash` off the event loop.
+
+    Normalization is pure CPU, but resolving `@context` reaches out over the
+    network with `requests`, which is blocking. On an event loop that stalls
+    every other request in the process (uvicorn runs a single one), so callers
+    in async code must go through this.
+    """
+    return await asyncio.to_thread(_doc_hash, doc)
+
+
 async def verify_signature(
     db_session: AsyncSession,
     doc: ap.RawObject,
@@ -87,7 +118,11 @@ async def verify_signature(
         )
         return False
 
-    to_be_signed = _options_hash(doc) + _doc_hash(doc)
+    # Both normalize + dereference `@context`, so keep them off the loop.
+    options_hash = await asyncio.to_thread(_options_hash, doc)
+    doc_hash = await asyncio.to_thread(_doc_hash, doc)
+
+    to_be_signed = options_hash + doc_hash
     signature = doc["signature"]["signatureValue"]
     signer = PKCS1_v1_5.new(key.pubkey or key.privkey)  # type: ignore
     digest = SHA256.new()

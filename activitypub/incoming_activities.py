@@ -29,8 +29,10 @@ async def new_ap_incoming_activity(
             logger.warning(f"Dropping invalid object: {raw_object}")
             return None
         else:
-            # This is a transient object, Build the JSON LD hash as the ID
-            ap_id = ldsig._doc_hash(raw_object)
+            # This is a transient object, Build the JSON LD hash as the ID.
+            # Reached straight from the `POST /inbox` handler, on an
+            # attacker-supplied payload — so it must not run inline.
+            ap_id = await ldsig.doc_hash_async(raw_object)
     else:
         ap_id = ap.get_id(raw_object)
 

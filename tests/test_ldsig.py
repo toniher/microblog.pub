@@ -98,3 +98,45 @@ async def test_linked_data_sig_rejects_actor_impersonation(
     options["signatureValue"] = base64.b64encode(signer.sign(digest)).decode("utf-8")
 
     assert (await ldsig.verify_signature(async_db_session, doc)) is False
+
+
+def test_document_loader_has_a_timeout() -> None:
+    """pyld dereferences the payload's `@context`, and for an inbox POST that
+    URL is attacker-chosen. requests.get() without a timeout waits forever, so
+    a host that accepts the connection and stays silent parks the caller for
+    good.
+    """
+    kwargs = [
+        c.cell_contents
+        for c in ldsig.requests_loader.__closure__ or ()
+        if isinstance(c.cell_contents, dict)
+    ]
+    assert any("timeout" in kw for kw in kwargs), (
+        "requests_document_loader() must be built with a timeout= kwarg; it "
+        "forwards kwargs straight to requests.get()"
+    )
+
+
+def test_document_loader_refuses_private_addresses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A crafted `@context` must not become a probe of the host's own network."""
+    from app.utils import url as url_utils
+
+    # tests.toml sets debug=true, which makes is_url_valid() allow everything
+    # so local federation testing works. Turn it off to exercise the guard.
+    monkeypatch.setattr(url_utils, "DEBUG", False)
+    url_utils.check_url.cache_clear()
+    url_utils._getaddrinfo.cache_clear()
+
+    with pytest.raises(url_utils.InvalidURLError):
+        ldsig._loader("http://127.0.0.1:8080/evil-context", {"headers": {}})
+
+    url_utils.check_url.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_doc_hash_async_matches_sync() -> None:
+    """The async wrapper the inbox handler uses must be a pure offload."""
+    doc = deepcopy(_SAMPLE_CREATE)
+    assert (await ldsig.doc_hash_async(doc)) == ldsig._doc_hash(doc)

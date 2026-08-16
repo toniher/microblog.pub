@@ -1,6 +1,7 @@
 import base64
 import time
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app import media
@@ -44,3 +45,44 @@ def test_proxy_media_resized_expired_signature_returns_404_not_500(
     response = client.get(f"/proxy/media/{expired_exp}/{sig}/{_encode(url)}/50")
 
     assert response.status_code == 404
+
+
+def test_resize_image_rejects_oversized_remote_image(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A proxied image's pixel count is chosen by the remote instance. Pillow
+    alone would happily decode ~179 MP (a ~0.5 GB bitmap) before objecting.
+
+    The ValueError is the endpoint's existing "serve the original untouched"
+    signal, so an oversized image is passed through rather than decoded.
+    """
+    import io
+
+    from PIL import Image
+
+    from app.main import _resize_image
+
+    monkeypatch.setattr("app.main.config.MAX_IMAGE_PIXELS", 100)
+
+    buf = io.BytesIO()
+    Image.new("RGB", (40, 40)).save(buf, format="PNG")  # 1600 px, over the cap
+
+    with pytest.raises(ValueError, match="megapixels"):
+        _resize_image(buf.getvalue(), 50, True)
+
+
+def test_resize_image_still_resizes_within_the_cap() -> None:
+    import io
+
+    from PIL import Image
+
+    from app.main import _resize_image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (400, 400), color=(10, 20, 30)).save(buf, format="PNG")
+
+    content, mimetype = _resize_image(buf.getvalue(), 50, True)
+
+    assert mimetype == "image/webp"
+    with Image.open(io.BytesIO(content)) as out:
+        assert max(out.size) <= 50
