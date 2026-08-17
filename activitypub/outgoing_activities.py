@@ -1,7 +1,5 @@
 import asyncio
 import dataclasses
-import email
-import time
 import traceback
 from datetime import datetime
 from datetime import timedelta
@@ -25,6 +23,7 @@ from app.config import KEY_PATH
 from app.database import AsyncSession
 from app.key import Key
 from app.utils.datetime import now
+from app.utils.datetime import parse_retry_after
 from app.utils.url import check_url_async
 from app.utils.workers import Worker
 
@@ -126,21 +125,6 @@ async def new_outgoing_activity(
     await db_session.flush()
     await db_session.refresh(outgoing_activity)
     return outgoing_activity
-
-
-def _parse_retry_after(retry_after: str) -> datetime | None:
-    try:
-        # Retry-After: 120
-        seconds = int(retry_after)
-    except ValueError:
-        # Retry-After: Wed, 21 Oct 2015 07:28:00 GMT
-        dt_tuple = email.utils.parsedate_tz(retry_after)
-        if dt_tuple is None:
-            return None
-
-        seconds = int(email.utils.mktime_tz(dt_tuple) - time.time())
-
-    return now() + timedelta(seconds=seconds)
 
 
 def _exp_backoff(tries: int) -> datetime:
@@ -294,7 +278,7 @@ async def _deliver(req: _DeliveryRequest) -> _DeliveryOutcome:
         retry_after: datetime | None = None
         if http_error.response.status_code in (429, 503):
             if retry_after_value := http_error.response.headers.get("Retry-After"):
-                retry_after = _parse_retry_after(retry_after_value)
+                retry_after = parse_retry_after(retry_after_value)
         return _DeliveryOutcome(
             activity_id=req.activity_id,
             exception=http_error,

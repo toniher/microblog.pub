@@ -118,6 +118,14 @@ def process_incoming_activities(ctx):
 
 
 @task
+def process_push_notifications(ctx):
+    # type: (Context) -> None
+    from app.push_notifications import loop
+
+    asyncio.run(loop())
+
+
+@task
 def tests(ctx, k=None):
     # type: (Context, Optional[str]) -> None
     pytest_args = " -vvv"

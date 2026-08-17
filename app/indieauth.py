@@ -17,6 +17,7 @@ from fastapi.security import HTTPBasic
 from fastapi.security import HTTPBasicCredentials
 from loguru import logger
 from pydantic import BaseModel
+from sqlalchemy import delete
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
@@ -644,6 +645,14 @@ async def indieauth_revocation_endpoint(
             raise ValueError("Should never happen")
 
         token_info.is_revoked = True
+        # Logging out should stop pushes immediately: a revoked token is
+        # otherwise still riding in in-flight payloads, and a dangling
+        # subscription holds push credentials indefinitely.
+        await db_session.execute(
+            delete(models.PushSubscription).where(
+                models.PushSubscription.access_token_id == token_info.id
+            )
+        )
         await db_session.commit()
 
     return JSONResponse(

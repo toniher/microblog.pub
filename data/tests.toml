@@ -14,4 +14,5 @@ debug = true
 sqlalchemy_database = "file:pytest?mode=memory&cache=shared&uri=true"
 # sqlalchemy_database_url = "data/pytest.db"
 key_path = "tests/test.key"
+vapid_key_path = "tests/test_vapid.key"
 media_db_path = "tests/media.db"

@@ -8,6 +8,7 @@ upload surface, Phase 2b's status-write surface, and Phase 3's social
 graph + search surface.
 """
 
+import re
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
@@ -75,6 +76,12 @@ from app.uploads import save_upload
 from app.utils.datetime import as_utc
 from app.utils.datetime import now
 from app.utils.emoji import EMOJIS
+from app.utils.url import InvalidURLError
+from app.utils.url import check_url_async
+from app.webpush import decode_client_key
+from app.webpush import parse_auth_secret
+from app.webpush import parse_p256dh
+from app.webpush import vapid_public_key_b64
 
 router = APIRouter()
 _TIMELINE_OBJECT_TYPES = ["Announce", "Article", "Note", "Page", "Question", "Video"]
@@ -157,7 +164,10 @@ async def instance_v1(
             "registrations": False,
             "approval_required": False,
             "invites_enabled": False,
-            "configuration": _INSTANCE_CONFIGURATION,
+            "configuration": {
+                **_INSTANCE_CONFIGURATION,
+                "vapid": {"public_key": vapid_public_key_b64()},
+            },
             "contact_account": owner_account,
             "rules": [],
         },
@@ -186,7 +196,10 @@ async def instance_v2(
                 "versions": {},
             },
             "languages": [config.LANGUAGE_CODE],
-            "configuration": _INSTANCE_CONFIGURATION,
+            "configuration": {
+                **_INSTANCE_CONFIGURATION,
+                "vapid": {"public_key": vapid_public_key_b64()},
+            },
             "registrations": {
                 "enabled": False,
                 "approval_required": False,
@@ -1387,31 +1400,6 @@ async def timelines_tag(
 
 # --- Notifications -------------------------------------------------------------
 
-# Only these carry a real Mastodon equivalent. Everything else (undo_*,
-# webmention_*, block/unblock, unfollow, follow_request_accepted/rejected) has
-# no matching Mastodon notification type, so it's filtered out entirely
-# rather than surfaced with a made-up/incorrect `type`.
-_NOTIFICATION_TYPE_MAP = {
-    models.NotificationType.NEW_FOLLOWER: "follow",
-    models.NotificationType.PENDING_INCOMING_FOLLOWER: "follow_request",
-    models.NotificationType.LIKE: "favourite",
-    models.NotificationType.ANNOUNCE: "reblog",
-    models.NotificationType.MENTION: "mention",
-    models.NotificationType.MOVE: "move",
-}
-
-_NOTIFICATION_OPTIONS = [
-    joinedload(models.Notification.actor),
-    joinedload(models.Notification.inbox_object).options(
-        joinedload(activitypub.models.InboxObject.actor)
-    ),
-    joinedload(models.Notification.outbox_object).options(
-        joinedload(activitypub.models.OutboxObject.outbox_object_attachments).options(
-            joinedload(activitypub.models.OutboxObjectAttachment.upload)
-        ),
-    ),
-]
-
 
 def _decode_notification_id(mastodon_id: str) -> int | None:
     # Notifications are a single table (unlike statuses/accounts), so the
@@ -1428,7 +1416,9 @@ async def _serialize_notification(
     if notification.notification_type is None or notification.actor is None:
         return None
 
-    mastodon_type = _NOTIFICATION_TYPE_MAP.get(notification.notification_type)
+    mastodon_type = serializers.NOTIFICATION_TYPE_MAP.get(
+        notification.notification_type
+    )
     if mastodon_type is None:
         return None
 
@@ -1451,18 +1441,18 @@ def _allowed_notification_types(request: Request) -> list[models.NotificationTyp
     include_types = set(request.query_params.getlist("types[]"))
     exclude_types = set(request.query_params.getlist("exclude_types[]"))
 
-    allowed_internal_types = list(_NOTIFICATION_TYPE_MAP.keys())
+    allowed_internal_types = list(serializers.NOTIFICATION_TYPE_MAP.keys())
     if include_types:
         allowed_internal_types = [
             t
             for t in allowed_internal_types
-            if _NOTIFICATION_TYPE_MAP[t] in include_types
+            if serializers.NOTIFICATION_TYPE_MAP[t] in include_types
         ]
     if exclude_types:
         allowed_internal_types = [
             t
             for t in allowed_internal_types
-            if _NOTIFICATION_TYPE_MAP[t] not in exclude_types
+            if serializers.NOTIFICATION_TYPE_MAP[t] not in exclude_types
         ]
     return allowed_internal_types
 
@@ -1483,7 +1473,7 @@ async def notifications_list(
             models.notification_not_muted(),
             models.notification_not_in_muted_conversation(),
         )
-        .options(*_NOTIFICATION_OPTIONS)
+        .options(*serializers.NOTIFICATION_OPTIONS)
         .order_by(models.Notification.id.desc())
         .limit(params.limit)
     )
@@ -1615,7 +1605,7 @@ async def notifications_show(
     internal_id = _decode_notification_id(notification_id)
     notification = (
         await db_session.get(
-            models.Notification, internal_id, options=_NOTIFICATION_OPTIONS
+            models.Notification, internal_id, options=serializers.NOTIFICATION_OPTIONS
         )
         if internal_id is not None
         else None
@@ -1653,6 +1643,255 @@ async def notifications_dismiss(
             delete(models.Notification).where(models.Notification.id == internal_id)
         )
         await db_session.commit()
+    return JSONResponse(content={}, status_code=200)
+
+
+# --- Web Push ------------------------------------------------------------------
+
+_ALERT_FIELDS = [
+    "mention",
+    "status",
+    "reblog",
+    "follow",
+    "follow_request",
+    "favourite",
+    "poll",
+    "update",
+]
+
+
+def _truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _unflatten_form(form_data: Any) -> dict[str, Any]:
+    """Turn `subscription[keys][p256dh]=...`-style flat form keys into the
+    same nested shape a JSON body would already have."""
+    result: dict[str, Any] = {}
+    for key in form_data.keys():
+        parts = re.findall(r"[^\[\]]+", key)
+        if not parts:
+            continue
+        node = result
+        for part in parts[:-1]:
+            node = node.setdefault(part, {})
+        node[parts[-1]] = form_data.get(key)
+    return result
+
+
+async def _parse_push_body(request: Request) -> dict[str, Any]:
+    content_type, _, _ = request.headers.get("Content-Type", "").partition(";")
+    if content_type.strip().lower() == "application/json":
+        body = await request.json()
+        return body if isinstance(body, dict) else {}
+    return _unflatten_form(await request.form())
+
+
+async def _get_push_subscription(
+    db_session: AsyncSession, access_token_id: int | None
+) -> models.PushSubscription | None:
+    return (
+        await db_session.scalars(
+            select(models.PushSubscription).where(
+                models.PushSubscription.access_token_id == access_token_id
+            )
+        )
+    ).one_or_none()
+
+
+async def _get_access_token_row(
+    db_session: AsyncSession, token_info: AccessTokenInfo
+) -> models.IndieAuthAccessToken:
+    row = (
+        await db_session.scalars(
+            select(models.IndieAuthAccessToken).where(
+                models.IndieAuthAccessToken.access_token == token_info.access_token
+            )
+        )
+    ).one_or_none()
+    if row is None:
+        raise ValueError("Should never happen")
+    return row
+
+
+def _serialize_push_subscription(sub: models.PushSubscription) -> dict:
+    return {
+        "id": str(sub.id),
+        "endpoint": sub.endpoint,
+        "alerts": {
+            "mention": sub.alert_mention,
+            "status": sub.alert_status,
+            "reblog": sub.alert_reblog,
+            "follow": sub.alert_follow,
+            "follow_request": sub.alert_follow_request,
+            "favourite": sub.alert_favourite,
+            "poll": sub.alert_poll,
+            "update": sub.alert_update,
+            # Never fired on a single-user instance with no sign-up/reports.
+            "admin.sign_up": False,
+            "admin.report": False,
+        },
+        "policy": sub.policy,
+        "server_key": vapid_public_key_b64(),
+        "standard": True,
+    }
+
+
+@router.post("/api/v1/push/subscription", response_model=None)
+async def push_subscription_create(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("push")),
+) -> JSONResponse:
+    body = await _parse_push_body(request)
+    subscription_data = body.get("subscription") or {}
+    keys = subscription_data.get("keys") or {}
+    data = body.get("data") or {}
+    alerts_raw = data.get("alerts") or {}
+
+    endpoint = subscription_data.get("endpoint")
+    if (
+        not endpoint
+        or not isinstance(endpoint, str)
+        or not endpoint.startswith("https://")
+    ):
+        raise MastodonError(
+            422, "validation_failed", "subscription.endpoint must be an https:// URL"
+        )
+
+    try:
+        p256dh_bytes = decode_client_key(str(keys.get("p256dh") or ""))
+        auth_bytes = decode_client_key(str(keys.get("auth") or ""))
+    except Exception:
+        raise MastodonError(422, "validation_failed", "subscription.keys is invalid")
+
+    try:
+        parse_p256dh(p256dh_bytes)
+    except ValueError:
+        raise MastodonError(
+            422, "validation_failed", "subscription.keys.p256dh is invalid"
+        )
+
+    try:
+        parse_auth_secret(auth_bytes)
+    except ValueError:
+        raise MastodonError(
+            422, "validation_failed", "subscription.keys.auth is invalid"
+        )
+
+    policy = str(data.get("policy") or "all")
+    if policy not in ("all", "followed", "follower", "none"):
+        raise MastodonError(422, "validation_failed", "data.policy is invalid")
+
+    try:
+        await check_url_async(endpoint)
+    except InvalidURLError:
+        raise MastodonError(
+            422, "validation_failed", "subscription.endpoint is not allowed"
+        )
+
+    access_token_row = await _get_access_token_row(db_session, token_info)
+    sub = await _get_push_subscription(db_session, access_token_row.id)
+    if sub is None:
+        sub = models.PushSubscription(access_token_id=access_token_row.id)
+        db_session.add(sub)
+
+    sub.endpoint = endpoint
+    sub.p256dh = keys["p256dh"]
+    sub.auth = keys["auth"]
+    sub.policy = policy
+    for field in _ALERT_FIELDS:
+        setattr(sub, f"alert_{field}", _truthy(alerts_raw.get(field, True)))
+
+    # A new subscription (or a replaced one) never gets a backlog: seed the
+    # watermark at the current high-water mark.
+    sub.last_notification_id = (
+        await db_session.scalar(select(func.max(models.Notification.id))) or 0
+    )
+    sub.tries = 0
+    sub.next_try = now()
+    sub.last_try = None
+    sub.error = None
+
+    await db_session.commit()
+
+    # An install that upgraded without wiring up the push_worker process
+    # would otherwise silently accept subscriptions and deliver nothing —
+    # indistinguishable from a broken feature. Flag it loudly.
+    oldest_undelivered = await db_session.scalar(
+        select(func.min(models.PushSubscription.created_at)).where(
+            models.PushSubscription.last_success_at.is_(None)
+        )
+    )
+    if oldest_undelivered and now() - as_utc(oldest_undelivered) > timedelta(hours=1):
+        logger.warning(
+            "Push subscriptions exist but none has ever been delivered to — "
+            "is the push_worker process running? See docs/mastodon_api.md."
+        )
+
+    return JSONResponse(content=_serialize_push_subscription(sub), status_code=200)
+
+
+@router.get("/api/v1/push/subscription", response_model=None)
+async def push_subscription_get(
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("push")),
+) -> JSONResponse:
+    access_token_row = await _get_access_token_row(db_session, token_info)
+    sub = await _get_push_subscription(db_session, access_token_row.id)
+    if sub is None:
+        raise MastodonError(404, "not_found", "no push subscription for this token")
+
+    return JSONResponse(content=_serialize_push_subscription(sub), status_code=200)
+
+
+@router.put("/api/v1/push/subscription", response_model=None)
+async def push_subscription_update(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("push")),
+) -> JSONResponse:
+    access_token_row = await _get_access_token_row(db_session, token_info)
+    sub = await _get_push_subscription(db_session, access_token_row.id)
+    if sub is None:
+        raise MastodonError(404, "not_found", "no push subscription for this token")
+
+    body = await _parse_push_body(request)
+    data = body.get("data") or {}
+    alerts_raw = data.get("alerts") or {}
+
+    # Partial update: only data[alerts][*] and data[policy]. Endpoint/keys
+    # never change here — a client that rotates them must POST a new
+    # subscription instead.
+    for field in _ALERT_FIELDS:
+        if field in alerts_raw:
+            setattr(sub, f"alert_{field}", _truthy(alerts_raw[field]))
+
+    if "policy" in data:
+        policy = str(data["policy"])
+        if policy not in ("all", "followed", "follower", "none"):
+            raise MastodonError(422, "validation_failed", "data.policy is invalid")
+        sub.policy = policy
+
+    await db_session.commit()
+
+    return JSONResponse(content=_serialize_push_subscription(sub), status_code=200)
+
+
+@router.delete("/api/v1/push/subscription", response_model=None)
+async def push_subscription_delete(
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("push")),
+) -> JSONResponse:
+    access_token_row = await _get_access_token_row(db_session, token_info)
+    await db_session.execute(
+        delete(models.PushSubscription).where(
+            models.PushSubscription.access_token_id == access_token_row.id
+        )
+    )
+    await db_session.commit()
     return JSONResponse(content={}, status_code=200)
 
 

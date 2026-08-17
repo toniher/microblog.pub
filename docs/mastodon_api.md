@@ -101,6 +101,22 @@ forgotten on the device.
   distinct from the authenticated `/api/v1/domain_blocks` above), and `/activity`
   (12 weeks of post counts and login counts, so "about this server" screens have
   something to plot instead of blanks).
+- **Push notifications** (`/api/v1/push/subscription`, `GET`/`POST`/`PUT`/`DELETE`) —
+  real Web Push, end-to-end encrypted (VAPID + `aes128gcm`), for mentions,
+  favourites, boosts, follows and follow requests, honouring the same
+  mute/conversation-mute filtering the in-app notification list applies.
+  `standard: true`; the `alerts` map advertises all ten Mastodon keys, but
+  `status`/`poll`/`update` and the admin-only `admin.sign_up`/`admin.report`
+  are always inert — this instance never generates those notification types
+  and has no admin surface to notify about. `policy` (`all`/`followed`/
+  `follower`/`none`) is honoured. New subscriptions default every alert to
+  `true` (upstream Mastodon defaults them `false`, which leaves a fresh
+  subscription silently inert until the client calls update — every real
+  client sends explicit alerts anyway, so this instance opts for the less
+  surprising default). **Deployment note**: delivery runs in a separate
+  `push_worker` process — see `docs/install.md` for the supervisord entry. An
+  install that skips wiring it up will still accept subscriptions and
+  advertise a VAPID key, just never deliver anything.
 
 ## What doesn't (single-user degradations)
 
@@ -118,9 +134,6 @@ instead of crashing:
   so the filtered-notifications queue (`/api/v1/notifications/requests`) is
   always empty and the policy (`/api/v2/notifications/policy`) always reports
   "accept everything"; nothing is held back for approval.
-- **Push notifications** — there's no `/api/v1/push` endpoint; apps fall back to
-  polling. If your client shows a "notifications unavailable" toggle for this
-  instance, that's expected.
 - **Streaming API** — not implemented; `/api/v1/instance` omits `streaming_api`
   on purpose so clients know not to try. Everything works over polling instead.
 - **Scheduled posts** — not supported.
@@ -130,8 +143,8 @@ instead of crashing:
 Standard Mastodon OAuth scopes are supported, including the granular
 `read:*`/`write:*` forms — a token granted the top-level `read`/`write`/`follow`
 scope satisfies any of the matching granular scopes underneath it, same as real
-Mastodon. Most apps request a broad `read write follow push` by default, which
-works fine even though `push` itself is a no-op here.
+Mastodon. Most apps request a broad `read write follow push` by default; `push`
+is a real scope here too, gating the push subscription endpoints above.
 
 ## Troubleshooting
 
@@ -140,6 +153,13 @@ works fine even though `push` itself is a no-op here.
   "instance" field.
 - **Nothing shows up on first sync**: some clients only backfill a page or two
   of history on first login; give it a pull-to-refresh.
+- **Push notifications never arrive**: confirm the `push_worker` process is
+  running (`supervisorctl status`) and check `data/push.log` for delivery
+  errors. If it's running and logging clean 2xx/201 responses but nothing
+  shows up on the device, double-check the `server_key` your client
+  subscribed with still matches `/api/v1/instance`'s
+  `configuration.vapid.public_key` — a regenerated VAPID key invalidates
+  every existing subscription, and the client needs to re-subscribe.
 - If something a real Mastodon client relies on 404s instead of degrading
   gracefully, that's a gap worth [reporting an
   issue](https://github.com/toniher/microblog.pub/issues) for — the API surface

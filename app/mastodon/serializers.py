@@ -22,6 +22,7 @@ from sqlalchemy import event
 from sqlalchemy import func
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.orm import joinedload
 
 import activitypub.models
 from activitypub import activitypub as ap
@@ -39,6 +40,37 @@ from app.database import AsyncSession
 from app.mastodon import ids
 from app.media import proxied_media_url
 from app.utils.datetime import parse_isoformat
+
+# --- Notifications -------------------------------------------------------------
+#
+# Public (not `app.mastodon.router`-private) because the push delivery worker
+# (`app/push_notifications.py`) needs them too, and importing `router.py` from
+# a worker would drag the whole FastAPI app into a background process.
+
+# Only these carry a real Mastodon equivalent. Everything else (undo_*,
+# webmention_*, block/unblock, unfollow, follow_request_accepted/rejected) has
+# no matching Mastodon notification type, so it's filtered out entirely
+# rather than surfaced with a made-up/incorrect `type`.
+NOTIFICATION_TYPE_MAP = {
+    models.NotificationType.NEW_FOLLOWER: "follow",
+    models.NotificationType.PENDING_INCOMING_FOLLOWER: "follow_request",
+    models.NotificationType.LIKE: "favourite",
+    models.NotificationType.ANNOUNCE: "reblog",
+    models.NotificationType.MENTION: "mention",
+    models.NotificationType.MOVE: "move",
+}
+
+NOTIFICATION_OPTIONS = [
+    joinedload(models.Notification.actor),
+    joinedload(models.Notification.inbox_object).options(
+        joinedload(activitypub.models.InboxObject.actor)
+    ),
+    joinedload(models.Notification.outbox_object).options(
+        joinedload(activitypub.models.OutboxObject.outbox_object_attachments).options(
+            joinedload(activitypub.models.OutboxObjectAttachment.upload)
+        ),
+    ),
+]
 
 _CACHE_KEY = "_mastodon_serializer_cache"
 

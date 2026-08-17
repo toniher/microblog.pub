@@ -44,12 +44,14 @@ Setup a reverse proxy (see the [Reverse Proxy section](#reverse-proxy)).
 
 ### What runs inside the container
 
-The image is built from `python:3.12-slim` and a single container runs **three
+The image is built from `python:3.12-slim` and a single container runs **four
 processes** under [supervisord](http://supervisord.org/) (see `misc/docker-supervisord.conf`):
 
  - `uvicorn` — the web server, listening on `0.0.0.0:8000`
  - `incoming_worker` — processes incoming federation activities (your inbox)
  - `outgoing_worker` — delivers your outgoing activities to other servers
+ - `push_worker` — delivers Web Push notifications to subscribed Mastodon
+   client apps (see `docs/mastodon_api.md`)
 
 On every start, the entrypoint (`misc/docker_start.sh`) first runs `inv update
 --no-update-deps`, which recompiles the CSS, compiles the translation catalogs
@@ -106,6 +108,7 @@ from the host:
 tail -f data/uvicorn.log     # web server
 tail -f data/incoming.log    # incoming federation worker
 tail -f data/outgoing.log    # outgoing federation worker
+tail -f data/push.log        # Web Push delivery worker
 ```
 
 supervisord rotates each of these once it hits `stdout_logfile_maxbytes` (see
@@ -230,7 +233,8 @@ Grab your virtualenv path.
 poetry env info
 ```
 
-Run the two processes with supervisord.
+Run the configured processes (web server + workers, see `misc/supervisord.conf`)
+with supervisord.
 
 ```bash
 VENV_DIR=/home/ubuntu/.cache/pypoetry/virtualenvs/microblogpub-chx-y1oE-py3.12 poetry run supervisord -c misc/supervisord.conf -n

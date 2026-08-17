@@ -132,6 +132,7 @@ class Config(pydantic.BaseModel):
     # Config items to make tests easier
     sqlalchemy_database: str | None = None
     key_path: str | None = None
+    vapid_key_path: str | None = None
 
     session_timeout: int = 3600 * 24 * 3  # in seconds, 3 days by default
     csrf_token_exp: int = 3600
@@ -178,6 +179,9 @@ class Config(pydantic.BaseModel):
     # cost is linear in pixels, not in file size. Matches the
     # `image_matrix_limit` that _INSTANCE_CONFIGURATION advertises.
     max_image_pixels: int = pydantic.Field(default=16_777_216, ge=1)  # 16 MP
+
+    # Batch size for the Web Push delivery worker, see `app/push_notifications.py`.
+    push_delivery_batch_size: int = pydantic.Field(default=10, ge=1)
 
     @pydantic.model_validator(mode="after")
     def _validate_outgoing_delivery_concurrency(self) -> "Config":
@@ -269,6 +273,8 @@ MAX_IMAGE_UPLOAD_SIZE = CONFIG.max_image_upload_size
 MAX_VIDEO_UPLOAD_SIZE = CONFIG.max_video_upload_size
 MAX_IMAGE_PIXELS = CONFIG.max_image_pixels
 
+PUSH_DELIVERY_BATCH_SIZE = CONFIG.push_delivery_batch_size
+
 SESSION_TIMEOUT = CONFIG.session_timeout
 CUSTOM_FOOTER = (
     markdown(CONFIG.custom_footer.replace("{version}", VERSION))
@@ -284,6 +290,11 @@ print(f"=====> Using database at {DB_PATH}")
 SQLALCHEMY_DATABASE_URL = f"sqlite:///{DB_PATH}"
 KEY_PATH = (
     (ROOT_DIR / CONFIG.key_path) if CONFIG.key_path else ROOT_DIR / "data" / "key.pem"
+)
+VAPID_KEY_PATH = (
+    (ROOT_DIR / CONFIG.vapid_key_path)
+    if CONFIG.vapid_key_path
+    else ROOT_DIR / "data" / "vapid_key.pem"
 )
 
 

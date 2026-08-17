@@ -4,12 +4,18 @@ from urllib.parse import parse_qs
 from urllib.parse import urlsplit
 
 import pytest
+from Crypto.PublicKey import ECC
+from Crypto.Random import get_random_bytes
 from fastapi.testclient import TestClient
+from sqlalchemy import func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import models
 from app.config import generate_csrf_token
 from app.config import session_serializer
+from app.webpush import _raw_public_point
+from app.webpush import vapid_public_key_b64
 
 _LOGGED_IN_COOKIE = {"session": session_serializer.dumps({"is_logged_in": True})}
 
@@ -88,7 +94,7 @@ def test_apps_create_returns_application_shape(client: TestClient) -> None:
     assert data["redirect_uri"] == "https://elk.zone/oauth/callback"
     assert "client_id" in data
     assert "client_secret" in data
-    assert data["vapid_key"] == ""
+    assert data["vapid_key"] == vapid_public_key_b64()
 
 
 def test_apps_create_accepts_json_body(client: TestClient) -> None:
@@ -362,7 +368,7 @@ async def test_apps_verify_credentials_with_authorized_token(
     assert response.status_code == 200
     data = response.json()
     assert data["name"] == "Test Mastodon Client"
-    assert data["vapid_key"] == ""
+    assert data["vapid_key"] == vapid_public_key_b64()
 
 
 @pytest.mark.asyncio
@@ -376,6 +382,7 @@ async def test_oauth_revoke_kills_the_token_server_side(
         client,
         client_id="mastodon-client",
         redirect_uri="https://client.example/callback",
+        scope="read write push",
         code_challenge=_s256_challenge(verifier),
         code_challenge_method="S256",
     )
@@ -393,6 +400,26 @@ async def test_oauth_revoke_kills_the_token_server_side(
     )
     access_token = token_response.json()["access_token"]
 
+    ua_key = ECC.generate(curve="P-256")
+    subscribe_response = client.post(
+        "/api/v1/push/subscription",
+        json={
+            "subscription": {
+                "endpoint": "https://push.example.net/sub/revoke-test",
+                "keys": {
+                    "p256dh": base64.urlsafe_b64encode(_raw_public_point(ua_key))
+                    .rstrip(b"=")
+                    .decode(),
+                    "auth": base64.urlsafe_b64encode(get_random_bytes(16))
+                    .rstrip(b"=")
+                    .decode(),
+                },
+            }
+        },
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert subscribe_response.status_code == 200
+
     revoke_response = client.post(
         "/oauth/revoke",
         data={
@@ -409,6 +436,13 @@ async def test_oauth_revoke_kills_the_token_server_side(
         headers={"Authorization": f"Bearer {access_token}"},
     )
     assert response.status_code == 401
+
+    # Logging out stops pushes immediately: the subscription tied to the
+    # revoked token must not linger.
+    remaining = await async_db_session.scalar(
+        select(func.count(models.PushSubscription.id))
+    )
+    assert remaining == 0
 
 
 def test_oauth_revoke_with_unknown_token_is_a_noop(client: TestClient) -> None:

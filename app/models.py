@@ -230,6 +230,69 @@ class MutedConversation(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=now)
 
 
+class PushSubscription(Base):
+    """A Web Push subscription (`POST /api/v1/push/subscription`).
+
+    Mastodon semantics: one subscription per access token (a `POST` replaces
+    any existing row), hence the unique FK. There is no separate delivery
+    queue — unlike `OutgoingActivity`, which fans one activity out to N
+    inboxes, each subscription is a strictly serial channel to one device, so
+    a per-subscription cursor (`last_notification_id`) gives ordering for
+    free with less machinery. A subscription that dies (404/410, or its
+    token is revoked/expired, or it exhausts its retries) is deleted rather
+    than flagged errored, so `GET` never advertises a subscription that will
+    never deliver again.
+    """
+
+    __tablename__ = "push_subscription"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
+
+    access_token_id = Column(
+        Integer,
+        ForeignKey(
+            "indieauth_access_token.id", name="fk_push_subscription_access_token_id"
+        ),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    access_token = relationship(IndieAuthAccessToken, uselist=False)
+
+    endpoint = Column(String, nullable=False)
+    # `p256dh` (65-byte uncompressed EC point) and `auth` (16-byte secret),
+    # both stored base64url-encoded — see `app.webpush.parse_p256dh` /
+    # `parse_auth_secret` for the decoded form the worker actually uses.
+    p256dh = Column(String, nullable=False)
+    auth = Column(String, nullable=False)
+
+    alert_mention = Column(Boolean, nullable=False, default=True)
+    alert_status = Column(Boolean, nullable=False, default=True)
+    alert_reblog = Column(Boolean, nullable=False, default=True)
+    alert_follow = Column(Boolean, nullable=False, default=True)
+    alert_follow_request = Column(Boolean, nullable=False, default=True)
+    alert_favourite = Column(Boolean, nullable=False, default=True)
+    alert_poll = Column(Boolean, nullable=False, default=True)
+    alert_update = Column(Boolean, nullable=False, default=True)
+
+    # all|followed|follower|none, mirroring the Mastodon subscription policy.
+    policy = Column(String, nullable=False, default="all")
+
+    # The watermark: the highest `Notification.id` already dealt with
+    # (delivered, filtered out, or permanently rejected). Plain Integer, not
+    # a FK — the referenced row may be pruned by `app/prune.py` while the
+    # watermark itself must survive.
+    last_notification_id = Column(Integer, nullable=False, default=0)
+
+    tries = Column(Integer, nullable=False, default=0)
+    next_try = Column(DateTime(timezone=True), nullable=True, default=now, index=True)
+    last_try = Column(DateTime(timezone=True), nullable=True)
+    last_success_at = Column(DateTime(timezone=True), nullable=True)
+    last_status_code = Column(Integer, nullable=True)
+    error = Column(String, nullable=True)
+
+
 def notification_not_muted() -> Any:
     """Where-clause dropping notifications sent by a muted actor.
 

@@ -7,6 +7,7 @@ from typing import Any
 
 import bcrypt
 import tomli_w
+from Crypto.PublicKey import ECC
 from prompt_toolkit import prompt
 from prompt_toolkit.key_binding import KeyBindings
 
@@ -14,6 +15,25 @@ from app.key import generate_key
 
 _ROOT_DIR = Path().parent.resolve()
 _KEY_PATH = _ROOT_DIR / "data" / "key.pem"
+_VAPID_KEY_PATH = _ROOT_DIR / "data" / "vapid_key.pem"
+
+
+def _generate_vapid_key(key_path: Path) -> None:
+    """Idempotently create a VAPID (P-256) keypair PEM for Web Push.
+
+    Mirrors `app.webpush._create_vapid_key` without importing `app.webpush`
+    (which imports `app.config`, and `app.config` loads `data/profile.toml`
+    at module scope — a file that doesn't exist yet at this point).
+    """
+    try:
+        fd = os.open(str(key_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError:
+        return
+    try:
+        key = ECC.generate(curve="P-256")
+        os.write(fd, key.export_key(format="PEM").encode("ascii"))
+    finally:
+        os.close(fd)
 
 
 _kb = KeyBindings()
@@ -38,6 +58,9 @@ def main() -> None:
                 generate_key(_KEY_PATH)
     else:
         generate_key(_KEY_PATH)
+
+    print("Generating VAPID key for Web Push...")
+    _generate_vapid_key(_VAPID_KEY_PATH)
 
     config_file = Path("data/profile.toml")
 

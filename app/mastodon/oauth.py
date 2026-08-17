@@ -13,6 +13,7 @@ from datetime import timezone
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import Request
+from sqlalchemy import delete
 from sqlalchemy import select
 from starlette.responses import JSONResponse
 
@@ -27,6 +28,7 @@ from app.indieauth import indieauth_authorization_endpoint
 from app.indieauth import issue_access_token
 from app.mastodon.entities import Application
 from app.mastodon.errors import MastodonError
+from app.webpush import vapid_public_key_b64
 
 router = APIRouter()
 
@@ -113,7 +115,7 @@ async def apps_verify_credentials(
         content={
             "name": client.client_name,
             "website": client.client_uri,
-            "vapid_key": "",
+            "vapid_key": vapid_public_key_b64(),
         },
         status_code=200,
     )
@@ -194,6 +196,14 @@ async def oauth_revoke(
                 raise ValueError("Should never happen")
 
             token_info.is_revoked = True
+            # Logging out should stop pushes immediately: a revoked token is
+            # otherwise still riding in in-flight payloads, and a dangling
+            # subscription holds push credentials indefinitely.
+            await db_session.execute(
+                delete(models.PushSubscription).where(
+                    models.PushSubscription.access_token_id == token_info.id
+                )
+            )
             await db_session.commit()
 
     return JSONResponse(content={}, status_code=200)

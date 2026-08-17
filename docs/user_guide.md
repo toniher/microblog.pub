@@ -295,6 +295,23 @@ reverse proxy, make sure its own body-size cap (e.g. nginx's `client_max_body_si
 [Reverse proxy](install.md#reverse-proxy)) is at least as large, or it will reject a
 large-but-valid upload before the app ever sees it.
 
+### Web Push delivery
+
+Mastodon client apps that support push notifications (see
+[Mastodon client apps](mastodon_api.md)) are served by a separate `push_worker`
+process. Both settings below are optional; omit them to keep the defaults.
+
+```toml
+vapid_key_path = "data/vapid_key.pem"
+push_delivery_batch_size = 10
+```
+
+ - `vapid_key_path` — where the instance's VAPID (RFC 8292) keypair lives. Generated
+   automatically on first use; back it up along with the rest of `data/` — regenerating
+   it invalidates every existing subscription, and clients must re-subscribe.
+ - `push_delivery_batch_size` — how many subscriptions with pending notifications are
+   fetched per poll by the `push_worker` process.
+
 ### Customization
 
 #### Default emoji

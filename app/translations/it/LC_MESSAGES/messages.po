@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-09 17:30+0200\n"
+"POT-Creation-Date: 2026-08-17 12:36+0200\n"
 "PO-Revision-Date: 2026-07-17 22:20+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: it\n"
@@ -18,26 +18,60 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: app/admin.py:1436 app/admin.py:1455 app/admin.py:1563
+#: app/admin.py:1438 app/admin.py:1457 app/admin.py:1582
 msgid "Error: object must have a content"
 msgstr "Errore: il contenuto è obbligatorio"
 
-#: app/admin.py:1443
+#: app/admin.py:1445
 msgid "Error: invalid language code"
 msgstr "Errore: codice lingua non valido"
 
-#: app/admin.py:1477
+#: app/admin.py:1472
+msgid "Error: file is too large"
+msgstr ""
+
+#: app/admin.py:1480
+#, fuzzy
+msgid "Error: unable to process upload"
+msgstr "Errore: impossibile elaborare il caricamento"
+
+#: app/admin.py:1496
 msgid "Error: Unable to process upload"
 msgstr "Errore: impossibile elaborare il caricamento"
 
-#: app/config.py:313
+#: app/config.py:387
 msgid "please try again"
 msgstr "riprova"
 
-#: app/config.py:323
+#: app/config.py:397
 #, python-format
 msgid "The security token has expired, %(please_try_again)s"
 msgstr "Il token di sicurezza è scaduto, %(please_try_again)s"
+
+#: app/push_notifications.py:97
+#, fuzzy, python-format
+msgid "%(name)s mentioned you"
+msgstr "ti ha menzionato"
+
+#: app/push_notifications.py:99
+#, fuzzy, python-format
+msgid "%(name)s favourited your post"
+msgstr "%(name)s - Nuovo post"
+
+#: app/push_notifications.py:101
+#, fuzzy, python-format
+msgid "%(name)s boosted your post"
+msgstr "%(name)s - Nuovo post"
+
+#: app/push_notifications.py:103
+#, fuzzy, python-format
+msgid "%(name)s started following you"
+msgstr "Seguiti di %(name)s"
+
+#: app/push_notifications.py:105
+#, python-format
+msgid "%(name)s has requested to follow you"
+msgstr ""
 
 #: app/templates/admin_blocks.html:6
 msgid "Blocked accounts"
@@ -245,6 +279,14 @@ msgstr "Vedi altro"
 msgid "%(name)s's articles"
 msgstr "Articoli di %(name)s"
 
+#: app/templates/articles.html:22 app/templates/index.html:46
+msgid "Previous"
+msgstr "Precedente"
+
+#: app/templates/articles.html:26 app/templates/index.html:50
+msgid "Next"
+msgstr "Successivo"
+
 #: app/templates/custom_page.html:10 app/templates/index.html:11
 msgid "ActivityPub profile"
 msgstr "Profilo ActivityPub"
@@ -305,14 +347,6 @@ msgstr "Follower"
 #: app/templates/header.html:60
 msgid "Following"
 msgstr "Seguiti"
-
-#: app/templates/index.html:46
-msgid "Previous"
-msgstr "Precedente"
-
-#: app/templates/index.html:50
-msgid "Next"
-msgstr "Successivo"
 
 #: app/templates/index.html:58
 msgid "write your first note"
