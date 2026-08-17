@@ -117,6 +117,27 @@ forgotten on the device.
   `push_worker` process — see `docs/install.md` for the supervisord entry. An
   install that skips wiring it up will still accept subscriptions and
   advertise a VAPID key, just never deliver anything.
+- **Streaming API** (`wss://…/api/v1/streaming`, WebSocket only — no SSE) —
+  `user`, `user:notification`, `public`, `public:local`, `public:remote`,
+  `hashtag` and `direct` streams, delivering `update`, `status.update`,
+  `delete`, `notification` and `conversation` events. Unlike Web Push, this
+  needs **no separate process**: the server runs as a single process/event
+  loop, so a small in-process task polls committed rows (~1s interval,
+  `streaming_poll_interval`) and fans out over the open sockets — the same
+  filtering (mutes, visibility) the REST timelines apply, since it re-queries
+  through the same functions rather than duplicating the logic. `delete` and
+  `status.update` are best-effort over a bounded window (the newest ~500
+  statuses per table plus anything streamed since connecting) — a much older
+  status, deleted, produces no frame; the client's own list still updates on
+  its next REST fetch. **Not supported**: `list` streams (Lists are an empty
+  stub, see below) and the `public:*:media` variants. One socket may hold at
+  most 64 subscriptions (`hashtag` streams carry a client-supplied tag, so the
+  set needs a bound); a 65th `subscribe` gets an error frame and is ignored.
+  **Deployment note**:
+  the reverse proxy must forward the WebSocket upgrade on this path
+  specifically — see the `location /api/v1/streaming` block in
+  `docs/install.md`'s nginx snippet. `streaming_enabled = false` in
+  `data/profile.toml` disables the endpoint and removes the advertisement.
 
 ## What doesn't (single-user degradations)
 
@@ -134,8 +155,6 @@ instead of crashing:
   so the filtered-notifications queue (`/api/v1/notifications/requests`) is
   always empty and the policy (`/api/v2/notifications/policy`) always reports
   "accept everything"; nothing is held back for approval.
-- **Streaming API** — not implemented; `/api/v1/instance` omits `streaming_api`
-  on purpose so clients know not to try. Everything works over polling instead.
 - **Scheduled posts** — not supported.
 
 ## Scopes
@@ -160,6 +179,13 @@ is a real scope here too, gating the push subscription endpoints above.
   subscribed with still matches `/api/v1/instance`'s
   `configuration.vapid.public_key` — a regenerated VAPID key invalidates
   every existing subscription, and the client needs to re-subscribe.
+- **Streaming never connects (client stuck "connecting…")**: check that the
+  reverse proxy has a dedicated location forwarding the WebSocket upgrade for
+  `/api/v1/streaming` specifically — a generic `proxy_pass` without
+  `proxy_set_header Upgrade`/`Connection` will accept the TCP connection and
+  then hang, since ordinary HTTP proxying doesn't forward the upgrade. Also
+  check `proxy_read_timeout` is generous (an idle socket dying at the default
+  60s reads to the client as an unexplained disconnect).
 - If something a real Mastodon client relies on 404s instead of degrading
   gracefully, that's a gap worth [reporting an
   issue](https://github.com/toniher/microblog.pub/issues) for — the API surface

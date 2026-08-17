@@ -312,6 +312,29 @@ push_delivery_batch_size = 10
  - `push_delivery_batch_size` — how many subscriptions with pending notifications are
    fetched per poll by the `push_worker` process.
 
+### Streaming API
+
+Mastodon client apps that support live timeline/notification updates (see
+[Mastodon client apps](mastodon_api.md)) connect over `wss://…/api/v1/streaming`.
+Unlike Web Push, this needs no separate process — see the linked section for why.
+All settings below are optional; omit them to keep the defaults.
+
+```toml
+streaming_enabled = true
+streaming_poll_interval = 1.0
+streaming_max_connections = 32
+```
+
+ - `streaming_enabled` — set to `false` to disable the endpoint entirely; this also
+   removes the `streaming_api`/`configuration.urls.streaming` advertisement, so
+   clients never attempt a connection that would just fail.
+ - `streaming_poll_interval` — how often (seconds) the in-process pump checks for
+   new activity while at least one client is connected. Lower is more responsive
+   and costs a few more cheap queries per second; has no cost at all when no
+   client is connected.
+ - `streaming_max_connections` — a cap on concurrent streaming sockets, since
+   `public`/`hashtag` streams can be reached without authentication.
+
 ### Customization
 
 #### Default emoji

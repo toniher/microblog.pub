@@ -10,11 +10,19 @@ Microblog.pub is a "modern" Python application with "old-school" server-rendered
  - Most of the code is asynchronous, using [asyncio](https://docs.python.org/3/library/asyncio.html).
  - SQLite3 for data storage
 
-The server has 3 components:
+The server has 4 components:
 
  - The web server (powered by [FastAPI](https://fastapi.tiangolo.com/) and [Jinja2](https://jinja.palletsprojects.com/en/3.1.x/) templates)
- - One process that takes care of sending "outgoing activities" 
- - One process that takes care of processing "incoming activities" 
+ - One process that takes care of sending "outgoing activities"
+ - One process that takes care of processing "incoming activities"
+ - One process that delivers Web Push notifications (`app/push_notifications.py`)
+
+The Mastodon streaming API (`app/mastodon/streaming.py`) adds no fifth process:
+it's a background `asyncio` task inside the web server, since that's the only
+component with an open WebSocket to push events to. It learns about activity
+from the other processes by polling committed rows (SQLite is WAL, so this
+never blocks a writer) rather than through any direct signalling between
+processes — see the module docstring for the full rationale.
 
 ### Tasks
 

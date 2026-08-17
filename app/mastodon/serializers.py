@@ -72,6 +72,32 @@ NOTIFICATION_OPTIONS = [
     ),
 ]
 
+
+async def serialize_notification(
+    db_session: AsyncSession, notification: models.Notification
+) -> dict | None:
+    if notification.notification_type is None or notification.actor is None:
+        return None
+
+    mastodon_type = NOTIFICATION_TYPE_MAP.get(notification.notification_type)
+    if mastodon_type is None:
+        return None
+
+    created_at = notification.created_at or datetime.min.replace(tzinfo=timezone.utc)
+    result = {
+        "id": str(notification.id),
+        "type": mastodon_type,
+        "created_at": format_datetime(created_at),
+        "account": await serialize_account(db_session, notification.actor),
+    }
+
+    target = notification.outbox_object or notification.inbox_object
+    if target is not None:
+        result["status"] = await serialize_status(db_session, target)
+
+    return result
+
+
 _CACHE_KEY = "_mastodon_serializer_cache"
 
 
@@ -845,4 +871,57 @@ def serialize_upload(upload: activitypub.models.Upload) -> dict:
         ),
         "description": upload.description,
         "blurhash": upload.blurhash,
+    }
+
+
+async def serialize_conversation(
+    db_session: AsyncSession,
+    last: AnyboxObject,
+    actor_ids: set[int],
+    unread: bool,
+) -> dict:
+    actors: list[activitypub.models.Actor] = []
+    if actor_ids:
+        actors = list(
+            (
+                await db_session.execute(
+                    select(activitypub.models.Actor).where(
+                        activitypub.models.Actor.id.in_(actor_ids)
+                    )
+                )
+            ).scalars()
+        )
+    elif last.is_from_outbox:
+        # A thread the owner started that hasn't been replied to yet has no
+        # inbox rows to read participants off of — fall back to the mention
+        # tags, like the HTML DM view does.
+        mention_ap_ids = [
+            tag["href"]
+            for tag in last.tags
+            if isinstance(tag, dict)
+            and tag.get("type") == "Mention"
+            and isinstance(tag.get("href"), str)
+        ]
+        if mention_ap_ids:
+            actors = list(
+                (
+                    await db_session.execute(
+                        select(activitypub.models.Actor).where(
+                            activitypub.models.Actor.ap_id.in_(mention_ap_ids)
+                        )
+                    )
+                ).scalars()
+            )
+
+    status_id = (
+        ids.encode_outbox_id(last)
+        if isinstance(last, activitypub.models.OutboxObject)
+        else ids.encode_inbox_id(last)
+    )
+
+    return {
+        "id": status_id,
+        "unread": unread,
+        "accounts": [await serialize_account(db_session, actor) for actor in actors],
+        "last_status": await serialize_status(db_session, last),
     }

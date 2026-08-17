@@ -43,6 +43,7 @@ from starlette.background import BackgroundTask
 from starlette.datastructures import Headers
 from starlette.datastructures import MutableHeaders
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.requests import HTTPConnection
 from starlette.responses import JSONResponse
 from starlette.types import Message
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware  # type: ignore
@@ -82,6 +83,8 @@ from app.mastodon.errors import MastodonError
 from app.mastodon.errors import mastodon_error_handler
 from app.mastodon.oauth import router as mastodon_oauth_router
 from app.mastodon.router import router as mastodon_router
+from app.mastodon.streaming import hub as mastodon_streaming_hub
+from app.mastodon.streaming import router as mastodon_streaming_router
 from app.templates import is_current_user_admin
 from app.uploads import UPLOAD_DIR
 from app.utils import pagination
@@ -201,15 +204,27 @@ class CustomMiddleware:
         return None
 
 
-def _check_0rtt_early_data(request: Request) -> None:
-    """Disable TLS1.3 0-RTT requests for non-GET."""
-    if request.headers.get("Early-Data", None) == "1" and request.method != "GET":
+def _check_0rtt_early_data(conn: HTTPConnection) -> None:
+    """Disable TLS1.3 0-RTT requests for non-GET.
+
+    HTTPConnection, not Request: this is an app-level dependency (see the
+    FastAPI(...) call below), so it also runs for WebSocket routes, where a
+    Request-typed parameter cannot be resolved. WebSocket handshakes are GETs
+    and carry no method worth guarding, so only http scopes are checked.
+    """
+    if conn.scope["type"] != "http":
+        return
+    if conn.headers.get("Early-Data", None) == "1" and conn.scope["method"] != "GET":
         raise fastapi.HTTPException(status_code=425, detail="Too early")
 
 
 @contextlib.asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
+    # Before closing the HTTP client pool: the streaming pump may be mid-tick
+    # inside a short-lived db session, and cancelling it first keeps shutdown
+    # ordered.
+    await mastodon_streaming_hub.aclose()
     await http_client.aclose_all()
 
 
@@ -285,6 +300,7 @@ app.include_router(micropub.router)
 app.include_router(webmentions.router)
 app.include_router(mastodon_oauth_router)
 app.include_router(mastodon_router)
+app.include_router(mastodon_streaming_router)
 config.load_custom_routes()
 if custom_router := get_custom_router():
     app.include_router(custom_router)

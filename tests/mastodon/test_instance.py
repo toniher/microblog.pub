@@ -38,8 +38,9 @@ def test_instance_v1_shape(client: TestClient) -> None:
     }
     assert data["contact_account"]["username"]
     assert data["contact_account"]["id"] == "0"
-    # No streaming API is implemented; clients must fall back to polling.
-    assert "streaming_api" not in data["urls"]
+    # Streaming is advertised over WebSocket, matching the wss:// origin
+    # streaming clients connect to (app/mastodon/streaming.py).
+    assert data["urls"]["streaming_api"].startswith("ws")
     assert data["registrations"] is False
 
 
@@ -52,6 +53,12 @@ def test_instance_v2_shape(client: TestClient) -> None:
     assert data["contact"]["account"]["id"] == "0"
     assert data["registrations"]["enabled"] is False
     assert "configuration" in data
+    # This is the key Mastodon 4.x clients actually read (v1's urls.streaming_api
+    # is legacy compatibility) — both must agree.
+    assert (
+        data["configuration"]["urls"]["streaming"]
+        == client.get("/api/v1/instance").json()["urls"]["streaming_api"]
+    )
 
 
 def test_instance_rules_is_empty(client: TestClient) -> None:

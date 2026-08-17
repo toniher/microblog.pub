@@ -279,6 +279,10 @@ server {
       proxy_set_header Connection $connection_upgrade;
       proxy_redirect off;
       proxy_buffering off;
+      # Needed for the Mastodon streaming API (wss://…/api/v1/streaming,
+      # app/mastodon/streaming.py) — the default 60s would kill an idle
+      # WebSocket, read as an unexplained disconnect by the client.
+      proxy_read_timeout 3600s;
       proxy_pass http://localhost:8000;
     }
 
@@ -288,7 +292,9 @@ server {
 # This should be outside the `server` block
 map $http_upgrade $connection_upgrade {
   default upgrade;
-  '' close;
+  # NOT `close`: that forces `Connection: close` on every ordinary
+  # (non-upgrade) request too, since $http_upgrade is empty for those.
+  '' '';
 }
 ```
 

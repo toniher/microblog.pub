@@ -11,7 +11,6 @@ graph + search surface.
 import re
 from datetime import datetime
 from datetime import timedelta
-from datetime import timezone
 from typing import Any
 from typing import Sequence
 from typing import cast
@@ -68,6 +67,8 @@ from app.lookup import lookup
 from app.mastodon import ids
 from app.mastodon import pagination
 from app.mastodon import serializers
+from app.mastodon import streaming
+from app.mastodon import timelines
 from app.mastodon.errors import MastodonError
 from app.mastodon.scopes import require_scope
 from app.uploads import IncompatibleMediaError
@@ -84,7 +85,6 @@ from app.webpush import parse_p256dh
 from app.webpush import vapid_public_key_b64
 
 router = APIRouter()
-_TIMELINE_OBJECT_TYPES = ["Announce", "Article", "Note", "Page", "Question", "Video"]
 
 # The size limits below are real (enforced in app/uploads.py's save_upload,
 # reading the same app.config constants) — everything else here is an
@@ -151,9 +151,11 @@ async def instance_v1(
             "description": config.CONFIG.summary,
             "email": config.CONFIG.contact_email or "",
             "version": f"{config.VERSION} (compatible; microblogpub {config.VERSION})",
-            # No `streaming_api` key: the streaming API isn't implemented, so
-            # clients fall back to polling (see PLAN-0.md).
-            "urls": {},
+            "urls": (
+                {"streaming_api": streaming_url}
+                if (streaming_url := streaming.streaming_base_url())
+                else {}
+            ),
             "stats": {
                 "user_count": 1,
                 "status_count": owner_account["statuses_count"],
@@ -199,6 +201,11 @@ async def instance_v2(
             "configuration": {
                 **_INSTANCE_CONFIGURATION,
                 "vapid": {"public_key": vapid_public_key_b64()},
+                "urls": (
+                    {"streaming": streaming_url}
+                    if (streaming_url := streaming.streaming_base_url())
+                    else {}
+                ),
             },
             "registrations": {
                 "enabled": False,
@@ -669,7 +676,9 @@ async def accounts_statuses(
                 # Must include "Announce" — otherwise the owner's own boosts
                 # never appear on their own profile, unlike a remote actor's
                 # (below), which already lists it.
-                activitypub.models.OutboxObject.ap_type.in_(_TIMELINE_OBJECT_TYPES),
+                activitypub.models.OutboxObject.ap_type.in_(
+                    timelines.TIMELINE_OBJECT_TYPES
+                ),
                 activitypub.models.OutboxObject.visibility.in_(allowed_visibility),
             )
             .options(
@@ -721,7 +730,9 @@ async def accounts_statuses(
             .where(
                 activitypub.models.InboxObject.ap_actor_id == actor_ap_id,
                 activitypub.models.InboxObject.is_deleted.is_(False),
-                activitypub.models.InboxObject.ap_type.in_(_TIMELINE_OBJECT_TYPES),
+                activitypub.models.InboxObject.ap_type.in_(
+                    timelines.TIMELINE_OBJECT_TYPES
+                ),
                 activitypub.models.InboxObject.visibility.in_(allowed_visibility),
             )
             .options(joinedload(activitypub.models.InboxObject.actor))
@@ -1162,84 +1173,6 @@ async def _resolve_cursor_published_at(
     return obj.ap_published_at if obj else None
 
 
-def _status_id_int(obj: AnyboxObject) -> int:
-    """Sort key aligning array order with the status id's own ordering.
-
-    The status id is timestamp-prefixed (see `app.mastodon.ids`), so sorting
-    by it (rather than by `ap_published_at` directly) guarantees the returned
-    array order exactly matches numeric id order — which is what the `Link`
-    header's `max_id`/`min_id` cursors (`pagination.build_link_header`) and
-    any client that re-sorts locally by id both assume.
-    """
-    status_id = (
-        ids.encode_outbox_id(obj)
-        if isinstance(obj, activitypub.models.OutboxObject)
-        else ids.encode_inbox_id(obj)
-    )
-    return ids.mastodon_id_int(status_id)
-
-
-async def _fetch_inbox_timeline_page(
-    db_session: AsyncSession,
-    *,
-    before: datetime | None,
-    after: datetime | None,
-    limit: int,
-    extra_where: tuple = (),
-) -> list[activitypub.models.InboxObject]:
-    query = (
-        select(activitypub.models.InboxObject)
-        .where(
-            activitypub.models.InboxObject.ap_type.in_(_TIMELINE_OBJECT_TYPES),
-            activitypub.models.InboxObject.is_hidden_from_stream.is_(False),
-            activitypub.models.InboxObject.is_deleted.is_(False),
-            # Applies to every timeline (home, public, hashtag), like
-            # Mastodon: a mute hides the account everywhere but the profile.
-            *activitypub.models.not_from_muted_actors(),
-            *extra_where,
-        )
-        .options(joinedload(activitypub.models.InboxObject.actor))
-        .order_by(activitypub.models.InboxObject.ap_published_at.desc())
-        .limit(limit)
-    )
-    if before:
-        query = query.where(activitypub.models.InboxObject.ap_published_at < before)
-    if after:
-        query = query.where(activitypub.models.InboxObject.ap_published_at > after)
-    return list((await db_session.scalars(query)).unique().all())
-
-
-async def _fetch_outbox_timeline_page(
-    db_session: AsyncSession,
-    *,
-    before: datetime | None,
-    after: datetime | None,
-    limit: int,
-    extra_where: tuple = (),
-) -> list[activitypub.models.OutboxObject]:
-    query = (
-        select(activitypub.models.OutboxObject)
-        .where(
-            activitypub.models.OutboxObject.ap_type.in_(_TIMELINE_OBJECT_TYPES),
-            activitypub.models.OutboxObject.is_hidden_from_homepage.is_(False),
-            activitypub.models.OutboxObject.is_deleted.is_(False),
-            *extra_where,
-        )
-        .options(
-            joinedload(
-                activitypub.models.OutboxObject.outbox_object_attachments
-            ).joinedload(activitypub.models.OutboxObjectAttachment.upload)
-        )
-        .order_by(activitypub.models.OutboxObject.ap_published_at.desc())
-        .limit(limit)
-    )
-    if before:
-        query = query.where(activitypub.models.OutboxObject.ap_published_at < before)
-    if after:
-        query = query.where(activitypub.models.OutboxObject.ap_published_at > after)
-    return list((await db_session.scalars(query)).unique().all())
-
-
 @router.get("/api/v1/timelines/home", response_model=None)
 async def timelines_home(
     request: Request,
@@ -1257,16 +1190,16 @@ async def timelines_home(
     # (see PLAN-0.md's pagination design). Fetching `limit` from EACH side
     # before merging guarantees the merged top-`limit` is correct even if
     # every recent post came from just one side.
-    inbox_items = await _fetch_inbox_timeline_page(
+    inbox_items = await timelines.fetch_inbox_timeline_page(
         db_session, before=before, after=after, limit=params.limit
     )
-    outbox_items = await _fetch_outbox_timeline_page(
+    outbox_items = await timelines.fetch_outbox_timeline_page(
         db_session, before=before, after=after, limit=params.limit
     )
     combined: list[AnyboxObject] = [*inbox_items, *outbox_items]
     merged = sorted(
         combined,
-        key=_status_id_int,
+        key=timelines.status_id_int,
         reverse=True,
     )[: params.limit]
 
@@ -1284,10 +1217,15 @@ async def timelines_public(
     if local_only:
         # Single table: plain id-based pagination, no published_at cursor
         # needed.
+        # NOTE: unlike timelines.fetch_outbox_timeline_page, this doesn't
+        # filter is_hidden_from_homepage — a pre-existing inconsistency with
+        # the non-local branch below, left as-is (see PLAN-push.md Step 1).
         query = (
             select(activitypub.models.OutboxObject)
             .where(
-                activitypub.models.OutboxObject.ap_type.in_(_TIMELINE_OBJECT_TYPES),
+                activitypub.models.OutboxObject.ap_type.in_(
+                    timelines.TIMELINE_OBJECT_TYPES
+                ),
                 activitypub.models.OutboxObject.visibility == ap.VisibilityEnum.PUBLIC,
                 activitypub.models.OutboxObject.is_deleted.is_(False),
             )
@@ -1318,7 +1256,7 @@ async def timelines_public(
     after = await _resolve_cursor_published_at(
         db_session, params.min_id or params.since_id
     )
-    inbox_items = await _fetch_inbox_timeline_page(
+    inbox_items = await timelines.fetch_inbox_timeline_page(
         db_session,
         before=before,
         after=after,
@@ -1327,7 +1265,7 @@ async def timelines_public(
             activitypub.models.InboxObject.visibility == ap.VisibilityEnum.PUBLIC,
         ),
     )
-    outbox_items = await _fetch_outbox_timeline_page(
+    outbox_items = await timelines.fetch_outbox_timeline_page(
         db_session,
         before=before,
         after=after,
@@ -1339,7 +1277,7 @@ async def timelines_public(
     combined: list[AnyboxObject] = [*inbox_items, *outbox_items]
     merged = sorted(
         combined,
-        key=_status_id_int,
+        key=timelines.status_id_int,
         reverse=True,
     )[: params.limit]
 
@@ -1365,7 +1303,7 @@ async def timelines_tag(
     )
     scan_limit = max(params.limit * 5, 100)
 
-    inbox_items = await _fetch_inbox_timeline_page(
+    inbox_items = await timelines.fetch_inbox_timeline_page(
         db_session,
         before=before,
         after=after,
@@ -1374,7 +1312,7 @@ async def timelines_tag(
             activitypub.models.InboxObject.visibility == ap.VisibilityEnum.PUBLIC,
         ),
     )
-    outbox_items = await _fetch_outbox_timeline_page(
+    outbox_items = await timelines.fetch_outbox_timeline_page(
         db_session,
         before=before,
         after=after,
@@ -1384,16 +1322,11 @@ async def timelines_tag(
         ),
     )
 
-    def _has_tag(obj: AnyboxObject) -> bool:
-        return any(
-            tag.get("type") == "Hashtag"
-            and tag.get("name", "").lstrip("#").lower() == wanted
-            for tag in obj.tags
-        )
-
     combined: list[AnyboxObject] = [*inbox_items, *outbox_items]
-    candidates = [obj for obj in combined if _has_tag(obj)]
-    merged = sorted(candidates, key=_status_id_int, reverse=True)[: params.limit]
+    candidates = [obj for obj in combined if timelines.has_tag(obj, wanted)]
+    merged = sorted(candidates, key=timelines.status_id_int, reverse=True)[
+        : params.limit
+    ]
 
     return await _respond_with_status_list(request, db_session, merged)
 
@@ -1408,33 +1341,6 @@ def _decode_notification_id(mastodon_id: str) -> int | None:
         return int(mastodon_id)
     except ValueError:
         return None
-
-
-async def _serialize_notification(
-    db_session: AsyncSession, notification: models.Notification
-) -> dict | None:
-    if notification.notification_type is None or notification.actor is None:
-        return None
-
-    mastodon_type = serializers.NOTIFICATION_TYPE_MAP.get(
-        notification.notification_type
-    )
-    if mastodon_type is None:
-        return None
-
-    created_at = notification.created_at or datetime.min.replace(tzinfo=timezone.utc)
-    result = {
-        "id": str(notification.id),
-        "type": mastodon_type,
-        "created_at": serializers.format_datetime(created_at),
-        "account": await serializers.serialize_account(db_session, notification.actor),
-    }
-
-    target = notification.outbox_object or notification.inbox_object
-    if target is not None:
-        result["status"] = await serializers.serialize_status(db_session, target)
-
-    return result
 
 
 def _allowed_notification_types(request: Request) -> list[models.NotificationType]:
@@ -1492,7 +1398,8 @@ async def notifications_list(
     serialized = [
         entity
         for notif in notifications
-        if (entity := await _serialize_notification(db_session, notif)) is not None
+        if (entity := await serializers.serialize_notification(db_session, notif))
+        is not None
     ]
     logger.info(
         "notifications_list: query returned "
@@ -1611,7 +1518,7 @@ async def notifications_show(
         else None
     )
     serialized = (
-        await _serialize_notification(db_session, notification)
+        await serializers.serialize_notification(db_session, notification)
         if notification is not None
         else None
     )
@@ -1897,160 +1804,8 @@ async def push_subscription_delete(
 
 # --- Conversations ---------------------------------------------------------------
 # Mastodon's DM inbox: one entry per `ap_context` thread of direct-visibility
-# statuses. There's no dedicated "conversation" table, so threads are grouped
-# the same way `app.admin.admin_direct_messages` builds the existing HTML view.
-
-
-async def _dm_thread_unread_contexts(db_session: AsyncSession) -> set[str]:
-    return set(
-        (
-            await db_session.execute(
-                select(activitypub.models.InboxObject.ap_context)
-                .join(
-                    models.Notification,
-                    models.Notification.inbox_object_id
-                    == activitypub.models.InboxObject.id,
-                )
-                .where(
-                    models.Notification.notification_type
-                    == models.NotificationType.MENTION,
-                    models.Notification.is_new.is_(True),
-                    activitypub.models.InboxObject.visibility
-                    == ap.VisibilityEnum.DIRECT,
-                    activitypub.models.InboxObject.ap_context.is_not(None),
-                )
-                .distinct()
-            )
-        )
-        .scalars()
-        .all()
-    )
-
-
-async def _dm_threads(
-    db_session: AsyncSession,
-) -> list[tuple[AnyboxObject, set[int], bool]]:
-    """Every DM thread's most recent status, participant actor ids (from the
-    inbox side only — an outbox-only thread has none yet), and unread state,
-    newest first.
-    """
-    inbox_objects = (
-        (
-            await db_session.execute(
-                select(activitypub.models.InboxObject)
-                .where(
-                    activitypub.models.InboxObject.visibility
-                    == ap.VisibilityEnum.DIRECT,
-                    activitypub.models.InboxObject.ap_context.is_not(None),
-                    activitypub.models.InboxObject.is_transient.is_(False),
-                    activitypub.models.InboxObject.is_deleted.is_(False),
-                )
-                .options(joinedload(activitypub.models.InboxObject.actor))
-            )
-        )
-        .unique()
-        .scalars()
-        .all()
-    )
-    outbox_objects = (
-        (
-            await db_session.execute(
-                select(activitypub.models.OutboxObject)
-                .where(
-                    activitypub.models.OutboxObject.visibility
-                    == ap.VisibilityEnum.DIRECT,
-                    activitypub.models.OutboxObject.ap_context.is_not(None),
-                    activitypub.models.OutboxObject.is_transient.is_(False),
-                    activitypub.models.OutboxObject.is_deleted.is_(False),
-                )
-                .options(
-                    joinedload(
-                        activitypub.models.OutboxObject.outbox_object_attachments
-                    ).joinedload(activitypub.models.OutboxObjectAttachment.upload)
-                )
-            )
-        )
-        .unique()
-        .scalars()
-        .all()
-    )
-
-    unread_contexts = await _dm_thread_unread_contexts(db_session)
-
-    by_context: dict[str, dict] = {}
-    for obj in [*inbox_objects, *outbox_objects]:
-        thread = by_context.setdefault(
-            obj.ap_context, {"objects": [], "actor_ids": set()}
-        )
-        thread["objects"].append(obj)
-        if isinstance(obj, activitypub.models.InboxObject):
-            thread["actor_ids"].add(obj.actor_id)
-
-    threads = [
-        (
-            max(thread["objects"], key=_status_id_int),
-            thread["actor_ids"],
-            context in unread_contexts,
-        )
-        for context, thread in by_context.items()
-    ]
-    threads.sort(key=lambda item: _status_id_int(item[0]), reverse=True)
-    return threads
-
-
-async def _serialize_conversation(
-    db_session: AsyncSession,
-    last: AnyboxObject,
-    actor_ids: set[int],
-    unread: bool,
-) -> dict:
-    actors: list[activitypub.models.Actor] = []
-    if actor_ids:
-        actors = list(
-            (
-                await db_session.execute(
-                    select(activitypub.models.Actor).where(
-                        activitypub.models.Actor.id.in_(actor_ids)
-                    )
-                )
-            ).scalars()
-        )
-    elif last.is_from_outbox:
-        # A thread the owner started that hasn't been replied to yet has no
-        # inbox rows to read participants off of — fall back to the mention
-        # tags, like the HTML DM view does.
-        mention_ap_ids = [
-            tag["href"]
-            for tag in last.tags
-            if isinstance(tag, dict)
-            and tag.get("type") == "Mention"
-            and isinstance(tag.get("href"), str)
-        ]
-        if mention_ap_ids:
-            actors = list(
-                (
-                    await db_session.execute(
-                        select(activitypub.models.Actor).where(
-                            activitypub.models.Actor.ap_id.in_(mention_ap_ids)
-                        )
-                    )
-                ).scalars()
-            )
-
-    status_id = (
-        ids.encode_outbox_id(last)
-        if isinstance(last, activitypub.models.OutboxObject)
-        else ids.encode_inbox_id(last)
-    )
-
-    return {
-        "id": status_id,
-        "unread": unread,
-        "accounts": [
-            await serializers.serialize_account(db_session, actor) for actor in actors
-        ],
-        "last_status": await serializers.serialize_status(db_session, last),
-    }
+# statuses. Thread grouping and serialization live in `app.mastodon.timelines`
+# / `app.mastodon.serializers` — the streaming event pump needs them too.
 
 
 def _safe_id_int(mastodon_id: str | None) -> int | None:
@@ -2069,19 +1824,19 @@ async def conversations_list(
     token_info: AccessTokenInfo = Depends(require_scope("read:statuses")),
 ) -> JSONResponse:
     params = pagination.parse_pagination(request)
-    threads = await _dm_threads(db_session)
+    threads = await timelines.dm_threads(db_session)
 
     if (max_int := _safe_id_int(params.max_id)) is not None:
-        threads = [t for t in threads if _status_id_int(t[0]) < max_int]
+        threads = [t for t in threads if timelines.status_id_int(t[0]) < max_int]
     if (cursor_int := _safe_id_int(params.min_id or params.since_id)) is not None:
-        threads = [t for t in threads if _status_id_int(t[0]) > cursor_int]
+        threads = [t for t in threads if timelines.status_id_int(t[0]) > cursor_int]
     threads = threads[: params.limit]
     await serializers.prefetch_status_relations(
         db_session, [last for last, _, _ in threads]
     )
 
     serialized = [
-        await _serialize_conversation(db_session, last, actor_ids, unread)
+        await serializers.serialize_conversation(db_session, last, actor_ids, unread)
         for last, actor_ids, unread in threads
     ]
     response = JSONResponse(content=serialized, status_code=200)
@@ -2118,13 +1873,15 @@ async def conversations_read(
     )
     await db_session.commit()
 
-    threads = await _dm_threads(db_session)
+    threads = await timelines.dm_threads(db_session)
     match = next((t for t in threads if t[0].ap_context == obj.ap_context), None)
     if match is None:
         raise MastodonError(404, "not_found", "conversation not found")
     last, actor_ids, _ = match
     return JSONResponse(
-        content=await _serialize_conversation(db_session, last, actor_ids, False),
+        content=await serializers.serialize_conversation(
+            db_session, last, actor_ids, False
+        ),
         status_code=200,
     )
 
@@ -3249,7 +3006,7 @@ async def _search_statuses(
     # sync). Fine for a single-user instance's post volume.
     query_lower = query.lower()
     scan_limit = max(limit * 5, 100)
-    inbox_items = await _fetch_inbox_timeline_page(
+    inbox_items = await timelines.fetch_inbox_timeline_page(
         db_session,
         before=None,
         after=None,
@@ -3258,7 +3015,7 @@ async def _search_statuses(
             activitypub.models.InboxObject.visibility == ap.VisibilityEnum.PUBLIC,
         ),
     )
-    outbox_items = await _fetch_outbox_timeline_page(
+    outbox_items = await timelines.fetch_outbox_timeline_page(
         db_session,
         before=None,
         after=None,
@@ -3271,7 +3028,7 @@ async def _search_statuses(
     matches = [
         obj for obj in combined if obj.content and query_lower in obj.content.lower()
     ]
-    matches.sort(key=_status_id_int, reverse=True)
+    matches.sort(key=timelines.status_id_int, reverse=True)
     page = matches[:limit]
     await serializers.prefetch_status_relations(db_session, page)
     return [await serializers.serialize_status(db_session, obj) for obj in page]

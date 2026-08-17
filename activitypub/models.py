@@ -245,7 +245,8 @@ class OutboxObject(Base, BaseObject):
     __table_args__ = (
         Index("ix_outbox_ap_published_at", "ap_published_at"),
         # Deliberately does NOT lead with `visibility`: the Mastodon outbox
-        # timeline (`_fetch_outbox_timeline_page`) never constrains it, and
+        # timeline (`app.mastodon.timelines.fetch_outbox_timeline_page`) never
+        # constrains it, and
         # SQLite can't use an index whose leading column is unconstrained.
         # Leading with the two flags both queries do share lets this one index
         # serve the homepage/articles pages *and* the Mastodon timelines, with

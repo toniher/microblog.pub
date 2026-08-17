@@ -183,6 +183,13 @@ class Config(pydantic.BaseModel):
     # Batch size for the Web Push delivery worker, see `app/push_notifications.py`.
     push_delivery_batch_size: int = pydantic.Field(default=10, ge=1)
 
+    # Mastodon streaming API (see `app/mastodon/streaming.py`). Disabling this
+    # also removes the `streaming_api`/`urls.streaming` instance advertisement,
+    # so a client never attempts a connection that would otherwise fail.
+    streaming_enabled: bool = True
+    streaming_poll_interval: float = pydantic.Field(default=1.0, ge=0.1, le=60.0)
+    streaming_max_connections: int = pydantic.Field(default=32, ge=1)
+
     @pydantic.model_validator(mode="after")
     def _validate_outgoing_delivery_concurrency(self) -> "Config":
         if (
@@ -274,6 +281,10 @@ MAX_VIDEO_UPLOAD_SIZE = CONFIG.max_video_upload_size
 MAX_IMAGE_PIXELS = CONFIG.max_image_pixels
 
 PUSH_DELIVERY_BATCH_SIZE = CONFIG.push_delivery_batch_size
+
+STREAMING_ENABLED = CONFIG.streaming_enabled
+STREAMING_POLL_INTERVAL = CONFIG.streaming_poll_interval
+STREAMING_MAX_CONNECTIONS = CONFIG.streaming_max_connections
 
 SESSION_TIMEOUT = CONFIG.session_timeout
 CUSTOM_FOOTER = (

@@ -543,26 +543,8 @@ class AccessTokenInfo:
     exp: int
 
 
-async def verify_access_token(
-    request: Request,
-    db_session: AsyncSession = Depends(get_db_session),
-) -> AccessTokenInfo:
-    token = request.headers.get("Authorization", "").removeprefix("Bearer ")
-
-    # Check if the token is within the form data
-    if not token:
-        form_data = await request.form()
-        if "access_token" in form_data:
-            token = str(form_data["access_token"])
-
-    is_token_valid, access_token = await _check_access_token(db_session, token)
-    if not is_token_valid:
-        raise HTTPException(
-            detail="Invalid access token",
-            status_code=401,
-        )
-
-    if not access_token or not access_token.scope:
+def _to_token_info(access_token: models.IndieAuthAccessToken) -> AccessTokenInfo:
+    if not access_token.scope:
         raise ValueError("Should never happen")
 
     return AccessTokenInfo(
@@ -582,6 +564,31 @@ async def verify_access_token(
     )
 
 
+async def verify_access_token(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+) -> AccessTokenInfo:
+    token = request.headers.get("Authorization", "").removeprefix("Bearer ")
+
+    # Check if the token is within the form data
+    if not token:
+        form_data = await request.form()
+        if "access_token" in form_data:
+            token = str(form_data["access_token"])
+
+    is_token_valid, access_token = await _check_access_token(db_session, token)
+    if not is_token_valid:
+        raise HTTPException(
+            detail="Invalid access token",
+            status_code=401,
+        )
+
+    if not access_token:
+        raise ValueError("Should never happen")
+
+    return _to_token_info(access_token)
+
+
 async def check_access_token(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -594,24 +601,10 @@ async def check_access_token(
     if not is_token_valid:
         return None
 
-    if not access_token or not access_token.scope:
+    if not access_token:
         raise ValueError("Should never happen")
 
-    access_token_info = AccessTokenInfo(
-        scopes=access_token.scope.split(),
-        client_id=(
-            access_token.indieauth_authorization_request.client_id
-            if access_token.indieauth_authorization_request
-            else None
-        ),
-        access_token=access_token.access_token,
-        exp=int(
-            (
-                access_token.created_at.replace(tzinfo=timezone.utc)
-                + timedelta(seconds=access_token.expires_in)
-            ).timestamp()
-        ),
-    )
+    access_token_info = _to_token_info(access_token)
 
     logger.info(
         "Authenticated with access token from client_id="
