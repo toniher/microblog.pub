@@ -564,6 +564,17 @@ def serialize_poll(obj: AnyboxObject, status_id: str) -> dict | None:
         if item.get("name") in voted_names
     ]
 
+    # `votes_count` is votes *cast* and `voters_count` is people: on a
+    # multiple-choice poll the first is the larger number, so it can't just
+    # mirror the second (a client labelling "N votes" would under-report, and
+    # one that takes votes_count as the percentage denominator would render
+    # totals over 100%). Floored at the voter count for remotes that publish
+    # `votersCount` without per-option tallies, where the sum reads 0.
+    voters_count = obj.poll_voters_count
+    votes_count = max(
+        sum(option["votes_count"] for option in options), voters_count or 0
+    )
+
     return {
         "id": status_id,
         "expires_at": (
@@ -571,8 +582,8 @@ def serialize_poll(obj: AnyboxObject, status_id: str) -> dict | None:
         ),
         "expired": obj.is_poll_ended,
         "multiple": not obj.is_one_of_poll,
-        "votes_count": obj.poll_voters_count or 0,
-        "voters_count": obj.poll_voters_count,
+        "votes_count": votes_count,
+        "voters_count": voters_count,
         "voted": bool(own_votes),
         "own_votes": own_votes,
         "options": options,

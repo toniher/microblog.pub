@@ -884,3 +884,208 @@ def test_statuses_history_not_found_for_remote_status(
 def test_statuses_history_not_found(client: TestClient) -> None:
     response = client.get("/api/v1/statuses/999999/history")
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_statuses_create_with_poll_indexed_form_keys(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    """Some HTTP clients encode a list as `poll[options][0]`, `poll[options][1]`.
+
+    Unrecognized, the poll used to vanish from the request and the status posted
+    as a plain note.
+    """
+    token = await _make_access_token(async_db_session, "write:statuses")
+
+    response = client.post(
+        "/api/v1/statuses",
+        headers={"Authorization": f"Bearer {token}"},
+        data={
+            "status": "Pick one",
+            "poll[options][0]": "Cats",
+            "poll[options][1]": "Dogs",
+            "poll[options][2]": "Birds",
+            "poll[expires_in]": "3600",
+        },
+    )
+
+    assert response.status_code == 200
+    poll = response.json()["poll"]
+    assert poll is not None
+    assert [o["title"] for o in poll["options"]] == ["Cats", "Dogs", "Birds"]
+
+
+@pytest.mark.asyncio
+async def test_statuses_create_poll_enforces_advertised_limits(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    """The limits `/api/v1/instance` advertises are the limits actually applied."""
+    token = await _make_access_token(async_db_session, "write:statuses")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    advertised = client.get("/api/v1/instance").json()["configuration"]["polls"]
+    assert advertised == {
+        "max_options": 4,
+        "max_characters_per_option": 100,
+        "min_expiration": 300,
+        "max_expiration": 2_629_746,
+    }
+
+    too_many = client.post(
+        "/api/v1/statuses",
+        headers=headers,
+        json={
+            "status": "Too many",
+            "poll": {"options": ["a", "b", "c", "d", "e"], "expires_in": 3600},
+        },
+    )
+    assert too_many.status_code == 422
+    assert "at most 4" in too_many.json()["error_description"]
+
+    too_long = client.post(
+        "/api/v1/statuses",
+        headers=headers,
+        json={
+            "status": "Too long",
+            "poll": {"options": ["a" * 101, "b"], "expires_in": 3600},
+        },
+    )
+    assert too_long.status_code == 422
+
+    too_soon = client.post(
+        "/api/v1/statuses",
+        headers=headers,
+        json={"status": "Too soon", "poll": {"options": ["a", "b"], "expires_in": 60}},
+    )
+    assert too_soon.status_code == 422
+
+    too_late = client.post(
+        "/api/v1/statuses",
+        headers=headers,
+        json={
+            "status": "Too late",
+            "poll": {"options": ["a", "b"], "expires_in": 3_000_000},
+        },
+    )
+    assert too_late.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_poll_vote_accepts_json_body(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    """JSON clients (Ice Cubes and friends) POST `{"choices": [n]}`."""
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    follower = setup_remote_actor_as_follower(ra)
+    assert follower.actor is not None
+
+    poll_object = RemoteObject(_build_poll_object(ra, ["Cats", "Dogs"]), ra)
+    inbox_object = factories.InboxObjectFactory.from_remote_object(
+        poll_object, follower.actor
+    )
+    poll_id = ids.encode_inbox_id(inbox_object)
+
+    token = await _make_access_token(async_db_session, "write:statuses")
+    response = client.post(
+        f"/api/v1/polls/{poll_id}/votes",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"choices": [1]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["own_votes"] == [1]
+
+
+@pytest.mark.asyncio
+async def test_poll_vote_rejects_a_second_vote(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    """A re-vote would deliver a second set of vote activities to the author."""
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    follower = setup_remote_actor_as_follower(ra)
+    assert follower.actor is not None
+
+    poll_object = RemoteObject(_build_poll_object(ra, ["Cats", "Dogs"]), ra)
+    inbox_object = factories.InboxObjectFactory.from_remote_object(
+        poll_object, follower.actor
+    )
+    poll_id = ids.encode_inbox_id(inbox_object)
+
+    token = await _make_access_token(async_db_session, "write:statuses")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    first = client.post(
+        f"/api/v1/polls/{poll_id}/votes", headers=headers, json={"choices": [0]}
+    )
+    assert first.status_code == 200
+
+    second = client.post(
+        f"/api/v1/polls/{poll_id}/votes", headers=headers, json={"choices": [1]}
+    )
+    assert second.status_code == 422
+    assert "already voted" in second.json()["error_description"]
+
+    # The recorded answer is still the first one, not the rejected re-vote.
+    refetched = client.get(f"/api/v1/polls/{poll_id}", headers=headers).json()
+    assert refetched["own_votes"] == [0]
+
+
+@pytest.mark.asyncio
+async def test_poll_vote_on_own_poll_is_a_422(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    token = await _make_access_token(async_db_session, "write:statuses")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    created = client.post(
+        "/api/v1/statuses",
+        headers=headers,
+        json={
+            "status": "Pick one",
+            "poll": {"options": ["Cats", "Dogs"], "expires_in": 3600},
+        },
+    ).json()
+
+    response = client.post(
+        f"/api/v1/polls/{created['poll']['id']}/votes",
+        headers=headers,
+        json={"choices": [0]},
+    )
+
+    assert response.status_code == 422
+    assert "own poll" in response.json()["error_description"]
+
+
+@pytest.mark.asyncio
+async def test_poll_counts_distinguish_votes_from_voters(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    """On a multiple-choice poll, votes cast exceed the number of voters."""
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    follower = setup_remote_actor_as_follower(ra)
+    assert follower.actor is not None
+
+    raw_poll = _build_poll_object(ra, ["Cats", "Dogs"], multiple=True)
+    raw_poll["votersCount"] = 5
+    raw_poll["anyOf"][0]["replies"]["totalItems"] = 4
+    raw_poll["anyOf"][1]["replies"]["totalItems"] = 3
+    inbox_object = factories.InboxObjectFactory.from_remote_object(
+        RemoteObject(raw_poll, ra), follower.actor
+    )
+    poll_id = ids.encode_inbox_id(inbox_object)
+
+    token = await _make_access_token(async_db_session, "read:statuses")
+    poll = client.get(
+        f"/api/v1/polls/{poll_id}", headers={"Authorization": f"Bearer {token}"}
+    ).json()
+
+    assert poll["multiple"] is True
+    assert poll["voters_count"] == 5
+    assert poll["votes_count"] == 7
+    assert [o["votes_count"] for o in poll["options"]] == [4, 3]

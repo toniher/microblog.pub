@@ -37,6 +37,20 @@ forgotten on the device.
   sensitive/media attachments, polls (including voting), and per-post language.
   Editing keeps full history (`/api/v1/statuses/:id/history`), so clients can
   show what a post looked like before each edit.
+- **Polls** — create one on a status (`poll[options][]`, `expires_in`,
+  `multiple`), read it (`/api/v1/polls/:id`) and vote
+  (`/api/v1/polls/:id/votes`), in either form-encoded or JSON bodies. The limits
+  `/api/v1/instance` advertises (4 options, 100 characters each, 5 minutes to
+  ~30 days) are the limits actually enforced, so a client building its composer
+  from them never hits a surprise rejection. `votes_count` counts votes cast and
+  `voters_count` counts people — they differ on a multiple-choice poll, and both
+  are tracked for your own polls as answers federate in. One vote per poll, as
+  in Mastodon: a second attempt is a `422` rather than a duplicate vote
+  delivered to the poll's author, and voting in your own poll is a `422` too.
+  **Not supported**: `poll[hide_totals]` is accepted and ignored — there's no
+  ActivityPub field for it, so tallies would still be public to every other
+  server and to this instance's own web UI; hiding them only in this API would
+  be a false promise rather than a feature.
 - **Interactions** — favourite, reblog, bookmark, pin, with their "who
   favourited/reblogged this" endpoints.
 - **Link previews** — posts containing a link carry a Mastodon `card`, built from

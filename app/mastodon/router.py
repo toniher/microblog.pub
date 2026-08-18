@@ -93,6 +93,16 @@ router = APIRouter()
 # advisory client hint only. The backend has no hard cap on note/article
 # length, so max_characters is set generously rather than mirroring
 # Mastodon's 500.
+# Poll limits. Named constants rather than literals inside
+# `_INSTANCE_CONFIGURATION` below because `POST /api/v1/statuses` enforces the
+# same numbers: a client reads these off `/api/v1/instance` to build its poll
+# composer, so what's advertised and what's accepted have to be the same values,
+# not two copies that can drift. Mastodon's own defaults.
+_POLL_MAX_OPTIONS = 4
+_POLL_MAX_CHARACTERS_PER_OPTION = 100
+_POLL_MIN_EXPIRATION = 300
+_POLL_MAX_EXPIRATION = 2_629_746
+
 _INSTANCE_CONFIGURATION = {
     "statuses": {
         "max_characters": 100_000,
@@ -127,10 +137,10 @@ _INSTANCE_CONFIGURATION = {
         "video_matrix_limit": 2_304_000,
     },
     "polls": {
-        "max_options": 4,
-        "max_characters_per_option": 100,
-        "min_expiration": 300,
-        "max_expiration": 2_629_746,
+        "max_options": _POLL_MAX_OPTIONS,
+        "max_characters_per_option": _POLL_MAX_CHARACTERS_PER_OPTION,
+        "min_expiration": _POLL_MIN_EXPIRATION,
+        "max_expiration": _POLL_MAX_EXPIRATION,
     },
 }
 
@@ -2099,6 +2109,27 @@ _IDEMPOTENCY_CACHE: dict[str, str] = {}
 _SCHEDULED_IDEMPOTENCY_CACHE: dict[str, int] = {}
 
 
+def _form_list(form: Any, key: str) -> list[Any]:
+    """The values of a repeated form field, in every spelling clients use.
+
+    `key[]` is what the Mastodon docs show and what most clients send, a bare
+    `key` is what a few send for a single value, and `key[0]`/`key[1]`… is what
+    some HTTP libraries generate for a list. The indexed form matters most for
+    poll options: unrecognized, the poll silently vanishes from the request and
+    the status posts as a plain note instead of failing loudly.
+    """
+    if values := form.getlist(f"{key}[]"):
+        return list(values)
+    if values := form.getlist(key):
+        return list(values)
+
+    indexed = []
+    for form_key in form.keys():
+        if match := re.fullmatch(rf"{re.escape(key)}\[(\d+)\]", form_key):
+            indexed.append((int(match.group(1)), form[form_key]))
+    return [value for _, value in sorted(indexed)]
+
+
 class _StatusParams:
     """Normalizes the POST /api/v1/statuses body across content types.
 
@@ -2129,7 +2160,7 @@ class _StatusParams:
         if self._json is not None:
             value = self._json.get(key)
             return list(value) if value else []
-        return self._form.getlist(f"{key}[]") or self._form.getlist(key)
+        return _form_list(self._form, key)
 
     def has(self, key: str) -> bool:
         """Whether `key` was present in the body at all — distinct from being
@@ -2146,7 +2177,7 @@ class _StatusParams:
         if self._json is not None:
             options = (self._json.get("poll") or {}).get("options") or []
         else:
-            options = self._form.getlist("poll[options][]")
+            options = _form_list(self._form, "poll[options]")
         return [str(option) for option in options]
 
     def get_poll_multiple(self) -> bool:
@@ -2256,10 +2287,40 @@ async def _parse_compose_params(
     language = str(language_value) if language_value else None
 
     poll_options = params.get_poll_options()
-    if poll_options and len(poll_options) < 2:
-        raise MastodonError(
-            422, "validation_failed", "poll must have at least 2 options"
-        )
+    poll_expires_in = params.get_poll_expires_in_seconds() if poll_options else None
+    if poll_options:
+        # Enforce exactly what `/api/v1/instance` advertises, so a client that
+        # respects the advertised limits never gets a surprise 422 and one that
+        # ignores them gets a message naming the limit instead of a poll that
+        # federates as something no other server would have accepted.
+        if len(poll_options) < 2:
+            raise MastodonError(
+                422, "validation_failed", "poll must have at least 2 options"
+            )
+        if len(poll_options) > _POLL_MAX_OPTIONS:
+            raise MastodonError(
+                422,
+                "validation_failed",
+                f"poll must have at most {_POLL_MAX_OPTIONS} options",
+            )
+        if any(
+            len(option) > _POLL_MAX_CHARACTERS_PER_OPTION for option in poll_options
+        ):
+            raise MastodonError(
+                422,
+                "validation_failed",
+                "poll options must be at most "
+                f"{_POLL_MAX_CHARACTERS_PER_OPTION} characters",
+            )
+        if poll_expires_in is not None and not (
+            _POLL_MIN_EXPIRATION <= poll_expires_in <= _POLL_MAX_EXPIRATION
+        ):
+            raise MastodonError(
+                422,
+                "validation_failed",
+                f"poll expires_in must be between {_POLL_MIN_EXPIRATION} and "
+                f"{_POLL_MAX_EXPIRATION} seconds",
+            )
 
     return scheduled_statuses.ComposeParams(
         content=content,
@@ -2271,9 +2332,7 @@ async def _parse_compose_params(
         media_ids=media_ids,
         poll_options=poll_options,
         poll_multiple=params.get_poll_multiple() if poll_options else False,
-        poll_expires_in=(
-            params.get_poll_expires_in_seconds() if poll_options else None
-        ),
+        poll_expires_in=poll_expires_in,
         idempotency=idempotency_key,
     )
 
@@ -2775,20 +2834,30 @@ async def polls_vote(
     db_session: AsyncSession = Depends(get_db_session),
     token_info: AccessTokenInfo = Depends(require_scope("write:statuses")),
 ) -> JSONResponse:
-    # send_vote only supports voting on a remote (inbox) poll — matches the
-    # existing HTML poll-vote action's own capability.
     obj = await ids.get_object_by_mastodon_id(db_session, poll_id)
-    if (
-        obj is None
-        or not isinstance(obj, activitypub.models.InboxObject)
-        or not obj.poll_items
-    ):
+    if obj is None or not obj.poll_items:
         raise MastodonError(404, "not_found", "poll not found")
+    if not isinstance(obj, activitypub.models.InboxObject):
+        # Your own poll. Mastodon rejects this too, and `send_vote` addresses
+        # the poll author's inbox, which for an outbox poll is us — a 422 says
+        # what happened, where the previous 404 claimed the poll didn't exist.
+        raise MastodonError(
+            422, "validation_failed", "you cannot vote in your own poll"
+        )
     if obj.is_poll_ended:
         raise MastodonError(422, "validation_failed", "poll has ended")
+    if obj.voted_for_answers:
+        # One vote per poll, as in Mastodon. Without this a client's re-vote
+        # (or a double tap) delivers a second set of vote activities to the
+        # poll's author and overwrites the recorded answers; the HTML UI
+        # enforces the same rule by hiding the form once you've voted
+        # (`can_vote` in app/templates/utils.html).
+        raise MastodonError(422, "validation_failed", "you have already voted")
 
-    form = await request.form()
-    choices = form.getlist("choices[]") or form.getlist("choices")
+    # Same JSON-or-form dance as every other write endpoint: clients disagree,
+    # and `request.form()` alone silently yields nothing for a JSON body, which
+    # turned a JSON client's vote into "choices is required".
+    choices = (await _body_params(request)).get_list("choices")
     if not choices:
         raise MastodonError(422, "validation_failed", "choices is required")
     if obj.is_one_of_poll and len(choices) > 1:
@@ -2797,7 +2866,10 @@ async def polls_vote(
         )
 
     try:
-        indices = [int(str(choice)) for choice in choices]
+        # Deduplicated, order preserved: a client that sends the same index
+        # twice would otherwise have two vote activities delivered for one
+        # answer, double-counting it on the poll author's server.
+        indices = list(dict.fromkeys(int(str(choice)) for choice in choices))
     except ValueError:
         raise MastodonError(422, "validation_failed", "invalid choice index")
 
