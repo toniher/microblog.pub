@@ -36,6 +36,7 @@ from activitypub.boxes import get_anybox_objects_by_ap_ids
 from activitypub.boxes import public_outbox_objects_count
 from app import config
 from app import models
+from app import scheduled_statuses
 from app.database import AsyncSession
 from app.mastodon import ids
 from app.media import proxied_media_url
@@ -871,6 +872,85 @@ def serialize_upload(upload: activitypub.models.Upload) -> dict:
         ),
         "description": upload.description,
         "blurhash": upload.blurhash,
+    }
+
+
+async def prefetch_scheduled_status_uploads(
+    db_session: AsyncSession,
+    rows: Iterable[models.ScheduledStatus],
+) -> None:
+    """Load every attachment referenced by a page of scheduled statuses at once.
+
+    Same reason `prefetch_status_relations` exists: serializing a page row by
+    row otherwise means one lookup per attachment. Nothing is returned — the
+    single `IN` query puts the `Upload` rows in the session's identity map, so
+    the per-row `db_session.get()` in `serialize_scheduled_status` resolves
+    from memory instead of issuing SQL.
+    """
+    internal_ids = set()
+    for row in rows:
+        for media_id in scheduled_statuses.ComposeParams.from_json(
+            row.params
+        ).media_ids:
+            internal_id = ids.decode_upload_id(media_id)
+            if internal_id is not None:
+                internal_ids.add(internal_id)
+
+    if not internal_ids:
+        return
+
+    await db_session.scalars(
+        select(activitypub.models.Upload).where(
+            activitypub.models.Upload.id.in_(internal_ids)
+        )
+    )
+
+
+async def serialize_scheduled_status(
+    db_session: AsyncSession,
+    scheduled_status: models.ScheduledStatus,
+) -> dict:
+    """Serialize a queued status to a Mastodon `ScheduledStatus`.
+
+    `params` echoes the compose parameters back under Mastodon's own names
+    (`text`, not `status`), with the nested `scheduled_at` always null — the
+    time lives in the top-level field, matching upstream. `application_id` is
+    always null: this server doesn't record which OAuth app authored a post.
+    """
+    params = scheduled_statuses.ComposeParams.from_json(scheduled_status.params)
+
+    uploads = []
+    for media_id in params.media_ids:
+        upload = await ids.get_upload_by_mastodon_id(db_session, media_id)
+        if upload is not None:
+            uploads.append(upload)
+
+    poll = None
+    if params.poll_options:
+        poll = {
+            "options": params.poll_options,
+            "expires_in": params.poll_expires_in or 3600,
+            "multiple": params.poll_multiple,
+        }
+
+    return {
+        "id": str(scheduled_status.id),
+        "scheduled_at": format_datetime(scheduled_status.scheduled_at),
+        "params": {
+            "text": params.content,
+            "poll": poll,
+            "media_ids": params.media_ids or None,
+            "sensitive": params.sensitive,
+            "spoiler_text": params.content_warning,
+            "visibility": _VISIBILITY_MAP.get(params.visibility, "public"),
+            "language": params.language,
+            "scheduled_at": None,
+            "idempotency": params.idempotency,
+            "with_rate_limit": False,
+            "in_reply_to_id": params.in_reply_to_id,
+            "application_id": None,
+        },
+        "media_attachments": [serialize_upload(upload) for upload in uploads],
     }
 
 

@@ -7,6 +7,7 @@ and `streaming.py` does too — if this module imported `router.py` back, that
 would be a circular import.
 """
 
+from collections.abc import Collection
 from datetime import datetime
 
 from sqlalchemy import select
@@ -112,6 +113,35 @@ def tag_names(obj: AnyboxObject) -> set[str]:
         for tag in obj.tags
         if tag.get("type") == "Hashtag"
     }
+
+
+def normalize_tag(name: str) -> str:
+    """A hashtag as the timeline queries compare them: no `#`, lowercased."""
+    return name.lstrip("#").lower()
+
+
+def matches_tag_query(
+    obj: AnyboxObject,
+    any_of: Collection[str],
+    all_of: Collection[str] = (),
+    none_of: Collection[str] = (),
+) -> bool:
+    """Mastodon's multi-hashtag timeline predicate.
+
+    `any_of` (the path hashtag plus any `any[]` params) must match at least
+    one of the object's tags, every `all_of` tag must be present, and no
+    `none_of` tag may be. All three must already be normalized by the caller
+    (`normalize_tag`), matching how `timelines_tag` derives them.
+    """
+    # Set *methods*, not operators: they take any iterable, so none of the
+    # three parameter collections gets copied into a temporary set once per
+    # object scanned.
+    names = tag_names(obj)
+    if names.isdisjoint(any_of):
+        return False
+    if not names.issuperset(all_of):
+        return False
+    return names.isdisjoint(none_of)
 
 
 def has_tag(obj: AnyboxObject, wanted: str) -> bool:

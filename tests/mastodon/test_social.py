@@ -4,9 +4,11 @@ from datetime import timedelta
 import pytest
 import respx
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
+import activitypub.models
 from activitypub import activitypub as ap
 from activitypub import boxes
 from activitypub.actor import LOCAL_ACTOR
@@ -624,3 +626,57 @@ async def test_search_hashtags_stub(
             "history": [],
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_remove_from_followers(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    follower = setup_remote_actor_as_follower(ra)
+    assert follower.actor is not None
+    account_id = ids.encode_account_id(follower.actor)
+
+    token = await _make_access_token(
+        async_db_session, "read:accounts read:follows write:follows"
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+
+    before = client.get(
+        f"/api/v1/accounts/relationships?id[]={account_id}", headers=headers
+    ).json()
+    assert before[0]["followed_by"] is True
+
+    response = client.post(
+        f"/api/v1/accounts/{account_id}/remove_from_followers", headers=headers
+    )
+
+    assert response.status_code == 200
+    assert response.json()["followed_by"] is False
+    assert (
+        await async_db_session.scalars(select(activitypub.models.Follower))
+    ).all() == []
+
+    # The remote server is told with a Reject of their original Follow.
+    rejects = (
+        await async_db_session.scalars(
+            select(activitypub.models.OutboxObject).where(
+                activitypub.models.OutboxObject.ap_type == "Reject"
+            )
+        )
+    ).all()
+    assert len(rejects) == 1
+
+    # Removing a non-follower is a no-op, not an error.
+    again = client.post(
+        f"/api/v1/accounts/{account_id}/remove_from_followers", headers=headers
+    )
+    assert again.status_code == 200
+    assert again.json()["followed_by"] is False
+
+
+@pytest.mark.asyncio
+async def test_remove_from_followers_requires_auth(client: TestClient) -> None:
+    assert client.post("/api/v1/accounts/1/remove_from_followers").status_code == 401

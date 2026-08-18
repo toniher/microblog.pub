@@ -527,3 +527,48 @@ async def test_timelines_home_hides_boost_of_muted_actor(
     assert response.status_code == 200
     returned_ids = {status["id"] for status in response.json()}
     assert ids.encode_inbox_id(boost_object) not in returned_ids
+
+
+@pytest.mark.asyncio
+async def test_timelines_tag_any_all_none(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    async def _post(source: str):
+        _, obj = await boxes.send_create(
+            async_db_session,
+            ObjectType.NOTE.value,
+            source,
+            uploads=[],
+            in_reply_to=None,
+            visibility=ap.VisibilityEnum.PUBLIC,
+        )
+        return ids.encode_outbox_id(obj)
+
+    alpha = await _post("Only #alpha here")
+    alpha_beta = await _post("Both #alpha and #beta")
+    gamma = await _post("Just #gamma")
+
+    def _ids(url: str) -> set[str]:
+        response = client.get(url)
+        assert response.status_code == 200
+        return {status["id"] for status in response.json()}
+
+    # any[] widens the match, on top of the path hashtag.
+    assert _ids("/api/v1/timelines/tag/alpha?any[]=gamma") == {
+        alpha,
+        alpha_beta,
+        gamma,
+    }
+
+    # all[] narrows it: every listed tag must be present.
+    assert _ids("/api/v1/timelines/tag/alpha?all[]=beta") == {alpha_beta}
+
+    # none[] excludes.
+    assert _ids("/api/v1/timelines/tag/alpha?none[]=beta") == {alpha}
+
+    # Clients that omit the trailing `[]`, and a leading `#`, work too.
+    assert _ids("/api/v1/timelines/tag/alpha?any=%23gamma") == {
+        alpha,
+        alpha_beta,
+        gamma,
+    }

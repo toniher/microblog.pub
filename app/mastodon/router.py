@@ -44,11 +44,11 @@ from activitypub.boxes import fetch_replies
 from activitypub.boxes import get_anybox_object_by_ap_id
 from activitypub.boxes import get_replies_tree
 from activitypub.boxes import prefetch_actor_outbox
+from activitypub.boxes import remove_follower
 from activitypub.boxes import save_object_to_inbox
 from activitypub.boxes import send_accept
 from activitypub.boxes import send_announce
 from activitypub.boxes import send_block
-from activitypub.boxes import send_create
 from activitypub.boxes import send_delete
 from activitypub.boxes import send_follow
 from activitypub.boxes import send_like
@@ -59,6 +59,7 @@ from activitypub.boxes import send_update
 from activitypub.boxes import send_vote
 from app import config
 from app import models
+from app import scheduled_statuses
 from app.database import AsyncSession
 from app.database import get_db_session
 from app.indieauth import AccessTokenInfo
@@ -76,6 +77,7 @@ from app.uploads import UploadTooLargeError
 from app.uploads import save_upload
 from app.utils.datetime import as_utc
 from app.utils.datetime import now
+from app.utils.datetime import parse_isoformat
 from app.utils.emoji import EMOJIS
 from app.utils.url import InvalidURLError
 from app.utils.url import check_url_async
@@ -1284,6 +1286,20 @@ async def timelines_public(
     return await _respond_with_status_list(request, db_session, merged)
 
 
+def _tag_query_params(request: Request, key: str) -> set[str]:
+    """Normalized `any[]`/`all[]`/`none[]` query values.
+
+    Clients disagree on the trailing `[]` (same split as the form bodies
+    `_StatusParams` normalizes), so both spellings are accepted.
+    """
+    q = request.query_params
+    return {
+        timelines.normalize_tag(value)
+        for value in [*q.getlist(f"{key}[]"), *q.getlist(key)]
+        if value
+    }
+
+
 @router.get("/api/v1/timelines/tag/{hashtag}", response_model=None)
 async def timelines_tag(
     hashtag: str,
@@ -1291,12 +1307,20 @@ async def timelines_tag(
     db_session: AsyncSession = Depends(get_db_session),
 ) -> JSONResponse:
     params = pagination.parse_pagination(request)
-    wanted = hashtag.lstrip("#").lower()
+
+    # Mastodon's multi-tag form: the path hashtag plus `any[]` widen the match,
+    # `all[]` narrows it, `none[]` excludes. Some clients build saved searches
+    # out of these.
+    any_of = {timelines.normalize_tag(hashtag)} | _tag_query_params(request, "any")
+    all_of = _tag_query_params(request, "all")
+    none_of = _tag_query_params(request, "none")
 
     # Hashtags live inside the ap_object JSON blob, not a queryable column, so
     # this scans a bounded recent-public-posts window and filters in Python
     # rather than pushing the predicate into SQL. Fine for a single-user
-    # instance's post volume; not a real search index.
+    # instance's post volume; not a real search index. Note that an `all[]`/
+    # `none[]` query filters the same window more aggressively, so it can
+    # return fewer than `limit` results while older matches exist.
     before = await _resolve_cursor_published_at(db_session, params.max_id)
     after = await _resolve_cursor_published_at(
         db_session, params.min_id or params.since_id
@@ -1323,7 +1347,11 @@ async def timelines_tag(
     )
 
     combined: list[AnyboxObject] = [*inbox_items, *outbox_items]
-    candidates = [obj for obj in combined if timelines.has_tag(obj, wanted)]
+    candidates = [
+        obj
+        for obj in combined
+        if timelines.matches_tag_query(obj, any_of, all_of, none_of)
+    ]
     merged = sorted(candidates, key=timelines.status_id_int, reverse=True)[
         : params.limit
     ]
@@ -2066,6 +2094,10 @@ _MASTODON_VISIBILITY_TO_AP = {
 # without standing up a Redis-like store for a single-user server.
 _IDEMPOTENCY_CACHE: dict[str, str] = {}
 
+# Same idea for the scheduled variant, keyed to the queue row id rather than a
+# status id — a retried POST must not queue the same post twice either.
+_SCHEDULED_IDEMPOTENCY_CACHE: dict[str, int] = {}
+
 
 class _StatusParams:
     """Normalizes the POST /api/v1/statuses body across content types.
@@ -2145,6 +2177,107 @@ async def _body_params(request: Request) -> _StatusParams:
     return _StatusParams(None, await request.form())
 
 
+def _parse_scheduled_at(params: _StatusParams) -> datetime | None:
+    """The requested publication time, or None to post right now.
+
+    Some clients send an empty string for "not scheduled" rather than omitting
+    the field, hence the falsy check. Unlike upstream Mastodon, which refuses
+    anything less than five minutes out, any future time is accepted here: a
+    client that honours the five-minute rule still works, and a single-user
+    server has no throughput reason to reject a post two minutes from now.
+    """
+    raw = params.get("scheduled_at")
+    if not raw:
+        return None
+
+    try:
+        scheduled_at = parse_isoformat(str(raw))
+    except Exception:
+        raise MastodonError(
+            422, "validation_failed", "scheduled_at is not a valid datetime"
+        ) from None
+
+    if scheduled_at <= now():
+        raise MastodonError(
+            422, "validation_failed", "scheduled_at must be in the future"
+        )
+    return scheduled_at
+
+
+async def _parse_compose_params(
+    db_session: AsyncSession,
+    params: _StatusParams,
+    idempotency_key: str | None,
+) -> scheduled_statuses.ComposeParams:
+    """Validate a status-write body into the shared compose parameters.
+
+    Both the immediate and the scheduled path go through here, so a scheduled
+    post is rejected for the same reasons (unknown media, unknown parent, bad
+    visibility, one-option poll) at request time rather than silently failing
+    when it comes due.
+    """
+    content_value = params.get("status")
+    content = str(content_value) if content_value is not None else ""
+    content_warning_value = params.get("spoiler_text")
+    content_warning = str(content_warning_value) if content_warning_value else None
+    sensitive = params.get_bool("sensitive")
+
+    media_ids = [str(media_id) for media_id in params.get_list("media_ids")]
+    for media_id in media_ids:
+        if await ids.get_upload_by_mastodon_id(db_session, media_id) is None:
+            raise MastodonError(
+                422, "validation_failed", f"unknown media id {media_id}"
+            )
+
+    # Mirrors the existing HTML new-post form (app/admin.py): a CW with no
+    # body text but attached media becomes the visible content instead.
+    if not content and content_warning and media_ids:
+        content = content_warning
+        sensitive = True
+        content_warning = None
+
+    if not content:
+        raise MastodonError(422, "validation_failed", "status is required")
+
+    in_reply_to_id = params.get("in_reply_to_id")
+    if in_reply_to_id:
+        in_reply_to_id = str(in_reply_to_id)
+        if await ids.get_object_by_mastodon_id(db_session, in_reply_to_id) is None:
+            raise MastodonError(422, "validation_failed", "in_reply_to_id not found")
+    else:
+        in_reply_to_id = None
+
+    visibility_param = str(params.get("visibility") or "public")
+    visibility = _MASTODON_VISIBILITY_TO_AP.get(visibility_param)
+    if visibility is None:
+        raise MastodonError(422, "validation_failed", "invalid visibility")
+
+    language_value = params.get("language")
+    language = str(language_value) if language_value else None
+
+    poll_options = params.get_poll_options()
+    if poll_options and len(poll_options) < 2:
+        raise MastodonError(
+            422, "validation_failed", "poll must have at least 2 options"
+        )
+
+    return scheduled_statuses.ComposeParams(
+        content=content,
+        content_warning=content_warning,
+        sensitive=True if content_warning else sensitive,
+        visibility=visibility,
+        language=language,
+        in_reply_to_id=in_reply_to_id,
+        media_ids=media_ids,
+        poll_options=poll_options,
+        poll_multiple=params.get_poll_multiple() if poll_options else False,
+        poll_expires_in=(
+            params.get_poll_expires_in_seconds() if poll_options else None
+        ),
+        idempotency=idempotency_key,
+    )
+
+
 @router.post("/api/v1/statuses", response_model=None)
 async def statuses_create(
     request: Request,
@@ -2155,7 +2288,11 @@ async def statuses_create(
     cache_key = (
         f"{token_info.access_token}:{idempotency_key}" if idempotency_key else None
     )
-    if cache_key and cache_key in _IDEMPOTENCY_CACHE:
+
+    params = await _body_params(request)
+    scheduled_at = _parse_scheduled_at(params)
+
+    if cache_key and scheduled_at is None and cache_key in _IDEMPOTENCY_CACHE:
         cached = await ids.get_object_by_mastodon_id(
             db_session, _IDEMPOTENCY_CACHE[cache_key]
         )
@@ -2165,89 +2302,39 @@ async def statuses_create(
                 status_code=200,
             )
 
-    content_type, _, _ = request.headers.get("Content-Type", "").partition(";")
-    if content_type.strip().lower() == "application/json":
-        params = _StatusParams(await request.json(), None)
-    else:
-        params = _StatusParams(None, await request.form())
+    if cache_key and scheduled_at is not None:
+        cached_id = _SCHEDULED_IDEMPOTENCY_CACHE.get(cache_key)
+        if cached_id is not None:
+            cached_row = await db_session.get(models.ScheduledStatus, cached_id)
+            if cached_row is not None:
+                return JSONResponse(
+                    content=await serializers.serialize_scheduled_status(
+                        db_session, cached_row
+                    ),
+                    status_code=200,
+                )
 
-    content_value = params.get("status")
-    content = str(content_value) if content_value is not None else ""
-    content_warning_value = params.get("spoiler_text")
-    content_warning = str(content_warning_value) if content_warning_value else None
-    sensitive = params.get_bool("sensitive")
+    compose = await _parse_compose_params(db_session, params, idempotency_key)
 
-    media_ids = params.get_list("media_ids")
-    uploads = []
-    for media_id in media_ids:
-        upload = await ids.get_upload_by_mastodon_id(db_session, str(media_id))
-        if upload is None:
-            raise MastodonError(
-                422, "validation_failed", f"unknown media id {media_id}"
-            )
-        uploads.append(
-            (upload, serializers.synthetic_filename(upload), upload.description)
+    if scheduled_at is not None:
+        scheduled_status = await scheduled_statuses.schedule(
+            db_session, compose, scheduled_at
+        )
+        if cache_key and scheduled_status.id is not None:
+            _SCHEDULED_IDEMPOTENCY_CACHE[cache_key] = scheduled_status.id
+        return JSONResponse(
+            content=await serializers.serialize_scheduled_status(
+                db_session, scheduled_status
+            ),
+            status_code=200,
         )
 
-    # Mirrors the existing HTML new-post form (app/admin.py): a CW with no
-    # body text but attached media becomes the visible content instead.
-    if not content and content_warning and uploads:
-        content = content_warning
-        sensitive = True
-        content_warning = None
-
-    if not content:
-        raise MastodonError(422, "validation_failed", "status is required")
-
-    in_reply_to_id = params.get("in_reply_to_id")
-    in_reply_to = None
-    if in_reply_to_id:
-        parent = await ids.get_object_by_mastodon_id(db_session, str(in_reply_to_id))
-        if parent is None:
-            raise MastodonError(422, "validation_failed", "in_reply_to_id not found")
-        in_reply_to = parent.ap_id
-
-    visibility_param = str(params.get("visibility") or "public")
-    visibility = _MASTODON_VISIBILITY_TO_AP.get(visibility_param)
-    if visibility is None:
-        raise MastodonError(422, "validation_failed", "invalid visibility")
-
-    language_value = params.get("language")
-    language = str(language_value) if language_value else None
-
-    ap_type = "Note"
-    poll_type = None
-    poll_answers = None
-    poll_duration_in_minutes = None
-    poll_options = params.get_poll_options()
-    if poll_options:
-        ap_type = "Question"
-        poll_answers = poll_options
-        if len(poll_answers) < 2:
-            raise MastodonError(
-                422, "validation_failed", "poll must have at least 2 options"
-            )
-        poll_type = "anyOf" if params.get_poll_multiple() else "oneOf"
-        expires_in_seconds = params.get_poll_expires_in_seconds() or 3600
-        # send_create takes whole minutes; never round a short-lived poll
-        # down to 0 (which would mean "no expiration" / immediately expired).
-        poll_duration_in_minutes = max(1, expires_in_seconds // 60)
-
-    _, outbox_object = await send_create(
-        db_session,
-        ap_type=ap_type,
-        source=content,
-        uploads=uploads,
-        in_reply_to=in_reply_to,
-        visibility=visibility,
-        content_warning=content_warning,
-        is_sensitive=True if content_warning else sensitive,
-        poll_type=poll_type,
-        poll_answers=poll_answers,
-        poll_duration_in_minutes=poll_duration_in_minutes,
-        name=None,
-        language=language,
-    )
+    try:
+        outbox_object = await scheduled_statuses.publish(db_session, compose)
+    except scheduled_statuses.ScheduledStatusError as exc:
+        # Only reachable if an upload or the parent status disappeared between
+        # validation above and the send.
+        raise MastodonError(422, "validation_failed", str(exc)) from exc
 
     status_id = ids.encode_outbox_id(outbox_object)
     if cache_key:
@@ -2342,6 +2429,145 @@ async def statuses_delete(
     await send_delete(db_session, obj.ap_id)
 
     return JSONResponse(content=serialized, status_code=200)
+
+
+# --- Scheduled statuses --------------------------------------------------------
+# `POST /api/v1/statuses` with `scheduled_at` queues the post here instead of
+# sending it; the outgoing-activity worker publishes it when due (see
+# app/scheduled_statuses.py). These endpoints are the client's view of that
+# queue.
+
+
+def _decode_scheduled_status_id(mastodon_id: str) -> int | None:
+    # A single table, so the Mastodon id is just the row's own PK — no
+    # dual-table encoding needed (same as notifications).
+    try:
+        return int(mastodon_id)
+    except ValueError:
+        return None
+
+
+async def _resolve_scheduled_status_or_404(
+    db_session: AsyncSession,
+    scheduled_status_id: str,
+) -> models.ScheduledStatus:
+    internal_id = _decode_scheduled_status_id(scheduled_status_id)
+    scheduled_status = (
+        await db_session.get(models.ScheduledStatus, internal_id)
+        if internal_id is not None
+        else None
+    )
+    if scheduled_status is None:
+        raise MastodonError(404, "not_found", "scheduled status not found")
+    return scheduled_status
+
+
+@router.get("/api/v1/scheduled_statuses", response_model=None)
+async def scheduled_statuses_index(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:statuses")),
+) -> JSONResponse:
+    """The queue, newest-queued first.
+
+    Ordered by id descending rather than by publication time: that's what
+    Mastodon's id-based pagination returns, and it's what the shared `Link`
+    header helper assumes. Clients sort by `scheduled_at` themselves.
+    """
+    params = pagination.parse_pagination(request)
+
+    query = (
+        select(models.ScheduledStatus)
+        .order_by(models.ScheduledStatus.id.desc())
+        .limit(params.limit)
+    )
+    if params.max_id:
+        decoded = _decode_scheduled_status_id(params.max_id)
+        if decoded is not None:
+            query = query.where(models.ScheduledStatus.id < decoded)
+    cursor = params.min_id or params.since_id
+    if cursor:
+        decoded = _decode_scheduled_status_id(cursor)
+        if decoded is not None:
+            query = query.where(models.ScheduledStatus.id > decoded)
+
+    rows = list((await db_session.scalars(query)).all())
+    await serializers.prefetch_scheduled_status_uploads(db_session, rows)
+    serialized = [
+        await serializers.serialize_scheduled_status(db_session, row) for row in rows
+    ]
+
+    response = JSONResponse(content=serialized, status_code=200)
+    link_header = pagination.build_link_header(
+        request, [entity["id"] for entity in serialized]
+    )
+    if link_header:
+        response.headers["Link"] = link_header
+    return response
+
+
+@router.get("/api/v1/scheduled_statuses/{scheduled_status_id}", response_model=None)
+async def scheduled_statuses_show(
+    scheduled_status_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:statuses")),
+) -> JSONResponse:
+    scheduled_status = await _resolve_scheduled_status_or_404(
+        db_session, scheduled_status_id
+    )
+    return JSONResponse(
+        content=await serializers.serialize_scheduled_status(
+            db_session, scheduled_status
+        ),
+        status_code=200,
+    )
+
+
+@router.put("/api/v1/scheduled_statuses/{scheduled_status_id}", response_model=None)
+async def scheduled_statuses_update(
+    scheduled_status_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:statuses")),
+) -> JSONResponse:
+    """Move a queued post's publication time.
+
+    Only `scheduled_at` is editable, same as upstream Mastodon — the compose
+    parameters are fixed once queued. Rescheduling also clears any recorded
+    failure, so a post that gave up trying to publish gets another chance.
+    """
+    scheduled_status = await _resolve_scheduled_status_or_404(
+        db_session, scheduled_status_id
+    )
+
+    params = await _body_params(request)
+    scheduled_at = _parse_scheduled_at(params)
+    if scheduled_at is None:
+        raise MastodonError(422, "validation_failed", "scheduled_at is required")
+
+    scheduled_statuses.reschedule(scheduled_status, scheduled_at)
+    await db_session.commit()
+
+    return JSONResponse(
+        content=await serializers.serialize_scheduled_status(
+            db_session, scheduled_status
+        ),
+        status_code=200,
+    )
+
+
+@router.delete("/api/v1/scheduled_statuses/{scheduled_status_id}", response_model=None)
+async def scheduled_statuses_delete(
+    scheduled_status_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:statuses")),
+) -> JSONResponse:
+    scheduled_status = await _resolve_scheduled_status_or_404(
+        db_session, scheduled_status_id
+    )
+    await db_session.delete(scheduled_status)
+    await db_session.commit()
+    return JSONResponse(content={}, status_code=200)
 
 
 @router.post("/api/v1/statuses/{status_id}/favourite", response_model=None)
@@ -2711,6 +2937,26 @@ async def accounts_unfollow(
     follow_activity = await _find_own_follow_activity(db_session, actor.ap_id)
     if follow_activity is not None:
         await send_undo(db_session, follow_activity.ap_id)
+    return JSONResponse(
+        content=await _relationship_for_actor(db_session, account_id, actor),
+        status_code=200,
+    )
+
+
+@router.post("/api/v1/accounts/{account_id}/remove_from_followers", response_model=None)
+async def accounts_remove_from_followers(
+    account_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:follows")),
+) -> JSONResponse:
+    """Drop a follower without blocking them.
+
+    Sends a Reject of their original Follow, so their server stops delivering
+    to us; they're free to follow again (this instance's
+    `manually_approves_followers` setting decides whether that needs approval).
+    """
+    actor = await _resolve_account_or_404(db_session, account_id)
+    await remove_follower(db_session, actor)
     return JSONResponse(
         content=await _relationship_for_actor(db_session, account_id, actor),
         status_code=200,

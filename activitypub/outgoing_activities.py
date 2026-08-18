@@ -1,5 +1,6 @@
 import asyncio
 import dataclasses
+import time
 import traceback
 from datetime import datetime
 from datetime import timedelta
@@ -484,11 +485,43 @@ async def process_next_outgoing_activity(
 class OutgoingActivityWorker(Worker[activitypub.models.OutgoingActivity]):
     batch_size = config.OUTGOING_DELIVERY_BATCH_SIZE
 
+    # Scheduled statuses ride along on this worker's poll instead of getting a
+    # process of their own: publishing one *is* outbox work, and this worker
+    # runs in every deployment already (nothing federates without it), so an
+    # upgraded install can't leave scheduled posts silently unpublished by
+    # missing a new supervisord entry.
+    #
+    # Rate-limited rather than run on every poll: while there's a delivery
+    # backlog `_main_loop` skips its idle sleep and calls straight back, and a
+    # publish does network I/O of its own (recipient resolution, webmention
+    # discovery), so an unthrottled pass would interleave that work between
+    # every delivery batch. Publication granularity here is minutes, so a few
+    # seconds of slack costs nothing.
+    scheduled_statuses_interval = 5.0
+    _last_scheduled_statuses_pass = 0.0
+
+    async def _publish_due_scheduled_statuses(self, db_session: AsyncSession) -> None:
+        if (
+            time.monotonic() - self._last_scheduled_statuses_pass
+            < self.scheduled_statuses_interval
+        ):
+            return
+        self._last_scheduled_statuses_pass = time.monotonic()
+
+        # Imported here rather than at module level to break the import cycle:
+        # the publish path goes through `activitypub.boxes`, which imports this
+        # module.
+        from app.scheduled_statuses import publish_due_scheduled_statuses
+
+        await publish_due_scheduled_statuses(db_session)
+
     async def get_next_messages(
         self,
         db_session: AsyncSession,
         limit: int,
     ) -> list[activitypub.models.OutgoingActivity]:
+        await self._publish_due_scheduled_statuses(db_session)
+
         return await fetch_next_outgoing_activities(db_session, limit)
 
     async def process_messages(

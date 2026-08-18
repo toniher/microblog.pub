@@ -28,9 +28,11 @@ forgotten on the device.
 
 ## What works
 
-- **Timelines** — home, local/federated public, and single-hashtag timelines
+- **Timelines** — home, local/federated public, and hashtag timelines
   (`/api/v1/timelines/home`, `/public`, `/tag/:hashtag`), with `max_id`/`since_id`/
-  `min_id` pagination and a `Link` header, like real Mastodon.
+  `min_id` pagination and a `Link` header, like real Mastodon. The hashtag
+  timeline takes Mastodon's multi-tag parameters (`any[]`, `all[]`, `none[]`), so
+  clients that build saved searches out of several tags work.
 - **Statuses** — read, create, edit, delete; replies, content warnings,
   sensitive/media attachments, polls (including voting), and per-post language.
   Editing keeps full history (`/api/v1/statuses/:id/history`), so clients can
@@ -57,7 +59,9 @@ forgotten on the device.
   you've blocked (`/api/v1/blocks`, so blocks can be reviewed and undone from a
   client), personal notes on an account, and incoming follow request
   approve/reject, with a real `follow_requests_count` badge on your own
-  profile.
+  profile. A follower can also be dropped without blocking them
+  (`/api/v1/accounts/:id/remove_from_followers`) — their server is told with a
+  Reject of the original follow, and they're free to follow again.
   Opening a remote actor you don't follow yet backfills their recent posts and
   follower/following/post counts on demand (fetched and cached, throttled), so
   their profile isn't empty on first view.
@@ -117,6 +121,19 @@ forgotten on the device.
   `push_worker` process — see `docs/install.md` for the supervisord entry. An
   install that skips wiring it up will still accept subscriptions and
   advertise a VAPID key, just never deliver anything.
+- **Scheduled posts** — `POST /api/v1/statuses` with `scheduled_at` queues the
+  post instead of sending it, and returns Mastodon's `ScheduledStatus` entity;
+  `/api/v1/scheduled_statuses` lists the queue, with `GET`/`PUT`/`DELETE` on a
+  single entry (`PUT` changes the publication time, the only field Mastodon
+  makes editable). Everything an immediate post supports carries over —
+  attachments, CW/sensitive, visibility, language, replies, polls — and is
+  validated when you queue it, not when it comes due. Any time in the future is
+  accepted, where upstream Mastodon insists on at least five minutes out. No
+  extra process is needed: the existing `outgoing_worker` publishes due posts as
+  part of its poll, so a queued post goes out within a couple of seconds of its
+  time. If publishing fails (say an attachment was deleted in the meantime) it's
+  retried with a growing backoff and then left in the queue rather than
+  disappearing — rescheduling it with `PUT` gives it a fresh set of attempts.
 - **Streaming API** (`wss://…/api/v1/streaming`, WebSocket only — no SSE) —
   `user`, `user:notification`, `public`, `public:local`, `public:remote`,
   `hashtag` and `direct` streams, delivering `update`, `status.update`,
@@ -155,7 +172,6 @@ instead of crashing:
   so the filtered-notifications queue (`/api/v1/notifications/requests`) is
   always empty and the policy (`/api/v2/notifications/policy`) always reports
   "accept everything"; nothing is held back for approval.
-- **Scheduled posts** — not supported.
 
 ## Scopes
 

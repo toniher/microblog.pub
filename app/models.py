@@ -230,6 +230,40 @@ class MutedConversation(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=now)
 
 
+class ScheduledStatus(Base):
+    """A status queued for later publication (`POST /api/v1/statuses` with
+    `scheduled_at`).
+
+    The compose parameters live in a single JSON blob rather than in columns:
+    they are exactly what Mastodon echoes back as the entity's `params`, and
+    publishing just replays them through `send_create` — nothing ever queries
+    an individual parameter. Attachments and the reply parent are kept as the
+    Mastodon ids the client sent (see `app.scheduled_statuses.ComposeParams`),
+    not as foreign keys, so deleting an upload or a parent status can't leave
+    a dangling reference in a row that may sit here for weeks.
+
+    `scheduled_at` is the user-facing publication time (echoed, and editable
+    via `PUT`); `next_try` is the worker's view of the same thing, moved
+    forward on a failed publish attempt. A NULL `next_try` means "given up
+    after `MAX_TRIES`" — the row stays listed so the owner can reschedule it
+    (which resets the retry state) or delete it.
+    """
+
+    __tablename__ = "scheduled_status"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
+
+    scheduled_at: Mapped[datetime] = Column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
+    params: Mapped[dict[str, Any]] = Column(JSON, nullable=False)
+
+    tries = Column(Integer, nullable=False, default=0)
+    next_try = Column(DateTime(timezone=True), nullable=True, index=True)
+    last_error = Column(String, nullable=True)
+
+
 class PushSubscription(Base):
     """A Web Push subscription (`POST /api/v1/push/subscription`).
 

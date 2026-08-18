@@ -1822,6 +1822,37 @@ async def _send_reject(
         db_session.add(notif)
 
 
+async def remove_follower(
+    db_session: AsyncSession,
+    actor: activitypub.models.Actor,
+) -> bool:
+    """Drop one of our followers (Mastodon's `remove_from_followers`).
+
+    Rejecting the original Follow is how the remote server is told the
+    relationship is over — the same activity as rejecting a pending follow
+    request, just sent after it had been accepted. Returns False when the actor
+    isn't a follower, which the API treats as a no-op rather than an error.
+    """
+    follower = (
+        (
+            await db_session.execute(
+                select(activitypub.models.Follower)
+                .where(activitypub.models.Follower.actor_id == actor.id)
+                .options(joinedload(activitypub.models.Follower.inbox_object))
+            )
+        )
+        .unique()
+        .scalar_one_or_none()
+    )
+    if follower is None:
+        return False
+
+    await _send_reject(db_session, actor, follower.inbox_object)
+    await db_session.delete(follower)
+    await db_session.commit()
+    return True
+
+
 async def _handle_undo_activity(
     db_session: AsyncSession,
     from_actor: activitypub.models.Actor,
