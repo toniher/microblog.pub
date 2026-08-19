@@ -390,6 +390,11 @@ class OutboxObject(Base, BaseObject):
                             else None
                         ),
                         "hasAudio": upload.has_audio,
+                        "focalPoint": (
+                            [upload.focus_x, upload.focus_y]
+                            if upload.focus_x is not None and upload.focus_y is not None
+                            else None
+                        ),
                     }
                 )
             )
@@ -572,6 +577,12 @@ class Upload(Base):
     # failed.
     duration = Column(Float, nullable=True)
     has_audio = Column(Boolean, nullable=True)
+
+    # Client-supplied cropping hint (Mastodon's `focus` media param), each in
+    # [-1.0, 1.0] with (0, 0) as center. Set via POST/PUT /api/v1/media, never
+    # derived from the file itself.
+    focus_x = Column(Float, nullable=True)
+    focus_y = Column(Float, nullable=True)
 
     @property
     def is_image(self) -> bool:

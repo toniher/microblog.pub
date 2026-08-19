@@ -307,6 +307,8 @@ def upload_to_attachment(
         extra_attachment_fields["duration"] = format_xsd_duration(
             float(upload.duration)
         )
+    if upload.focus_x is not None and upload.focus_y is not None:
+        extra_attachment_fields["focalPoint"] = [upload.focus_x, upload.focus_y]
     if not upload.is_image and upload.has_thumbnail:
         extra_attachment_fields["icon"] = {
             "type": "Image",

@@ -383,6 +383,10 @@ class Attachment(BaseModel):
     # tell") rather than being guessed at.
     has_audio: bool | None = None
 
+    # Cropping hint, `[x, y]` each in [-1, 1]. Not part of core ActivityStreams;
+    # federated (both ways) as the Pleroma-style `focalPoint` extension.
+    focal_point: list[float] | None = None
+
     @property
     def mimetype(self) -> str:
         mimetype = self.media_type
@@ -399,6 +403,12 @@ class Attachment(BaseModel):
         if not self.duration:
             return None
         return _parse_xsd_duration(self.duration)
+
+    @property
+    def focus(self) -> tuple[float, float] | None:
+        if not self.focal_point or len(self.focal_point) != 2:
+            return None
+        return (self.focal_point[0], self.focal_point[1])
 
 
 class RemoteObject(Object):

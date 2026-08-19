@@ -764,6 +764,31 @@ async def test_statuses_update_without_media_ids_preserves_attachments(
 
 
 @pytest.mark.asyncio
+async def test_status_media_attachment_carries_focus(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    media_token = await _make_access_token(async_db_session, "write:media")
+    media_response = client.post(
+        "/api/v2/media",
+        headers={"Authorization": f"Bearer {media_token}"},
+        files={"file": ("photo.png", _png_bytes(), "image/png")},
+        data={"focus": "-0.5,0.7"},
+    )
+    media_id = media_response.json()["id"]
+
+    token = await _make_access_token(async_db_session, "write:statuses")
+    create_response = client.post(
+        "/api/v1/statuses",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"status": "With a focal point", "media_ids[]": [media_id]},
+    )
+
+    assert create_response.status_code == 200
+    attachment = create_response.json()["media_attachments"][0]
+    assert attachment["meta"]["focus"] == {"x": -0.5, "y": 0.7}
+
+
+@pytest.mark.asyncio
 async def test_statuses_update_replaces_media_ids(
     client: TestClient, async_db_session: AsyncSession
 ) -> None:

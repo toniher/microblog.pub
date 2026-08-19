@@ -2015,6 +2015,23 @@ async def trends_links() -> JSONResponse:
 # populated MediaAttachment — never Mastodon's `206`/still-processing shape.
 
 
+def _parse_focus(value: str) -> tuple[float, float]:
+    """Parse Mastodon's `focus` media param, e.g. "-0.5,0.7" -> (-0.5, 0.7)."""
+    parts = value.split(",")
+    if len(parts) != 2:
+        raise ValueError("focus must be `x,y`")
+
+    try:
+        x, y = float(parts[0]), float(parts[1])
+    except ValueError:
+        raise ValueError("focus must be `x,y` floats")
+
+    if not (-1.0 <= x <= 1.0 and -1.0 <= y <= 1.0):
+        raise ValueError("focus x/y must be within [-1.0, 1.0]")
+
+    return (x, y)
+
+
 @router.post("/api/v2/media", response_model=None)
 async def media_create(
     request: Request,
@@ -2043,6 +2060,14 @@ async def media_create(
     description = form.get("description")
     if description:
         upload.description = str(description)
+        await db_session.commit()
+
+    focus = form.get("focus")
+    if focus:
+        try:
+            upload.focus_x, upload.focus_y = _parse_focus(str(focus))
+        except ValueError as exc:
+            raise MastodonError(422, "validation_failed", str(exc))
         await db_session.commit()
 
     return JSONResponse(content=serializers.serialize_upload(upload), status_code=200)
@@ -2085,6 +2110,17 @@ async def media_update(
     if "description" in form:
         description = form.get("description")
         upload.description = str(description) if description else None
+        await db_session.commit()
+
+    if "focus" in form:
+        focus = form.get("focus")
+        if focus:
+            try:
+                upload.focus_x, upload.focus_y = _parse_focus(str(focus))
+            except ValueError as exc:
+                raise MastodonError(422, "validation_failed", str(exc))
+        else:
+            upload.focus_x = upload.focus_y = None
         await db_session.commit()
 
     return JSONResponse(content=serializers.serialize_upload(upload), status_code=200)

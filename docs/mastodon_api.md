@@ -112,7 +112,9 @@ forgotten on the device.
   enforced, not just advisory. Uploads are still processed synchronously —
   `POST /api/v2/media` never returns Mastodon's `206`/still-processing shape,
   so a very large upload occupies the request for the whole transfer + probe
-  + poster extraction.
+  + poster extraction. Media also accepts a `focus` cropping hint (`x,y`, each
+  in `[-1.0, 1.0]`) on create and update, echoed back as `meta.focus` and
+  federated (both ways) as the Pleroma-style `focalPoint` attachment extension.
 - **Instance "about" extras** — `/api/v1/instance/rules` (empty, none configured),
   `/extended_description` (the same bio text as the instance description), the
   public `/instance/domain_blocks` transparency list (hostname, digest, reason —

@@ -82,6 +82,39 @@ async def test_media_create_with_description(
 
 
 @pytest.mark.asyncio
+async def test_media_create_with_focus(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    token = await _make_access_token(async_db_session, "write:media")
+
+    response = client.post(
+        "/api/v2/media",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("photo.png", _png_bytes((4, 4)), "image/png")},
+        data={"focus": "-0.5,0.7"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["meta"]["focus"] == {"x": -0.5, "y": 0.7}
+
+
+@pytest.mark.asyncio
+async def test_media_create_with_invalid_focus(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    token = await _make_access_token(async_db_session, "write:media")
+
+    response = client.post(
+        "/api/v2/media",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("photo.png", _png_bytes((4, 4)), "image/png")},
+        data={"focus": "2.0,0"},
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_media_create_v1_alias_behaves_the_same(
     client: TestClient, async_db_session: AsyncSession
 ) -> None:
@@ -141,6 +174,37 @@ async def test_media_update_description(
 
     refetched = client.get(f"/api/v1/media/{created['id']}", headers=headers)
     assert refetched.json()["description"] == "updated alt text"
+
+
+@pytest.mark.asyncio
+async def test_media_update_focus(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    token = await _make_access_token(async_db_session, "write:media read:media")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    created = client.post(
+        "/api/v2/media",
+        headers=headers,
+        files={"file": ("photo.png", _png_bytes((6, 6)), "image/png")},
+    ).json()
+    assert "focus" not in created["meta"]
+
+    updated = client.put(
+        f"/api/v1/media/{created['id']}",
+        headers=headers,
+        data={"focus": "0.2,-0.4"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["meta"]["focus"] == {"x": 0.2, "y": -0.4}
+
+    cleared = client.put(
+        f"/api/v1/media/{created['id']}",
+        headers=headers,
+        data={"focus": ""},
+    )
+    assert cleared.status_code == 200
+    assert "focus" not in cleared.json()["meta"]
 
 
 @pytest.mark.asyncio

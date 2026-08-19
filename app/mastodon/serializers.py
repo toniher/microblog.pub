@@ -464,6 +464,7 @@ def _media_meta(
     height: int | None,
     duration: float | None,
     has_thumbnail: bool,
+    focus: tuple[float, float] | None = None,
 ) -> dict:
     meta: dict = {}
     original: dict = {}
@@ -492,6 +493,9 @@ def _media_meta(
             "size": f"{small_width}x{small_height}",
             "aspect": small_width / small_height,
         }
+
+    if focus is not None:
+        meta["focus"] = {"x": focus[0], "y": focus[1]}
 
     return meta
 
@@ -525,7 +529,11 @@ def serialize_media_attachment(
         "preview_url": preview_url,
         "remote_url": attachment.url,
         "meta": _media_meta(
-            attachment.width, attachment.height, duration, has_thumbnail
+            attachment.width,
+            attachment.height,
+            duration,
+            has_thumbnail,
+            focus=attachment.focus,
         ),
         "description": attachment.name,
         "blurhash": attachment.blurhash,
@@ -879,7 +887,15 @@ def serialize_upload(upload: activitypub.models.Upload) -> dict:
         "preview_url": preview_url,
         "remote_url": None,
         "meta": _media_meta(
-            upload.width, upload.height, duration, bool(upload.has_thumbnail)
+            upload.width,
+            upload.height,
+            duration,
+            bool(upload.has_thumbnail),
+            focus=(
+                (float(upload.focus_x), float(upload.focus_y))
+                if upload.focus_x is not None and upload.focus_y is not None
+                else None
+            ),
         ),
         "description": upload.description,
         "blurhash": upload.blurhash,
