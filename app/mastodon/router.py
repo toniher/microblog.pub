@@ -2141,14 +2141,26 @@ class _StatusParams:
     post into a 422 "status is required".
     """
 
-    def __init__(self, json_body: dict[str, Any] | None, form: Any) -> None:
+    def __init__(
+        self, json_body: dict[str, Any] | None, form: Any, query: Any = None
+    ) -> None:
         self._json = json_body
         self._form = form
+        # Query string params, used only as a fallback for keys the body
+        # doesn't carry: Rails (and therefore Mastodon) merges query and body
+        # params, so some clients put write params in the URL instead of the
+        # body — Ice Cubes votes with `POST /api/v1/polls/{id}/votes?choices[]=0`
+        # and an empty body, which read as "choices is required" (422) here.
+        self._query = query
 
     def get(self, key: str) -> Any:
         if self._json is not None:
-            return self._json.get(key)
-        return self._form.get(key)
+            value = self._json.get(key)
+        else:
+            value = self._form.get(key)
+        if value is None and self._query is not None:
+            value = self._query.get(key)
+        return value
 
     def get_bool(self, key: str) -> bool:
         value = self.get(key)
@@ -2159,8 +2171,12 @@ class _StatusParams:
     def get_list(self, key: str) -> list[Any]:
         if self._json is not None:
             value = self._json.get(key)
-            return list(value) if value else []
-        return _form_list(self._form, key)
+            values = list(value) if value else []
+        else:
+            values = _form_list(self._form, key)
+        if not values and self._query is not None:
+            values = _form_list(self._query, key)
+        return values
 
     def has(self, key: str) -> bool:
         """Whether `key` was present in the body at all — distinct from being
@@ -2170,26 +2186,38 @@ class _StatusParams:
         not "clear them").
         """
         if self._json is not None:
-            return key in self._json
-        return f"{key}[]" in self._form or key in self._form
+            if key in self._json:
+                return True
+        elif f"{key}[]" in self._form or key in self._form:
+            return True
+        return self._query is not None and (
+            f"{key}[]" in self._query or key in self._query
+        )
 
     def get_poll_options(self) -> list[str]:
         if self._json is not None:
             options = (self._json.get("poll") or {}).get("options") or []
         else:
             options = _form_list(self._form, "poll[options]")
+        if not options and self._query is not None:
+            options = _form_list(self._query, "poll[options]")
         return [str(option) for option in options]
 
     def get_poll_multiple(self) -> bool:
         if self._json is not None:
             return bool((self._json.get("poll") or {}).get("multiple"))
-        return str(self._form.get("poll[multiple]", "")).lower() == "true"
+        value = self._form.get("poll[multiple]")
+        if value is None and self._query is not None:
+            value = self._query.get("poll[multiple]")
+        return str(value or "").lower() == "true"
 
     def get_poll_expires_in_seconds(self) -> int | None:
         if self._json is not None:
             value = (self._json.get("poll") or {}).get("expires_in")
         else:
             value = self._form.get("poll[expires_in]")
+            if value is None and self._query is not None:
+                value = self._query.get("poll[expires_in]")
         return int(str(value)) if value else None
 
 
@@ -2197,15 +2225,18 @@ async def _body_params(request: Request) -> _StatusParams:
     """Read a request body as either JSON or form data.
 
     Same content-type dance as POST /api/v1/statuses below — clients disagree
-    on which encoding they use for POST bodies, whatever the endpoint.
+    on which encoding they use for POST bodies, whatever the endpoint. The
+    query string is kept as a fallback for keys the body doesn't carry, since
+    Mastodon (Rails) makes no distinction between the two.
     """
+    query = request.query_params
     content_type, _, _ = request.headers.get("Content-Type", "").partition(";")
     if content_type.strip().lower() == "application/json":
         try:
-            return _StatusParams(await request.json(), None)
+            return _StatusParams(await request.json(), None, query)
         except ValueError:
-            return _StatusParams({}, None)
-    return _StatusParams(None, await request.form())
+            return _StatusParams({}, None, query)
+    return _StatusParams(None, await request.form(), query)
 
 
 def _parse_scheduled_at(params: _StatusParams) -> datetime | None:

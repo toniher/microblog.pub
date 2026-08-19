@@ -540,6 +540,38 @@ async def test_poll_vote_single_choice(
 
 
 @pytest.mark.asyncio
+async def test_poll_vote_with_choices_in_query_string(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    """Ice Cubes votes via `?choices[]=0` with an empty body (as Rails, and so
+    Mastodon, makes no distinction between query and body params)."""
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    follower = setup_remote_actor_as_follower(ra)
+    assert follower.actor is not None
+
+    poll_object = RemoteObject(_build_poll_object(ra, ["Cats", "Dogs"]), ra)
+    inbox_object = factories.InboxObjectFactory.from_remote_object(
+        poll_object, follower.actor
+    )
+    poll_id = ids.encode_inbox_id(inbox_object)
+
+    token = await _make_access_token(async_db_session, "write:statuses")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.post(
+        f"/api/v1/polls/{poll_id}/votes?choices%5B%5D=0",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    poll = response.json()
+    assert poll["own_votes"] == [0]
+    assert poll["voted"] is True
+
+
+@pytest.mark.asyncio
 async def test_poll_vote_rejects_multiple_choices_on_single_choice_poll(
     client: TestClient,
     async_db_session: AsyncSession,
