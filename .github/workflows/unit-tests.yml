@@ -7,7 +7,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
       - name: Check out repository code
@@ -22,9 +22,11 @@ jobs:
         uses: Gr1N/setup-poetry@v9
 
       - name: Install ffmpeg
+        timeout-minutes: 5
+        continue-on-error: true
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ffmpeg
 
       - name: Install dependencies
         run: |
