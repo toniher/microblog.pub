@@ -22,11 +22,7 @@ jobs:
         uses: Gr1N/setup-poetry@v9
 
       - name: Install ffmpeg
-        timeout-minutes: 5
-        continue-on-error: true
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends ffmpeg
+        uses: federicocarboni/setup-ffmpeg@v3
 
       - name: Install dependencies
         run: |
