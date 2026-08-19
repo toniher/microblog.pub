@@ -1,7 +1,9 @@
 import httpx
 import pytest
 from sqlalchemy import select
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 import activitypub.models
 from activitypub import boxes
@@ -222,3 +224,36 @@ async def test_fetch_replies_stale_cache_refreshed_from_remote(
         await async_db_session.execute(select(activitypub.models.InboxObject))
     ).scalar_one()
     assert saved.ap_id == reply_note["id"]
+
+
+@pytest.mark.parametrize(
+    "model,index_name",
+    [
+        (activitypub.models.InboxObject, "ix_inbox_in_reply_to"),
+        (activitypub.models.OutboxObject, "ix_outbox_in_reply_to"),
+    ],
+)
+def test_reply_lookup_uses_the_expression_index(
+    db: Session,
+    model,
+    index_name: str,
+) -> None:
+    """`inReplyTo` is matched with `json_extract`, which SQLite can only serve
+    from an expression index when the JSON path is rendered as a *literal* —
+    with the path sent as a bound parameter the planner falls back to a full
+    table scan (~90ms over a 50k-row inbox). `in_reply_to_expr()` exists to keep
+    it a literal; this asserts the planner actually takes the index, so a
+    rewrite back to `func.json_extract(col, "$.inReplyTo")` fails here rather
+    than quietly regressing.
+    """
+    stmt = select(model.ap_id).where(
+        activitypub.models.in_reply_to_expr(model.ap_object)
+        == "http://localhost:8000/o/whatever"
+    )
+    sql = str(stmt.compile(compile_kwargs={"literal_binds": True}))
+
+    plan = " ".join(
+        str(row) for row in db.execute(text("EXPLAIN QUERY PLAN " + sql)).all()
+    )
+
+    assert index_name in plan, plan

@@ -251,11 +251,15 @@ git pull
 poetry run inv update
 ```
 
-This fork carries a few Alembic migrations beyond upstream (e.g. caching remote
-actor follower/following/post counts, on-demand outbox backfill tracking, upload
-descriptions). See the [developer guide](developer_guide.md#database-migrations)
-for the full list — useful if you're moving a database between this fork and
-upstream, or just want to know what changed under the hood.
+This fork carries a number of Alembic migrations beyond upstream — new tables
+(scheduled statuses, Web Push subscriptions, muted threads, read markers), extra
+columns (media alt text and focal point, cached remote actor counts, account
+mutes) and several indexes. The
+[developer guide](developer_guide.md#database-migrations) lists every one of them
+in the order they are applied, and shows how to check which are still pending on
+a given database (`alembic current` vs. `alembic heads`) — useful if you're moving
+a database between this fork and upstream, or just want to know what changed under
+the hood.
 
 ## Reverse proxy
 

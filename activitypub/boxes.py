@@ -1470,8 +1470,8 @@ async def _get_replies_count(
     return (
         await db_session.scalar(
             select(func.count(activitypub.models.InboxObject.id)).where(
-                func.json_extract(
-                    activitypub.models.InboxObject.ap_object, "$.inReplyTo"
+                activitypub.models.in_reply_to_expr(
+                    activitypub.models.InboxObject.ap_object
                 )
                 == replied_object_ap_id,
                 activitypub.models.InboxObject.is_deleted.is_(False),
@@ -1480,8 +1480,8 @@ async def _get_replies_count(
     ) + (
         await db_session.scalar(
             select(func.count(activitypub.models.OutboxObject.id)).where(
-                func.json_extract(
-                    activitypub.models.OutboxObject.ap_object, "$.inReplyTo"
+                activitypub.models.in_reply_to_expr(
+                    activitypub.models.OutboxObject.ap_object
                 )
                 == replied_object_ap_id,
                 activitypub.models.OutboxObject.is_deleted.is_(False),
@@ -1587,8 +1587,8 @@ async def fetch_direct_replies_ap_ids(
             await db_session.scalars(
                 select(activitypub.models.InboxObject)
                 .where(
-                    func.json_extract(
-                        activitypub.models.InboxObject.ap_object, "$.inReplyTo"
+                    activitypub.models.in_reply_to_expr(
+                        activitypub.models.InboxObject.ap_object
                     )
                     == outbox_object.ap_id,
                     activitypub.models.InboxObject.ap_type.in_(
@@ -1608,8 +1608,8 @@ async def fetch_direct_replies_ap_ids(
             await db_session.scalars(
                 select(activitypub.models.OutboxObject)
                 .where(
-                    func.json_extract(
-                        activitypub.models.OutboxObject.ap_object, "$.inReplyTo"
+                    activitypub.models.in_reply_to_expr(
+                        activitypub.models.OutboxObject.ap_object
                     )
                     == outbox_object.ap_id,
                     activitypub.models.OutboxObject.ap_type.in_(
@@ -2676,6 +2676,12 @@ async def _handle_block_activity(
         db_session.add(notif)
 
 
+# How many of a report's reported objects are looked up. Mastodon sends the
+# reported account plus the reported statuses; the cap is a bound on hostile
+# input, not on anything a real client sends.
+_MAX_REPORTED_OBJECTS = 40
+
+
 async def _handle_flag_activity(
     db_session: AsyncSession,
     actor: activitypub.models.Actor,
@@ -2702,14 +2708,27 @@ async def _handle_flag_activity(
         return
 
     # Link the first reported post (if the report is about posts and not just
-    # about the account) so the notification can display it.
-    reported_outbox_object: activitypub.models.OutboxObject | None = None
-    for ap_id in local_ap_ids:
-        if ap_id == LOCAL_ACTOR.ap_id:
-            continue
-        reported_outbox_object = await get_outbox_object_by_ap_id(db_session, ap_id)
-        if reported_outbox_object:
-            break
+    # about the account) so the notification can display it. One batched query,
+    # bounded: the id list is attacker-supplied and the incoming queue processes
+    # one activity at a time, so a report naming thousands of objects must not
+    # turn into thousands of lookups.
+    reported_post_ap_ids = [
+        ap_id
+        for ap_id in local_ap_ids[:_MAX_REPORTED_OBJECTS]
+        if ap_id != LOCAL_ACTOR.ap_id
+    ]
+    reported_objects = {
+        obj.ap_id: obj
+        for obj in await get_outbox_objects_by_ap_ids(db_session, reported_post_ap_ids)
+    }
+    reported_outbox_object = next(
+        (
+            reported_objects[ap_id]
+            for ap_id in reported_post_ap_ids
+            if ap_id in reported_objects
+        ),
+        None,
+    )
 
     if is_notification_enabled(models.NotificationType.REPORTED):
         notif = models.Notification(
