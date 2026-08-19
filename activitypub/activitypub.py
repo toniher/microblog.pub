@@ -53,8 +53,15 @@ AS_EXTENDED_CTX = [
         # toot
         "toot": "http://joinmastodon.org/ns#",
         "featured": {"@id": "toot:featured", "@type": "@id"},
+        "featuredTags": {"@id": "toot:featuredTags", "@type": "@id"},
+        "discoverable": "toot:discoverable",
+        "indexable": "toot:indexable",
         "Emoji": "toot:Emoji",
         "blurhash": "toot:blurhash",
+        # Pleroma-style attachment focal point, published under the same term
+        # Mastodon uses; the `@list` container keeps the [x, y] pair ordered
+        # for strict JSON-LD processors.
+        "focalPoint": {"@container": "@list", "@id": "toot:focalPoint"},
         "votersCount": "toot:votersCount",
         # schema
         "schema": "http://schema.org#",
@@ -136,6 +143,7 @@ ME: RawObject = {
     "following": config.BASE_URL + "/following",
     "followers": config.BASE_URL + "/followers",
     "featured": config.BASE_URL + "/featured",
+    "featuredTags": config.BASE_URL + "/featured_tags",
     "inbox": config.BASE_URL + "/inbox",
     "outbox": config.BASE_URL + "/outbox",
     "preferredUsername": config.USERNAME,
@@ -148,6 +156,11 @@ ME: RawObject = {
     },
     "url": config.ID + "/",  # XXX: the path is important for Mastodon compat
     "manuallyApprovesFollowers": config.CONFIG.manually_approves_followers,
+    # Discovery hints from `data/profile.toml`: whether remote servers may
+    # list this profile in directories/suggestions, and whether they may
+    # include its posts in full-text search.
+    "discoverable": config.DISCOVERABLE,
+    "indexable": config.INDEXABLE,
     "attachment": _LOCAL_ACTOR_METADATA,
     "publicKey": {
         "id": f"{config.ID}#main-key",

@@ -120,6 +120,16 @@ class Config(pydantic.BaseModel):
     hides_followers: bool = False
     hides_following: bool = False
 
+    # Federated discovery hints, published on the actor as Mastodon's
+    # `toot:discoverable` / `toot:indexable` (and mirrored in the Mastodon
+    # client API's Account entity). Both default to true, matching what the
+    # public web profile and the shipped robots.txt already allow. Set
+    # `discoverable = false` to ask remote servers not to list the profile in
+    # directories/suggestions, `indexable = false` to ask them not to include
+    # posts in full-text search. Both are requests, not enforcement.
+    discoverable: bool = True
+    indexable: bool = True
+
     # Emit schema.org microdata (itemscope/itemtype/itemprop) in the public HTML
     enable_microdata: bool = False
 
@@ -256,6 +266,8 @@ HIDES_FOLLOWING = CONFIG.hides_following
 LANGUAGE_CODE = CONFIG.language_code
 ENABLE_MICRODATA = CONFIG.enable_microdata
 FEATURED_TAGS = CONFIG.featured_tags
+DISCOVERABLE = CONFIG.discoverable
+INDEXABLE = CONFIG.indexable
 PRIVACY_REPLACE = None
 if CONFIG.privacy_replace:
     PRIVACY_REPLACE = {pr.domain: pr.replace_by for pr in CONFIG.privacy_replace}

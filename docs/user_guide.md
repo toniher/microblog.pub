@@ -103,7 +103,30 @@ This is read-only: featured tags are configured in `profile.toml`, not editable 
 a client, so `POST`/`DELETE /api/v1/featured_tags` aren't implemented — only the `GET`
 endpoints (`/api/v1/featured_tags` and `/api/v1/accounts/:id/featured_tags`). They're
 also shown on the public web profile, linking to the matching [hashtag
-page](#public-website).
+page](#public-website), and federated to remote servers as Mastodon's
+`toot:featuredTags` collection (served at `/featured_tags`), so they show up on your
+profile as seen from another instance too.
+
+### Discoverability
+
+These two `profile.toml` items are published on your actor, so remote servers know
+what you want done with your profile and posts. Both default to `true`, matching what
+the public web profile and the shipped `robots.txt` already allow:
+
+ - `discoverable` — may other servers list your profile in directories, suggestions
+   and "who to follow" features?
+ - `indexable` — may they include your posts in full-text search?
+
+```toml
+discoverable = false
+indexable = false
+```
+
+They are requests, not enforcement: a remote server is free to ignore them, and
+nothing here stops a public page from being read. Set them to say what you want; keep
+posts non-public if you need it guaranteed. Both are also reported to Mastodon clients
+(as `discoverable` and `noindex` on the account), and microblog.pub honours the same
+properties on remote actors when they publish them.
 
 ### Followers and following
 

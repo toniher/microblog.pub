@@ -95,7 +95,8 @@ forgotten on the device.
 - **Featured tags** (`/api/v1/featured_tags`) — hashtags pinned to your profile via
   `featured_tags` in `profile.toml`, shown with their post counts. Read-only: this
   mirrors the config file, so there's no `POST`/`DELETE` to add or remove one from
-  a client.
+  a client. The same list is federated as the actor's `toot:featuredTags`
+  collection.
 - **Search** (`/api/v2/search`) — accounts, statuses, and hashtags.
 - **Media uploads**, including descriptions/alt text — images, video and audio.
   Video/audio gets a real duration, a poster frame (extracted with `ffmpeg`,

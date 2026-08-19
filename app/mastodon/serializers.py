@@ -360,6 +360,11 @@ async def serialize_account(
         acct = f"{actor.preferred_username}@{urlparse(actor.ap_id).netloc}"
         created_at = actor.created_at or _FALLBACK_CREATED_AT
         locked = bool(actor.ap_actor.get("manuallyApprovesFollowers", False))
+        # Honour the remote actor's own hints when it publishes them, rather
+        # than asserting anything on its behalf. Absent means "didn't say",
+        # so keep the permissive reading both properties defaulted to before.
+        discoverable = bool(actor.ap_actor.get("discoverable", True))
+        indexable = bool(actor.ap_actor.get("indexable", True))
         # Cached on demand from the actor's own AP collections (see
         # `refresh_actor_counts`) — 0 until the first refresh happens.
         followers_count = actor.followers_count or 0
@@ -370,6 +375,8 @@ async def serialize_account(
         acct = actor.preferred_username
         created_at = _owner_created_at()
         locked = config.MANUALLY_APPROVES_FOLLOWERS
+        discoverable = config.DISCOVERABLE
+        indexable = config.INDEXABLE
         followers_count, following_count, statuses_count = await _owner_counts(
             db_session
         )
@@ -381,7 +388,8 @@ async def serialize_account(
         "display_name": _as_str(actor.display_name),
         "locked": locked,
         "bot": actor.ap_type == "Service",
-        "discoverable": True,
+        "discoverable": discoverable,
+        "noindex": not indexable,
         "group": False,
         "created_at": format_datetime(created_at),
         "note": _as_str(actor.summary),

@@ -829,6 +829,36 @@ async def featured(
     )
 
 
+@app.get("/featured_tags", response_model=None)
+async def featured_tags(
+    _: httpsig.HTTPSigInfo = Depends(httpsig.httpsig_checker),
+) -> ActivityPubResponse:
+    """The hashtags pinned to the profile, as Mastodon's `toot:featuredTags`
+    collection (a flat `Collection` of `Hashtag` objects, not an ordered one).
+
+    Same source as the client API's `GET /api/v1/featured_tags`: the
+    `featured_tags` list in `data/profile.toml`, read at request time and
+    normalized the same way `serialize_featured_tags` does it.
+    """
+    items = [
+        {
+            "type": "Hashtag",
+            "href": f"{BASE_URL}/t/{tag}",
+            "name": f"#{tag}",
+        }
+        for tag in (raw_tag.lstrip("#").lower() for raw_tag in config.FEATURED_TAGS)
+    ]
+    return ActivityPubResponse(
+        {
+            "@context": ap.AS_EXTENDED_CTX,
+            "id": f"{ID}/featured_tags",
+            "type": "Collection",
+            "totalItems": len(items),
+            "items": items,
+        }
+    )
+
+
 async def _check_outbox_object_acl(
     request: Request,
     db_session: AsyncSession,

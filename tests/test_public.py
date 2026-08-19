@@ -9,6 +9,7 @@ import activitypub.models
 from activitypub import activitypub as ap
 from activitypub.actor import LOCAL_ACTOR
 from activitypub.tests import factories
+from app import config
 from app import templates
 from app.utils.datetime import now
 
@@ -122,6 +123,64 @@ def test_index__ap(db: Session, client: TestClient, accept: str):
     assert response.status_code == 200
     assert response.headers["content-type"] == ap.AP_CONTENT_TYPE
     assert response.json() == LOCAL_ACTOR.ap_actor
+
+
+def test_index__ap_publishes_discovery_hints(db: Session, client: TestClient) -> None:
+    # Both are config-driven (`data/profile.toml`), and both must carry a
+    # declared JSON-LD term or a strict processor drops them.
+    response = client.get("/", headers={"Accept": ap.AP_CONTENT_TYPE})
+
+    assert response.status_code == 200
+    actor = response.json()
+    assert actor["discoverable"] is True
+    assert actor["indexable"] is True
+    assert actor["featuredTags"] == "http://localhost:8000/featured_tags"
+
+    terms = actor["@context"][-1]
+    assert terms["discoverable"] == "toot:discoverable"
+    assert terms["indexable"] == "toot:indexable"
+    assert terms["featuredTags"] == {"@id": "toot:featuredTags", "@type": "@id"}
+    assert terms["focalPoint"] == {"@container": "@list", "@id": "toot:focalPoint"}
+
+
+def test_featured_tags__ap_empty_by_default(db: Session, client: TestClient) -> None:
+    response = client.get("/featured_tags", headers={"Accept": ap.AP_CONTENT_TYPE})
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == ap.AP_CONTENT_TYPE
+    assert response.json() == {
+        "@context": ap.AS_EXTENDED_CTX,
+        "id": "http://localhost:8000/featured_tags",
+        "type": "Collection",
+        "totalItems": 0,
+        "items": [],
+    }
+
+
+def test_featured_tags__ap(
+    db: Session, client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Tags are normalized the same way the client API does it: leading "#"
+    # stripped, lowercased.
+    monkeypatch.setattr(config, "FEATURED_TAGS", ["#Microblogging", "activitypub"])
+
+    response = client.get("/featured_tags", headers={"Accept": ap.AP_CONTENT_TYPE})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["totalItems"] == 2
+    assert payload["items"] == [
+        {
+            "type": "Hashtag",
+            "href": "http://localhost:8000/t/microblogging",
+            "name": "#microblogging",
+        },
+        {
+            "type": "Hashtag",
+            "href": "http://localhost:8000/t/activitypub",
+            "name": "#activitypub",
+        },
+    ]
 
 
 def test_followers__ap(client, db) -> None:
