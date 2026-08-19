@@ -230,6 +230,7 @@ disabled_notifications = ["like", "announce"]
  - `unblocked`
  - `block`
  - `unblock`
+ - `reported`
 
 ### Outgoing HTTP connections
 

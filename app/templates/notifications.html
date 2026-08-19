@@ -40,6 +40,15 @@
             {% elif notif.notification_type.value == "unblock" %}
                 {{ actor_component.actor_action(url_for("admin_profile"), notif, _("was unblocked"), new_flag=notif.is_new) }}
                 {{ actor_component.display_actor(request, csrf_token, is_admin, notif.actor, actors_metadata) }}
+            {% elif notif.notification_type.value == "reported" %}
+                {# an inbound Flag: sent by the reporter's instance actor, not by the reporter #}
+                {{ actor_component.actor_action(url_for("admin_profile"), notif, _("sent a report"), new_flag=notif.is_new) }}
+                {% if notif.inbox_object and notif.inbox_object.content %}
+                <div class="ap_object">{{ notif.inbox_object.content | clean_html(notif.inbox_object) | safe }}</div>
+                {% endif %}
+                {% if notif.outbox_object %}
+                    {{ utils.display_object(notif.outbox_object, is_h_entry=False) }}
+                {% endif %}
             {%- elif notif.notification_type.value == "move" and notif.inbox_object %}
                 {# for move notif, the actor is the target and the inbox object the Move activity #}
                 <div class="actor-action">

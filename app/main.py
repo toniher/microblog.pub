@@ -751,7 +751,9 @@ async def outbox(
             "type": "OrderedCollection",
             "totalItems": len(outbox_objects),
             "orderedItems": [
-                ap.remove_context(ap.wrap_object_if_needed(a.ap_object))
+                ap.remove_context(
+                    ap.wrap_object_if_needed(boxes.with_interaction_collections(a))
+                )
                 for a in outbox_objects
             ],
         }
@@ -824,7 +826,10 @@ async def featured(
             "id": f"{ID}/featured",
             "type": "OrderedCollection",
             "totalItems": len(outbox_objects),
-            "orderedItems": [ap.remove_context(a.ap_object) for a in outbox_objects],
+            "orderedItems": [
+                ap.remove_context(boxes.with_interaction_collections(a))
+                for a in outbox_objects
+            ],
         }
     )
 
@@ -996,7 +1001,9 @@ async def outbox_by_public_id(
     await _check_outbox_object_acl(request, db_session, maybe_object, httpsig_info)
 
     if is_activitypub_requested(request):
-        return ActivityPubResponse(maybe_object.ap_object)
+        return ActivityPubResponse(
+            await boxes.fetch_ap_object_with_collections(db_session, maybe_object)
+        )
 
     if maybe_object.ap_type == "Article":
         return RedirectResponse(
@@ -1111,7 +1118,9 @@ async def article_by_slug(
     await _check_outbox_object_acl(request, db_session, maybe_object, httpsig_info)
 
     if is_activitypub_requested(request):
-        return ActivityPubResponse(maybe_object.ap_object)
+        return ActivityPubResponse(
+            await boxes.fetch_ap_object_with_collections(db_session, maybe_object)
+        )
 
     replies_tree = await boxes.get_replies_tree(
         db_session,
@@ -1164,7 +1173,108 @@ async def outbox_activity_by_public_id(
 
     await _check_outbox_object_acl(request, db_session, maybe_object, httpsig_info)
 
-    return ActivityPubResponse(ap.wrap_object(maybe_object.ap_object))
+    return ActivityPubResponse(
+        ap.wrap_object(
+            await boxes.fetch_ap_object_with_collections(db_session, maybe_object)
+        )
+    )
+
+
+async def _get_outbox_object_for_ap_collection(
+    public_id: str,
+    request: Request,
+    db_session: AsyncSession,
+    httpsig_info: httpsig.HTTPSigInfo,
+) -> activitypub.models.OutboxObject:
+    """Shared lookup for the per-object `replies`/`likes`/`shares` collections."""
+    maybe_object = (
+        await db_session.execute(
+            select(activitypub.models.OutboxObject).where(
+                activitypub.models.OutboxObject.public_id == public_id,
+                activitypub.models.OutboxObject.is_deleted.is_(False),
+            )
+        )
+    ).scalar_one_or_none()
+    if not maybe_object:
+        raise HTTPException(status_code=404)
+
+    await _check_outbox_object_acl(request, db_session, maybe_object, httpsig_info)
+
+    return maybe_object
+
+
+@app.get("/o/{public_id}/replies", response_model=None)
+async def outbox_object_replies(
+    public_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    httpsig_info: httpsig.HTTPSigInfo = Depends(httpsig.httpsig_checker),
+) -> ActivityPubResponse:
+    """The direct replies to a local object, as the `replies` collection
+    advertised on the object itself.
+
+    Mastodon dereferences this when it discovers one of our posts out of context
+    (a boost, a search, a link) to rebuild the thread around it. Unpaginated,
+    like the other collections here: it holds the most recent
+    `REPLIES_COLLECTION_LIMIT` direct replies.
+    """
+    outbox_object = await _get_outbox_object_for_ap_collection(
+        public_id, request, db_session, httpsig_info
+    )
+    items = await boxes.fetch_direct_replies_ap_ids(db_session, outbox_object)
+    return ActivityPubResponse(
+        {
+            "@context": ap.AS_EXTENDED_CTX,
+            "id": f"{outbox_object.ap_id}/replies",
+            "type": "Collection",
+            "totalItems": outbox_object.replies_count,
+            "items": items,
+        }
+    )
+
+
+@app.get("/o/{public_id}/likes", response_model=None)
+async def outbox_object_likes(
+    public_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    httpsig_info: httpsig.HTTPSigInfo = Depends(httpsig.httpsig_checker),
+) -> ActivityPubResponse:
+    """The `likes` collection of a local object: the advertised count only, no
+    items — same as what Mastodon serves."""
+    outbox_object = await _get_outbox_object_for_ap_collection(
+        public_id, request, db_session, httpsig_info
+    )
+    return ActivityPubResponse(
+        {
+            "@context": ap.AS_EXTENDED_CTX,
+            "id": f"{outbox_object.ap_id}/likes",
+            "type": "Collection",
+            "totalItems": outbox_object.likes_count,
+        }
+    )
+
+
+@app.get("/o/{public_id}/shares", response_model=None)
+async def outbox_object_shares(
+    public_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    httpsig_info: httpsig.HTTPSigInfo = Depends(httpsig.httpsig_checker),
+) -> ActivityPubResponse:
+    """The `shares` (boosts) collection of a local object: the advertised count
+    only, no items — same as what Mastodon serves."""
+    outbox_object = await _get_outbox_object_for_ap_collection(
+        public_id, request, db_session, httpsig_info
+    )
+    return ActivityPubResponse(
+        {
+            "@context": ap.AS_EXTENDED_CTX,
+            "id": f"{outbox_object.ap_id}/shares",
+            "type": "Collection",
+            "totalItems": outbox_object.announces_count,
+        }
+    )
 
 
 @app.get("/t/{tag}", response_model=None)

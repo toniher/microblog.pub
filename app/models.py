@@ -167,6 +167,12 @@ class NotificationType(str, enum.Enum):
     BLOCKED = "blocked"
     UNBLOCKED = "unblocked"
 
+    # A remote user reported one of the owner's posts (or the account itself)
+    # via an inbound `Flag`. There is no moderation queue on a single-user
+    # instance — the owner *is* the moderator — so the report surfaces as a
+    # notification and nothing else.
+    REPORTED = "reported"
+
     # outgoing
     BLOCK = "block"
     UNBLOCK = "unblock"

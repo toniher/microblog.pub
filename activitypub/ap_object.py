@@ -235,9 +235,23 @@ class Object:
         )
 
     @property
+    def activity_object_ap_ids(self) -> list[str]:
+        """Every object an activity addresses.
+
+        `Flag` is the one activity that addresses several at once: Mastodon
+        reports the actor plus each reported status in a single `object` array.
+        Everything else is single-valued, and yields a one-element list.
+        """
+        if "object" not in self.ap_object:
+            return []
+
+        return [ap.get_id(obj) for obj in ap.as_list(self.ap_object["object"])]
+
+    @property
     def activity_object_ap_id(self) -> str | None:
-        if "object" in self.ap_object:
-            return ap.get_id(self.ap_object["object"])
+        ap_ids = self.activity_object_ap_ids
+        if ap_ids:
+            return ap_ids[0]
 
         return None
 

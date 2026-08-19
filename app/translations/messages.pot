@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-17 12:36+0200\n"
+"POT-Creation-Date: 2026-08-19 22:27+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -37,11 +37,11 @@ msgstr ""
 msgid "Error: Unable to process upload"
 msgstr ""
 
-#: app/config.py:387
+#: app/config.py:410
 msgid "please try again"
 msgstr ""
 
-#: app/config.py:397
+#: app/config.py:420
 #, python-format
 msgid "The security token has expired, %(please_try_again)s"
 msgstr ""
@@ -495,41 +495,45 @@ msgstr ""
 msgid "was unblocked"
 msgstr ""
 
-#: app/templates/notifications.html:47
+#: app/templates/notifications.html:45
+msgid "sent a report"
+msgstr ""
+
+#: app/templates/notifications.html:56
 msgid "has moved to"
 msgstr ""
 
-#: app/templates/notifications.html:54
+#: app/templates/notifications.html:63
 msgid "liked a post"
 msgstr ""
 
-#: app/templates/notifications.html:57
+#: app/templates/notifications.html:66
 msgid "unliked a post"
 msgstr ""
 
-#: app/templates/notifications.html:60
+#: app/templates/notifications.html:69
 msgid "shared a post"
 msgstr ""
 
-#: app/templates/notifications.html:63
+#: app/templates/notifications.html:72
 msgid "unshared a post"
 msgstr ""
 
-#: app/templates/notifications.html:66
+#: app/templates/notifications.html:75
 msgid "mentioned you"
 msgstr ""
 
-#: app/templates/notifications.html:73
+#: app/templates/notifications.html:82
 #, python-format
 msgid "new webmention from %(source)s"
 msgstr ""
 
-#: app/templates/notifications.html:81
+#: app/templates/notifications.html:90
 #, python-format
 msgid "updated webmention from %(source)s"
 msgstr ""
 
-#: app/templates/notifications.html:89
+#: app/templates/notifications.html:98
 #, python-format
 msgid "deleted webmention from %(source)s"
 msgstr ""

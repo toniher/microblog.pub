@@ -82,6 +82,23 @@ def build_block_activity(
     }
 
 
+def build_flag_activity(
+    from_remote_actor: actor.RemoteActor,
+    reported_ap_ids: list[str],
+    content: str = "spam",
+) -> ap.RawObject:
+    """A report, shaped the way Mastodon sends one: from the instance actor,
+    without an `id` (a report has no public URI), and with every reported object
+    -- the account plus each status -- in a single `object` array."""
+    return {
+        "@context": ap.AS_CTX,
+        "type": "Flag",
+        "actor": from_remote_actor.ap_id,
+        "content": content,
+        "object": reported_ap_ids,
+    }
+
+
 def build_move_activity(
     from_remote_actor: actor.RemoteActor,
     for_remote_object: actor.RemoteActor,

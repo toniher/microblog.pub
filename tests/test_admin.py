@@ -8,12 +8,15 @@ from sqlalchemy.orm import Session
 
 import activitypub.models
 from activitypub import activitypub as ap
+from activitypub.actor import LOCAL_ACTOR
 from activitypub.ap_object import RemoteObject
 from activitypub.tests import factories
+from app import models
 from app.config import generate_csrf_token
 from app.main import app
 from app.utils.datetime import now
 from tests.utils import generate_admin_session_cookies
+from tests.utils import setup_outbox_note
 from tests.utils import setup_remote_actor
 from tests.utils import setup_remote_actor_as_follower
 
@@ -315,3 +318,43 @@ def test_admin_edit_history(db: Session, client: TestClient) -> None:
     assert response.status_code == 200
     assert "hello world" in response.text
     assert "hello world, edited" in response.text
+
+
+def test_admin_notifications__renders_an_inbound_report(
+    db: Session,
+    client: TestClient,
+    respx_mock: respx.MockRouter,
+) -> None:
+    # Given a report about a local post
+    ra = setup_remote_actor(respx_mock)
+    remote_actor = factories.ActorFactory.from_remote_actor(ra)
+    outbox_object = setup_outbox_note()
+    flag = RemoteObject(
+        {
+            **factories.build_flag_activity(
+                from_remote_actor=ra,
+                reported_ap_ids=[LOCAL_ACTOR.ap_id, outbox_object.ap_id],
+                content="this is spam",
+            ),
+            "id": ra.ap_id + "#flag/1",
+        },
+        ra,
+    )
+    inbox_object = factories.InboxObjectFactory.from_remote_object(flag, remote_actor)
+    db.add(
+        models.Notification(
+            notification_type=models.NotificationType.REPORTED,
+            actor_id=remote_actor.id,
+            inbox_object_id=inbox_object.id,
+            outbox_object_id=outbox_object.id,
+        )
+    )
+    db.commit()
+
+    response = client.get(
+        "/admin/notifications", cookies=generate_admin_session_cookies()
+    )
+
+    assert response.status_code == 200
+    assert "sent a report" in response.text
+    assert "this is spam" in response.text

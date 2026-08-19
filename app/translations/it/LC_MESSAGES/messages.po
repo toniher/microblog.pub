@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-17 12:36+0200\n"
+"POT-Creation-Date: 2026-08-19 22:27+0200\n"
 "PO-Revision-Date: 2026-07-17 22:20+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: it\n"
@@ -39,11 +39,11 @@ msgstr "Errore: impossibile elaborare il caricamento"
 msgid "Error: Unable to process upload"
 msgstr "Errore: impossibile elaborare il caricamento"
 
-#: app/config.py:387
+#: app/config.py:410
 msgid "please try again"
 msgstr "riprova"
 
-#: app/config.py:397
+#: app/config.py:420
 #, python-format
 msgid "The security token has expired, %(please_try_again)s"
 msgstr "Il token di sicurezza è scaduto, %(please_try_again)s"
@@ -504,41 +504,45 @@ msgstr "è stato bloccato"
 msgid "was unblocked"
 msgstr "è stato sbloccato"
 
-#: app/templates/notifications.html:47
+#: app/templates/notifications.html:45
+msgid "sent a report"
+msgstr "ha inviato una segnalazione"
+
+#: app/templates/notifications.html:56
 msgid "has moved to"
 msgstr "si è trasferito a"
 
-#: app/templates/notifications.html:54
+#: app/templates/notifications.html:63
 msgid "liked a post"
 msgstr "ha messo mi piace a un post"
 
-#: app/templates/notifications.html:57
+#: app/templates/notifications.html:66
 msgid "unliked a post"
 msgstr "ha rimosso il mi piace da un post"
 
-#: app/templates/notifications.html:60
+#: app/templates/notifications.html:69
 msgid "shared a post"
 msgstr "ha condiviso un post"
 
-#: app/templates/notifications.html:63
+#: app/templates/notifications.html:72
 msgid "unshared a post"
 msgstr "ha annullato la condivisione di un post"
 
-#: app/templates/notifications.html:66
+#: app/templates/notifications.html:75
 msgid "mentioned you"
 msgstr "ti ha menzionato"
 
-#: app/templates/notifications.html:73
+#: app/templates/notifications.html:82
 #, python-format
 msgid "new webmention from %(source)s"
 msgstr "nuovo webmention da %(source)s"
 
-#: app/templates/notifications.html:81
+#: app/templates/notifications.html:90
 #, python-format
 msgid "updated webmention from %(source)s"
 msgstr "webmention aggiornato da %(source)s"
 
-#: app/templates/notifications.html:89
+#: app/templates/notifications.html:98
 #, python-format
 msgid "deleted webmention from %(source)s"
 msgstr "webmention eliminato da %(source)s"

@@ -17,6 +17,7 @@ from app import models
 from tests.utils import mock_httpsig_checker
 from tests.utils import run_process_next_incoming_activity
 from tests.utils import setup_inbox_delete
+from tests.utils import setup_outbox_note
 from tests.utils import setup_remote_actor
 from tests.utils import setup_remote_actor_as_follower
 from tests.utils import setup_remote_actor_as_following
@@ -540,3 +541,101 @@ def test_inbox__block_activity(
     ).scalar_one()
     assert notif.actor.ap_id == ra.ap_id
     assert notif.inbox_object_id == inbox_activity.id
+
+
+def _mock_transient_activity_id():
+    """An activity without an `id` -- a Mastodon report -- is queued under a
+    JSON-LD hash of the payload, which makes pyld dereference its `@context`
+    over the network. The hash is not what these tests are about, so stub it out
+    and keep them offline.
+    """
+    return mock.patch(
+        "app.ldsig.doc_hash_async",
+        mock.AsyncMock(return_value="flag-doc-hash"),
+    )
+
+
+def test_inbox__flag_activity(
+    db: Session,
+    client: TestClient,
+    respx_mock: respx.MockRouter,
+) -> None:
+    # Given a remote actor
+    ra = setup_remote_actor(respx_mock)
+
+    # And a local post
+    outbox_object = setup_outbox_note()
+
+    # When receiving a report about the local actor and that post
+    flag_activity = factories.build_flag_activity(
+        from_remote_actor=ra,
+        reported_ap_ids=[LOCAL_ACTOR.ap_id, outbox_object.ap_id],
+        content="this is spam",
+    )
+    with mock_httpsig_checker(ra), _mock_transient_activity_id():
+        response = client.post(
+            "/inbox",
+            headers={"Content-Type": ap.AS_CTX},
+            json=flag_activity,
+        )
+
+    # Then the server returns a 202
+    assert response.status_code == 202
+
+    run_process_next_incoming_activity()
+
+    # And the Flag activity was saved in the inbox, with a synthetic ID as
+    # Mastodon sends reports without one
+    inbox_activity = db.execute(
+        select(activitypub.models.InboxObject).where(
+            activitypub.models.InboxObject.ap_type == "Flag"
+        )
+    ).scalar_one()
+    assert inbox_activity.ap_id.startswith(ra.ap_id + "#flag/")
+    assert inbox_activity.content == "this is spam"
+
+    # And a notification was created, pointing at the reported post
+    notif = db.execute(
+        select(models.Notification).where(
+            models.Notification.notification_type == models.NotificationType.REPORTED
+        )
+    ).scalar_one()
+    assert notif.actor.ap_id == ra.ap_id
+    assert notif.inbox_object_id == inbox_activity.id
+    assert notif.outbox_object_id == outbox_object.id
+
+
+def test_inbox__flag_activity_about_foreign_objects_is_dropped(
+    db: Session,
+    client: TestClient,
+    respx_mock: respx.MockRouter,
+) -> None:
+    # Given a remote actor
+    ra = setup_remote_actor(respx_mock)
+
+    # When receiving a report that is not about anything local
+    flag_activity = factories.build_flag_activity(
+        from_remote_actor=ra,
+        reported_ap_ids=["https://other.example/users/someone"],
+    )
+    with mock_httpsig_checker(ra), _mock_transient_activity_id():
+        response = client.post(
+            "/inbox",
+            headers={"Content-Type": ap.AS_CTX},
+            json=flag_activity,
+        )
+
+    assert response.status_code == 202
+
+    run_process_next_incoming_activity()
+
+    # Then it was dropped, and no notification was created
+    assert (
+        db.scalar(
+            select(func.count(activitypub.models.InboxObject.id)).where(
+                activitypub.models.InboxObject.ap_type == "Flag"
+            )
+        )
+        == 0
+    )
+    assert db.scalar(select(func.count(models.Notification.id))) == 0

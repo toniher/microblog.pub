@@ -1553,6 +1553,150 @@ async def _get_outbox_announces_count(
     )
 
 
+# Number of direct replies inlined in an object's `replies` collection.
+# Mastodon reads at most 5 entries of a discovered status' collection to resolve
+# the thread around it; 20 leaves some headroom without turning the object into
+# a page dump. The collection is unpaginated, like `/featured`.
+REPLIES_COLLECTION_LIMIT = 20
+
+# The object types that carry the interaction collections. Activities served
+# from the outbox (`Announce`…) must not get them.
+_OBJECT_TYPES_WITH_COLLECTIONS = ["Note", "Article", "Question"]
+
+
+async def fetch_direct_replies_ap_ids(
+    db_session: AsyncSession,
+    outbox_object: activitypub.models.OutboxObject,
+    limit: int = REPLIES_COLLECTION_LIMIT,
+) -> list[str]:
+    """AP IDs of the public direct replies to a local object.
+
+    Both boxes are queried: a remote server resolving a thread around a post it
+    just discovered wants the replies that live on other instances too, not only
+    the local self-replies.
+
+    `inReplyTo` has no column, so this matches on the JSON the same way
+    `_get_replies_count` does — which also means it only sees the string form of
+    `inReplyTo` (what Mastodon and friends send).
+    """
+    replies: list[AnyboxObject] = []
+    allowed_visibility = [ap.VisibilityEnum.PUBLIC, ap.VisibilityEnum.UNLISTED]
+
+    replies.extend(
+        (
+            await db_session.scalars(
+                select(activitypub.models.InboxObject)
+                .where(
+                    func.json_extract(
+                        activitypub.models.InboxObject.ap_object, "$.inReplyTo"
+                    )
+                    == outbox_object.ap_id,
+                    activitypub.models.InboxObject.ap_type.in_(
+                        ["Note", "Page", "Article", "Question"]
+                    ),
+                    activitypub.models.InboxObject.is_deleted.is_(False),
+                    activitypub.models.InboxObject.visibility.in_(allowed_visibility),
+                )
+                .order_by(activitypub.models.InboxObject.ap_published_at.asc())
+                .limit(limit)
+            )
+        ).all()
+    )
+
+    replies.extend(
+        (
+            await db_session.scalars(
+                select(activitypub.models.OutboxObject)
+                .where(
+                    func.json_extract(
+                        activitypub.models.OutboxObject.ap_object, "$.inReplyTo"
+                    )
+                    == outbox_object.ap_id,
+                    activitypub.models.OutboxObject.ap_type.in_(
+                        ["Note", "Page", "Article", "Question"]
+                    ),
+                    activitypub.models.OutboxObject.is_deleted.is_(False),
+                    activitypub.models.OutboxObject.visibility.in_(allowed_visibility),
+                )
+                .order_by(activitypub.models.OutboxObject.ap_published_at.asc())
+                .limit(limit)
+            )
+        ).all()
+    )
+
+    replies.sort(key=lambda reply: reply.ap_published_at)  # type: ignore
+
+    # Poll votes are replies carrying a bare `name` and no content; they are not
+    # part of the thread.
+    return [reply.ap_id for reply in replies if reply.content][:limit]
+
+
+def with_interaction_collections(
+    outbox_object: activitypub.models.OutboxObject,
+    replies_ap_ids: list[str] | None = None,
+) -> ap.RawObject:
+    """The object as served over AP, with the `replies`/`likes`/`shares`
+    collections a remote server expects on a status.
+
+    Computed at serve time rather than stored in `ap_object`: the counts move
+    with every interaction, and `send_update` rebuilds the note from scratch on
+    every edit. Mastodon reads the `replies` collection of a status it
+    cold-discovers (via a boost, a search or a link) specifically to resolve the
+    surrounding thread, so this is what makes that possible.
+
+    `replies_ap_ids` is `None` for collection listings, where inlining the
+    replies of every item would cost a query per item: the collection is then
+    only advertised (id + `totalItems`), and a remote server that cares
+    dereferences it.
+
+    `totalItems` comes from the denormalized counters, i.e. the same numbers the
+    client API reports — which include the webmention likes/reposts/replies that
+    have no AP identity to list.
+    """
+    if outbox_object.ap_type not in _OBJECT_TYPES_WITH_COLLECTIONS:
+        return outbox_object.ap_object
+
+    ap_id = outbox_object.ap_id
+    replies: ap.RawObject = {
+        "id": f"{ap_id}/replies",
+        "type": "Collection",
+        "totalItems": outbox_object.replies_count,
+    }
+    if replies_ap_ids is not None:
+        replies["items"] = replies_ap_ids
+
+    return {
+        **outbox_object.ap_object,
+        "replies": replies,
+        # Counts only, no items: matches what Mastodon serves, and keeps the
+        # facepiles out of a machine-readable collection.
+        "likes": {
+            "id": f"{ap_id}/likes",
+            "type": "Collection",
+            "totalItems": outbox_object.likes_count,
+        },
+        "shares": {
+            "id": f"{ap_id}/shares",
+            "type": "Collection",
+            "totalItems": outbox_object.announces_count,
+        },
+    }
+
+
+async def fetch_ap_object_with_collections(
+    db_session: AsyncSession,
+    outbox_object: activitypub.models.OutboxObject,
+) -> ap.RawObject:
+    """`with_interaction_collections` with the `replies` items inlined."""
+    if outbox_object.ap_type not in _OBJECT_TYPES_WITH_COLLECTIONS:
+        return outbox_object.ap_object
+
+    return with_interaction_collections(
+        outbox_object,
+        replies_ap_ids=await fetch_direct_replies_ap_ids(db_session, outbox_object),
+    )
+
+
 async def _revert_side_effect_for_deleted_object(
     db_session: AsyncSession,
     delete_activity: activitypub.models.InboxObject | None,
@@ -2532,6 +2676,53 @@ async def _handle_block_activity(
         db_session.add(notif)
 
 
+async def _handle_flag_activity(
+    db_session: AsyncSession,
+    actor: activitypub.models.Actor,
+    flag_activity: activitypub.models.InboxObject,
+) -> None:
+    """A remote user reported the owner, or one of their posts, to the owner.
+
+    Two quirks of Mastodon's `Flag`: it comes from the remote *instance* actor
+    rather than from the reporter (deliberately, to keep the reporter anonymous),
+    and it addresses the reported account plus every reported status in a single
+    `object` array.
+
+    There is no moderation queue to file this into — on a single-user instance
+    the owner is the moderator — so the proportionate handling is a
+    notification. Dropping it silently, which is what happened before, means the
+    owner never learns they were reported at all. The reporter's comment lives in
+    the activity's `content`, so the `Flag` itself is kept in the inbox.
+    """
+    reported_ap_ids = flag_activity.activity_object_ap_ids
+    local_ap_ids = [ap_id for ap_id in reported_ap_ids if ap_id.startswith(BASE_URL)]
+    if not local_ap_ids:
+        logger.warning(f"Received a Flag about foreign objects {reported_ap_ids=}")
+        await db_session.delete(flag_activity)
+        return
+
+    # Link the first reported post (if the report is about posts and not just
+    # about the account) so the notification can display it.
+    reported_outbox_object: activitypub.models.OutboxObject | None = None
+    for ap_id in local_ap_ids:
+        if ap_id == LOCAL_ACTOR.ap_id:
+            continue
+        reported_outbox_object = await get_outbox_object_by_ap_id(db_session, ap_id)
+        if reported_outbox_object:
+            break
+
+    if is_notification_enabled(models.NotificationType.REPORTED):
+        notif = models.Notification(
+            notification_type=models.NotificationType.REPORTED,
+            actor_id=actor.id,
+            inbox_object_id=flag_activity.id,
+            outbox_object_id=(
+                reported_outbox_object.id if reported_outbox_object else None
+            ),
+        )
+        db_session.add(notif)
+
+
 async def _process_transient_object(
     db_session: AsyncSession,
     raw_object: ap.RawObject,
@@ -2589,8 +2780,14 @@ async def save_to_inbox(
         return
 
     if "id" not in raw_object or not raw_object["id"]:
-        await _process_transient_object(db_session, raw_object, actor)
-        return None
+        # A Mastodon report has no public URI, so its `Flag` arrives without an
+        # `id`. It is still worth keeping (the reporter's comment is the useful
+        # part), so give it a synthetic one instead of treating it as transient.
+        if ap.as_list(raw_object["type"])[0] == "Flag":
+            raw_object = {**raw_object, "id": f"{actor.ap_id}#flag/{uuid.uuid4().hex}"}
+        else:
+            await _process_transient_object(db_session, raw_object, actor)
+            return None
 
     # If we just blocked an actor, we want to process any undo sent as side
     # effects
@@ -2801,6 +2998,12 @@ async def save_to_inbox(
         await db_session.delete(inbox_object)
     elif activity_ro.ap_type == "Block":
         await _handle_block_activity(
+            db_session,
+            actor,
+            inbox_object,
+        )
+    elif activity_ro.ap_type == "Flag":
+        await _handle_flag_activity(
             db_session,
             actor,
             inbox_object,

@@ -2,6 +2,7 @@ from datetime import timedelta
 from unittest import mock
 
 import pytest
+import respx
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -12,6 +13,8 @@ from activitypub.tests import factories
 from app import config
 from app import templates
 from app.utils.datetime import now
+from tests.utils import setup_inbox_note
+from tests.utils import setup_remote_actor
 
 _ACCEPTED_AP_HEADERS = [
     "application/activity+json",
@@ -306,3 +309,179 @@ def test_public_page_renders_video_attachment(db: Session, client: TestClient) -
     assert 'width="1280" height="720"' in html
     assert 'data-has-audio="false"' in html
     assert "/attachments/thumbnails/" in html  # poster= + resized image src
+
+
+def _create_note_with_interactions(
+    db: Session,
+    respx_mock: respx.MockRouter,
+) -> tuple[activitypub.models.OutboxObject, str, str]:
+    """A public note with a remote reply, a local self-reply, and some counts."""
+    note = factories.OutboxObjectFactory(
+        public_id="note-with-interactions",
+        ap_type="Note",
+        ap_id="http://localhost:8000/o/note-with-interactions",
+        ap_object={
+            "type": "Note",
+            "id": "http://localhost:8000/o/note-with-interactions",
+            "content": "hello",
+            "published": now().replace(microsecond=0).isoformat(),
+        },
+        visibility=ap.VisibilityEnum.PUBLIC,
+        ap_published_at=now(),
+        likes_count=3,
+        announces_count=2,
+        replies_count=2,
+    )
+
+    ra = setup_remote_actor(respx_mock, base_url="https://remote.example")
+    remote_actor = factories.ActorFactory.from_remote_actor(ra)
+    remote_reply = setup_inbox_note(
+        remote_actor,
+        content="me too",
+        in_reply_to=note.ap_id,
+    )
+
+    self_reply = factories.OutboxObjectFactory(
+        public_id="self-reply",
+        ap_type="Note",
+        ap_id="http://localhost:8000/o/self-reply",
+        ap_object={
+            "type": "Note",
+            "id": "http://localhost:8000/o/self-reply",
+            "content": "and one more thing",
+            "inReplyTo": note.ap_id,
+            "published": now().replace(microsecond=0).isoformat(),
+        },
+        visibility=ap.VisibilityEnum.PUBLIC,
+        # Explicit ordering: the collection is sorted by publication date
+        ap_published_at=now() + timedelta(seconds=10),
+    )
+    db.commit()
+
+    return note, remote_reply.ap_id, self_reply.ap_id
+
+
+def test_object__ap_has_interaction_collections(
+    db: Session, client: TestClient, respx_mock: respx.MockRouter
+) -> None:
+    note, remote_reply_ap_id, self_reply_ap_id = _create_note_with_interactions(
+        db, respx_mock
+    )
+
+    response = client.get(
+        f"/o/{note.public_id}", headers={"Accept": ap.AP_CONTENT_TYPE}
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    # The counts are the live ones, and the replies of both boxes are inlined so
+    # a remote server can resolve the thread around a post it just discovered.
+    assert payload["replies"] == {
+        "id": f"{note.ap_id}/replies",
+        "type": "Collection",
+        "totalItems": 2,
+        "items": [remote_reply_ap_id, self_reply_ap_id],
+    }
+    assert payload["likes"] == {
+        "id": f"{note.ap_id}/likes",
+        "type": "Collection",
+        "totalItems": 3,
+    }
+    assert payload["shares"] == {
+        "id": f"{note.ap_id}/shares",
+        "type": "Collection",
+        "totalItems": 2,
+    }
+
+
+def test_object_activity__ap_has_interaction_collections(
+    db: Session, client: TestClient, respx_mock: respx.MockRouter
+) -> None:
+    note, _, _ = _create_note_with_interactions(db, respx_mock)
+
+    response = client.get(
+        f"/o/{note.public_id}/activity", headers={"Accept": ap.AP_CONTENT_TYPE}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["object"]["replies"]["totalItems"] == 2
+
+
+def test_object_replies_collection__ap(
+    db: Session, client: TestClient, respx_mock: respx.MockRouter
+) -> None:
+    note, remote_reply_ap_id, self_reply_ap_id = _create_note_with_interactions(
+        db, respx_mock
+    )
+
+    response = client.get(
+        f"/o/{note.public_id}/replies", headers={"Accept": ap.AP_CONTENT_TYPE}
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == ap.AP_CONTENT_TYPE
+    assert response.json() == {
+        "@context": ap.AS_EXTENDED_CTX,
+        "id": f"{note.ap_id}/replies",
+        "type": "Collection",
+        "totalItems": 2,
+        "items": [remote_reply_ap_id, self_reply_ap_id],
+    }
+
+
+def test_object_likes_and_shares_collections__ap(
+    db: Session, client: TestClient, respx_mock: respx.MockRouter
+) -> None:
+    note, _, _ = _create_note_with_interactions(db, respx_mock)
+
+    likes = client.get(
+        f"/o/{note.public_id}/likes", headers={"Accept": ap.AP_CONTENT_TYPE}
+    )
+    shares = client.get(
+        f"/o/{note.public_id}/shares", headers={"Accept": ap.AP_CONTENT_TYPE}
+    )
+
+    # Counts only, no items -- same as what Mastodon serves
+    assert likes.json() == {
+        "@context": ap.AS_EXTENDED_CTX,
+        "id": f"{note.ap_id}/likes",
+        "type": "Collection",
+        "totalItems": 3,
+    }
+    assert shares.json() == {
+        "@context": ap.AS_EXTENDED_CTX,
+        "id": f"{note.ap_id}/shares",
+        "type": "Collection",
+        "totalItems": 2,
+    }
+
+
+def test_object_collections__ap_404_for_unknown_object(
+    db: Session, client: TestClient, respx_mock: respx.MockRouter
+) -> None:
+    for collection in ["replies", "likes", "shares"]:
+        response = client.get(
+            f"/o/nope/{collection}", headers={"Accept": ap.AP_CONTENT_TYPE}
+        )
+        assert response.status_code == 404
+
+
+def test_outbox__ap_advertises_interaction_collections(
+    db: Session, client: TestClient, respx_mock: respx.MockRouter
+) -> None:
+    note, _, _ = _create_note_with_interactions(db, respx_mock)
+
+    response = client.get("/outbox", headers={"Accept": ap.AP_CONTENT_TYPE})
+
+    assert response.status_code == 200
+    items = {
+        item["object"]["id"]: item["object"] for item in response.json()["orderedItems"]
+    }
+    # Listings advertise the collections without inlining the replies: that
+    # would cost a query per item.
+    assert items[note.ap_id]["replies"] == {
+        "id": f"{note.ap_id}/replies",
+        "type": "Collection",
+        "totalItems": 2,
+    }
+    assert items[note.ap_id]["likes"]["totalItems"] == 3
