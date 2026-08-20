@@ -181,6 +181,51 @@ async def test_statuses_create_with_reply(
 
 
 @pytest.mark.asyncio
+async def test_statuses_create_with_quote(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    token = await _make_access_token(async_db_session, "write:statuses")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    _, quoted = await boxes.send_create(
+        async_db_session,
+        ObjectType.NOTE.value,
+        "Original",
+        uploads=[],
+        in_reply_to=None,
+        visibility=ap.VisibilityEnum.PUBLIC,
+    )
+    quoted_id = ids.encode_outbox_id(quoted)
+
+    response = client.post(
+        "/api/v1/statuses",
+        headers=headers,
+        data={"status": "Check this out", "quote_id": quoted_id},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    # Quoting our own post is auto-authorized -- no round trip needed.
+    assert data["quote"]["state"] == "accepted"
+    assert data["quote"]["quoted_status"]["id"] == quoted_id
+
+
+@pytest.mark.asyncio
+async def test_statuses_create_with_unknown_quote_id(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    token = await _make_access_token(async_db_session, "write:statuses")
+
+    response = client.post(
+        "/api/v1/statuses",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"status": "Check this out", "quote_id": "999999999"},
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_statuses_create_with_poll(
     client: TestClient, async_db_session: AsyncSession
 ) -> None:

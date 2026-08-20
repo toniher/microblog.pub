@@ -14,6 +14,11 @@
 {{ utils.display_object(in_reply_to_object) }}
 {% endif %}
 
+{% if quoted_object %}
+<div class="actor-action">{{ _("Quoting:") }}</div>
+{{ utils.display_object(quoted_object) }}
+{% endif %}
+
 <div class="box">
 <nav class="flexbox" hx-boost="true" hx-indicator="body">
 <ul>
@@ -91,6 +96,7 @@
         <input type="checkbox" name="is_sensitive" id="is_sensitive"> <label for="is_sensitive">{{ _("Mark attachment(s) as sensitive") }}</label>
     </p>
     <input type="hidden" name="in_reply_to" value="{{ request.query_params.in_reply_to }}">
+    <input type="hidden" name="quote_of" value="{{ request.query_params.quote_of }}">
     <p>
         <input id="files" name="files" type="file" class="width-95" multiple accept="image/*,video/*,audio/*">
     </p>

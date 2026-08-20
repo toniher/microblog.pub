@@ -2345,6 +2345,14 @@ async def _parse_compose_params(
     else:
         in_reply_to_id = None
 
+    quote_id = params.get("quote_id")
+    if quote_id:
+        quote_id = str(quote_id)
+        if await ids.get_object_by_mastodon_id(db_session, quote_id) is None:
+            raise MastodonError(422, "validation_failed", "quote_id not found")
+    else:
+        quote_id = None
+
     visibility_param = str(params.get("visibility") or "public")
     visibility = _MASTODON_VISIBILITY_TO_AP.get(visibility_param)
     if visibility is None:
@@ -2396,6 +2404,7 @@ async def _parse_compose_params(
         visibility=visibility,
         language=language,
         in_reply_to_id=in_reply_to_id,
+        quote_id=quote_id,
         media_ids=media_ids,
         poll_options=poll_options,
         poll_multiple=params.get_poll_multiple() if poll_options else False,

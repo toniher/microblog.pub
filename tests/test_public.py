@@ -456,6 +456,55 @@ def test_object_likes_and_shares_collections__ap(
     }
 
 
+def _create_quote_authorization_stamp() -> activitypub.models.OutboxObject:
+    return factories.OutboxObjectFactory(
+        public_id="stamp-1",
+        ap_type="QuoteAuthorization",
+        ap_id="http://localhost:8000/o/stamp-1",
+        ap_object={
+            "type": "QuoteAuthorization",
+            "attributedTo": LOCAL_ACTOR.ap_id,
+            "interactingObject": "https://example.com/users/alice/notes/1",
+            "interactionTarget": "http://localhost:8000/o/some-note",
+        },
+        visibility=ap.VisibilityEnum.PUBLIC,
+        is_hidden_from_homepage=True,
+    )
+
+
+def test_quote_authorization_stamp__ap(db: Session, client: TestClient) -> None:
+    stamp = _create_quote_authorization_stamp()
+
+    response = client.get(
+        f"/o/{stamp.public_id}", headers={"Accept": ap.AP_CONTENT_TYPE}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["type"] == "QuoteAuthorization"
+
+
+def test_quote_authorization_stamp__html_404s(db: Session, client: TestClient) -> None:
+    # No HTML rendering exists for a stamp -- see PLAN-quote.md -- so a
+    # browser hitting its permalink gets a 404 rather than a blank page.
+    stamp = _create_quote_authorization_stamp()
+
+    response = client.get(f"/o/{stamp.public_id}")
+
+    assert response.status_code == 404
+
+
+def test_quote_authorization_stamp__not_in_public_outbox(
+    db: Session, client: TestClient
+) -> None:
+    _create_quote_authorization_stamp()
+
+    response = client.get("/outbox", headers={"Accept": ap.AP_CONTENT_TYPE})
+
+    assert response.status_code == 200
+    ap_ids = {item["object"]["id"] for item in response.json()["orderedItems"]}
+    assert "http://localhost:8000/o/stamp-1" not in ap_ids
+
+
 def test_object_collections__ap_404_for_unknown_object(
     db: Session, client: TestClient, respx_mock: respx.MockRouter
 ) -> None:

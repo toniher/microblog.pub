@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-19 22:27+0200\n"
+"POT-Creation-Date: 2026-08-20 13:06+0200\n"
 "PO-Revision-Date: 2026-07-17 22:20+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: es\n"
@@ -18,32 +18,32 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: app/admin.py:1438 app/admin.py:1457 app/admin.py:1582
+#: app/admin.py:1494 app/admin.py:1513 app/admin.py:1639
 msgid "Error: object must have a content"
 msgstr "Error: el contenido es obligatorio"
 
-#: app/admin.py:1445
+#: app/admin.py:1501
 msgid "Error: invalid language code"
 msgstr "Error: código de idioma no válido"
 
-#: app/admin.py:1472
+#: app/admin.py:1528
 msgid "Error: file is too large"
 msgstr ""
 
-#: app/admin.py:1480
+#: app/admin.py:1536
 #, fuzzy
 msgid "Error: unable to process upload"
 msgstr "Error: no se pudo procesar la subida"
 
-#: app/admin.py:1496
+#: app/admin.py:1552
 msgid "Error: Unable to process upload"
 msgstr "Error: no se pudo procesar la subida"
 
-#: app/config.py:410
+#: app/config.py:422
 msgid "please try again"
 msgstr "inténtelo de nuevo"
 
-#: app/config.py:420
+#: app/config.py:432
 #, python-format
 msgid "The security token has expired, %(please_try_again)s"
 msgstr "El token de seguridad ha caducado, %(please_try_again)s"
@@ -117,8 +117,8 @@ msgstr "Versión actual"
 msgid "%(name)s - New"
 msgstr "%(name)s - Nuevo"
 
-#: app/templates/admin_edit_text.html:19 app/templates/admin_new.html:48
-#: app/templates/admin_new_post.html:53
+#: app/templates/admin_edit_text.html:19 app/templates/admin_new.html:53
+#: app/templates/admin_new_post.html:58
 msgid "Title"
 msgstr "Título"
 
@@ -145,7 +145,7 @@ msgstr "Todavía no hay nada que ver, %(link)s."
 msgid "shared"
 msgstr "ha compartido"
 
-#: app/templates/admin_inbox.html:37 app/templates/notifications.html:16
+#: app/templates/admin_inbox.html:37 app/templates/notifications.html:17
 msgid "followed you"
 msgstr "ha empezado a seguirte"
 
@@ -174,76 +174,80 @@ msgstr ""
 msgid "In reply to:"
 msgstr "En respuesta a:"
 
-#: app/templates/admin_new.html:31 app/templates/admin_new_post.html:36
+#: app/templates/admin_new.html:18 app/templates/admin_new_post.html:21
+msgid "Quoting:"
+msgstr "Citando:"
+
+#: app/templates/admin_new.html:36 app/templates/admin_new_post.html:41
 #: app/templates/components/filters.html:22 app/templates/object.html:18
 msgid "Note"
 msgstr "Nota"
 
-#: app/templates/admin_new.html:31 app/templates/admin_new_post.html:36
+#: app/templates/admin_new.html:36 app/templates/admin_new_post.html:41
 #: app/templates/components/filters.html:22
 msgid "Article"
 msgstr "Artículo"
 
-#: app/templates/admin_new.html:31 app/templates/admin_new_post.html:36
+#: app/templates/admin_new.html:36 app/templates/admin_new_post.html:41
 #: app/templates/components/filters.html:22
 msgid "Question"
 msgstr "Encuesta"
 
-#: app/templates/admin_new.html:59 app/templates/admin_new_post.html:64
+#: app/templates/admin_new.html:64 app/templates/admin_new_post.html:69
 msgid "Hey!"
 msgstr "¡Hola!"
 
-#: app/templates/admin_new.html:64 app/templates/admin_new_post.html:71
+#: app/templates/admin_new.html:69 app/templates/admin_new_post.html:76
 msgid "single choice"
 msgstr "opción única"
 
-#: app/templates/admin_new.html:65 app/templates/admin_new_post.html:72
+#: app/templates/admin_new.html:70 app/templates/admin_new_post.html:77
 msgid "multiple choices"
 msgstr "opciones múltiples"
 
-#: app/templates/admin_new.html:70 app/templates/admin_new_post.html:77
+#: app/templates/admin_new.html:75 app/templates/admin_new_post.html:82
 msgid "ends in 5 minutes"
 msgstr "termina dentro de 5 minutos"
 
-#: app/templates/admin_new.html:71 app/templates/admin_new_post.html:78
+#: app/templates/admin_new.html:76 app/templates/admin_new_post.html:83
 msgid "ends in 30 minutes"
 msgstr "termina dentro de 30 minutos"
 
-#: app/templates/admin_new.html:72 app/templates/admin_new_post.html:79
+#: app/templates/admin_new.html:77 app/templates/admin_new_post.html:84
 msgid "ends in 1 hour"
 msgstr "termina dentro de 1 hora"
 
-#: app/templates/admin_new.html:73 app/templates/admin_new_post.html:80
+#: app/templates/admin_new.html:78 app/templates/admin_new_post.html:85
 msgid "ends in 6 hours"
 msgstr "termina dentro de 6 horas"
 
-#: app/templates/admin_new.html:74 app/templates/admin_new_post.html:81
+#: app/templates/admin_new.html:79 app/templates/admin_new_post.html:86
 msgid "ends in 1 day"
 msgstr "termina dentro de 1 día"
 
-#: app/templates/admin_new.html:79 app/templates/admin_new_post.html:86
+#: app/templates/admin_new.html:84 app/templates/admin_new_post.html:91
 #, python-format
 msgid "Option %(n)s, leave empty to disable"
 msgstr "Opción %(n)s, déjela vacía para desactivarla"
 
-#: app/templates/admin_new.html:85 app/templates/admin_new_post.html:92
+#: app/templates/admin_new.html:90 app/templates/admin_new_post.html:97
 msgid "content warning (will mark the post as sensitive)"
 msgstr "aviso de contenido (marcará la publicación como sensible)"
 
-#: app/templates/admin_new.html:88 app/templates/admin_new_post.html:95
+#: app/templates/admin_new.html:93 app/templates/admin_new_post.html:100
 #, python-format
 msgid "language code (optional, e.g. %(lang)s)"
 msgstr "código de idioma (opcional, p. ej. %(lang)s)"
 
-#: app/templates/admin_new.html:88 app/templates/admin_new_post.html:95
+#: app/templates/admin_new.html:93 app/templates/admin_new_post.html:100
 msgid "BCP 47 language code, e.g. en or pt-BR"
 msgstr "código de idioma BCP 47, p. ej. en o pt-BR"
 
-#: app/templates/admin_new.html:91 app/templates/admin_new_post.html:98
+#: app/templates/admin_new.html:96 app/templates/admin_new_post.html:103
 msgid "Mark attachment(s) as sensitive"
 msgstr "Marcar los adjuntos como sensibles"
 
-#: app/templates/admin_new.html:99 app/templates/admin_new_post.html:106
+#: app/templates/admin_new.html:105 app/templates/admin_new_post.html:112
 msgid "Publish"
 msgstr "Publicar"
 
@@ -469,82 +473,90 @@ msgstr ""
 "Error inesperado; revisa los registros e informa del problema si es "
 "necesario."
 
-#: app/templates/notifications.html:7
+#: app/templates/notifications.html:8
 #, python-format
 msgid "%(name)s - Notifications"
 msgstr "%(name)s - Notificaciones"
 
-#: app/templates/notifications.html:19
+#: app/templates/notifications.html:20
 msgid "sent a follow request"
 msgstr "ha enviado una solicitud de seguimiento"
 
-#: app/templates/notifications.html:23
+#: app/templates/notifications.html:24
 msgid "unfollowed you"
 msgstr "ha dejado de seguirte"
 
-#: app/templates/notifications.html:26
+#: app/templates/notifications.html:27
 msgid "accepted your follow request"
 msgstr "ha aceptado tu solicitud de seguimiento"
 
-#: app/templates/notifications.html:29
+#: app/templates/notifications.html:30
 msgid "rejected your follow request"
 msgstr "ha rechazado tu solicitud de seguimiento"
 
-#: app/templates/components/actor.html:64 app/templates/notifications.html:32
+#: app/templates/components/actor.html:64 app/templates/notifications.html:33
 msgid "blocked you"
 msgstr "te ha bloqueado"
 
-#: app/templates/notifications.html:35
+#: app/templates/notifications.html:36
 msgid "unblocked you"
 msgstr "te ha desbloqueado"
 
-#: app/templates/notifications.html:38
+#: app/templates/notifications.html:39
 msgid "was blocked"
 msgstr "ha sido bloqueado"
 
-#: app/templates/notifications.html:41
+#: app/templates/notifications.html:42
 msgid "was unblocked"
 msgstr "ha sido desbloqueado"
 
 #: app/templates/notifications.html:45
+msgid "asked to quote a post"
+msgstr "ha pedido citar una publicación"
+
+#: app/templates/notifications.html:58
+msgid "quoted a post"
+msgstr "ha citado una publicación"
+
+#: app/templates/notifications.html:64
 msgid "sent a report"
 msgstr "ha enviado una denuncia"
 
-#: app/templates/notifications.html:56
+#: app/templates/notifications.html:75
 msgid "has moved to"
 msgstr "se ha mudado a"
 
-#: app/templates/notifications.html:63
+#: app/templates/notifications.html:82
 msgid "liked a post"
 msgstr "le ha gustado una publicación"
 
-#: app/templates/notifications.html:66
+#: app/templates/notifications.html:85
 msgid "unliked a post"
 msgstr "ya no le gusta una publicación"
 
-#: app/templates/notifications.html:69
+#: app/templates/notifications.html:88
 msgid "shared a post"
 msgstr "ha compartido una publicación"
 
-#: app/templates/notifications.html:72
+#: app/templates/notifications.html:91
 msgid "unshared a post"
 msgstr "ha dejado de compartir una publicación"
 
-#: app/templates/notifications.html:75
+#: app/templates/notifications.html:94
 msgid "mentioned you"
 msgstr "te ha mencionado"
 
-#: app/templates/notifications.html:82
+#: app/templates/notifications.html:101
 #, python-format
 msgid "new webmention from %(source)s"
 msgstr "nueva webmention de %(source)s"
 
-#: app/templates/notifications.html:90
+#: app/templates/notifications.html:109
 #, python-format
 msgid "updated webmention from %(source)s"
 msgstr "webmention actualizada de %(source)s"
 
-#: app/templates/notifications.html:98
+#: app/templates/notifications.html:117
 #, python-format
 msgid "deleted webmention from %(source)s"
 msgstr "webmention eliminada de %(source)s"
@@ -623,7 +635,7 @@ msgstr "Interactuar desde tu instancia"
 msgid "Interact with this object"
 msgstr "Interactuar con este objeto"
 
-#: app/templates/remote_interact.html:24 app/templates/utils.html:234
+#: app/templates/remote_interact.html:24 app/templates/utils.html:242
 msgid "interact from your instance"
 msgstr "interactuar desde tu instancia"
 
@@ -638,7 +650,7 @@ msgstr ""
 "        este objeto\n"
 "    </a>"
 
-#: app/templates/utils.html:55 app/templates/utils.html:228
+#: app/templates/utils.html:55 app/templates/utils.html:236
 msgid "permalink"
 msgstr "enlace permanente"
 
@@ -654,7 +666,7 @@ msgstr ""
 "            este objeto\n"
 "        </a>"
 
-#: app/templates/utils.html:126
+#: app/templates/utils.html:134
 #, python-format
 msgid ""
 "On %(start)s\n"
@@ -663,92 +675,92 @@ msgstr ""
 "El %(start)s\n"
 "            (termina el %(end)s)"
 
-#: app/templates/utils.html:135
+#: app/templates/utils.html:143
 msgid "Location"
 msgstr "Ubicación"
 
-#: app/templates/utils.html:187
+#: app/templates/utils.html:195
 msgid "you voted for this answer"
 msgstr "has votado esta respuesta"
 
-#: app/templates/utils.html:194
+#: app/templates/utils.html:202
 #, python-format
 msgid "%(count)s vote"
 msgid_plural "%(count)s votes"
 msgstr[0] "%(count)s voto"
 msgstr[1] "%(count)s votos"
 
-#: app/templates/utils.html:206
+#: app/templates/utils.html:214
 msgid "vote"
 msgstr "votar"
 
-#: app/templates/utils.html:248
+#: app/templates/utils.html:256
 msgid "ended"
 msgstr "finalizada"
 
-#: app/templates/utils.html:248
+#: app/templates/utils.html:256
 msgid "ends"
 msgstr "finaliza"
 
-#: app/templates/utils.html:255
+#: app/templates/utils.html:263
 #, python-format
 msgid "%(count)s voter"
 msgid_plural "%(count)s voters"
 msgstr[0] "%(count)s votante"
 msgstr[1] "%(count)s votantes"
 
-#: app/templates/utils.html:267
+#: app/templates/utils.html:275
 #, python-format
 msgid "<strong>%(count)s</strong> like"
 msgid_plural "<strong>%(count)s</strong> likes"
 msgstr[0] "<strong>%(count)s</strong> me gusta"
 msgstr[1] "<strong>%(count)s</strong> me gusta"
 
-#: app/templates/utils.html:273
+#: app/templates/utils.html:281
 #, python-format
 msgid "<strong>%(count)s</strong> share"
 msgid_plural "<strong>%(count)s</strong> shares"
 msgstr[0] "<strong>%(count)s</strong> compartido"
 msgstr[1] "<strong>%(count)s</strong> compartidos"
 
-#: app/templates/utils.html:279
+#: app/templates/utils.html:287
 #, python-format
 msgid "<strong>%(count)s</strong> webmention"
 msgid_plural "<strong>%(count)s</strong> webmentions"
 msgstr[0] "<strong>%(count)s</strong> webmention"
 msgstr[1] "<strong>%(count)s</strong> webmentions"
 
-#: app/templates/utils.html:288
+#: app/templates/utils.html:296
 #, python-format
 msgid "<strong>%(count)s</strong> reply"
 msgid_plural "<strong>%(count)s</strong> replies"
 msgstr[0] "<strong>%(count)s</strong> respuesta"
 msgstr[1] "<strong>%(count)s</strong> respuestas"
 
-#: app/templates/utils.html:327
+#: app/templates/utils.html:341
 msgid "unlike"
 msgstr "quitar me gusta"
 
-#: app/templates/utils.html:344
+#: app/templates/utils.html:358
 msgid "unshare"
 msgstr "dejar de compartir"
 
-#: app/templates/utils.html:378
+#: app/templates/utils.html:392
 msgid "Likes"
 msgstr "Me gusta"
 
-#: app/templates/utils.html:387 app/templates/utils.html:404
+#: app/templates/utils.html:401 app/templates/utils.html:418
 #, python-format
 msgid "and %(count)s more."
 msgid_plural "and %(count)s more."
 msgstr[0] "y %(count)s más."
 msgstr[1] "y %(count)s más."
 
-#: app/templates/utils.html:395
+#: app/templates/utils.html:409
 msgid "Shares"
 msgstr "Compartidos"
 
-#: app/templates/utils.html:412
+#: app/templates/utils.html:426
 msgid "Webmentions"
 msgstr "Webmentions"
 
@@ -843,71 +855,83 @@ msgid "reject follow"
 msgstr "rechazar seguimiento"
 
 #: app/templates/components/admin_buttons.html:89
+msgid "accept quote"
+msgstr "aceptar cita"
+
+#: app/templates/components/admin_buttons.html:98
+msgid "reject quote"
+msgstr "rechazar cita"
+
+#: app/templates/components/admin_buttons.html:107
 msgid "like"
 msgstr "me gusta"
 
-#: app/templates/components/admin_buttons.html:98
+#: app/templates/components/admin_buttons.html:116
 msgid "bookmark"
 msgstr "añadir a marcadores"
 
-#: app/templates/components/admin_buttons.html:107
+#: app/templates/components/admin_buttons.html:125
 msgid "unbookmark"
 msgstr "quitar de marcadores"
 
-#: app/templates/components/admin_buttons.html:116
+#: app/templates/components/admin_buttons.html:134
 msgid "pin"
 msgstr "fijar"
 
-#: app/templates/components/admin_buttons.html:125
+#: app/templates/components/admin_buttons.html:143
 msgid "unpin"
 msgstr "dejar de fijar"
 
-#: app/templates/components/admin_buttons.html:132
+#: app/templates/components/admin_buttons.html:150
 msgid "edit"
 msgstr "editar"
 
-#: app/templates/components/admin_buttons.html:137
+#: app/templates/components/admin_buttons.html:155
 msgid "history"
 msgstr "historial"
 
-#: app/templates/components/admin_buttons.html:145
+#: app/templates/components/admin_buttons.html:163
 msgid "delete"
 msgstr "eliminar"
 
-#: app/templates/components/admin_buttons.html:154
-#: app/templates/components/admin_buttons.html:163
+#: app/templates/components/admin_buttons.html:172
+#: app/templates/components/admin_buttons.html:181
 msgid "local delete"
 msgstr "eliminar localmente"
 
-#: app/templates/components/admin_buttons.html:172
+#: app/templates/components/admin_buttons.html:190
 msgid "share"
 msgstr "compartir"
 
-#: app/templates/components/admin_buttons.html:181
+#: app/templates/components/admin_buttons.html:199
 msgid "undo"
 msgstr "deshacer"
 
-#: app/templates/components/admin_buttons.html:188
+#: app/templates/components/admin_buttons.html:206
 msgid "reply"
 msgstr "responder"
 
-#: app/templates/components/admin_buttons.html:196
+#: app/templates/components/admin_buttons.html:213
+msgid "quote"
+msgstr "citar"
+
+#: app/templates/components/admin_buttons.html:221
 msgid "direct message"
 msgstr "mensaje directo"
 
-#: app/templates/components/admin_buttons.html:203
+#: app/templates/components/admin_buttons.html:228
 msgid "mention"
 msgstr "mencionar"
 
-#: app/templates/components/admin_buttons.html:210
+#: app/templates/components/admin_buttons.html:235
 msgid "profile"
 msgstr "perfil"
 
-#: app/templates/components/admin_buttons.html:218
+#: app/templates/components/admin_buttons.html:243
 msgid "expand"
 msgstr "ampliar"
 
-#: app/templates/components/admin_buttons.html:227
+#: app/templates/components/admin_buttons.html:252
 msgid "fetch replies"
 msgstr "obtener respuestas"
 

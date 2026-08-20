@@ -1,6 +1,8 @@
 """Actions related to the AP inbox/outbox."""
 
+import asyncio
 import datetime
+import html
 import time
 import uuid
 from collections import defaultdict
@@ -62,9 +64,12 @@ AnyboxObject = activitypub.models.InboxObject | activitypub.models.OutboxObject
 
 def is_notification_enabled(notification_type: models.NotificationType) -> bool:
     """Checks if a given notification type is enabled."""
-    if notification_type.value == "pending_incoming_follower":
-        # This one cannot be disabled as it would prevent manually reviewing
-        # follow requests.
+    if notification_type.value in (
+        "pending_incoming_follower",
+        "pending_incoming_quote_request",
+    ):
+        # These cannot be disabled as it would prevent manually reviewing
+        # follow/quote requests.
         return True
     if notification_type.value in config.CONFIG.disabled_notifications:
         return False
@@ -286,6 +291,201 @@ async def send_delete(db_session: AsyncSession, ap_object_id: str) -> None:
             logger.info(f"{outbox_object_to_delete.in_reply_to} not found")
 
     await db_session.commit()
+
+
+# Ceiling on a single quote-related fetch. The inbox worker already caps a
+# whole activity at 60s, but that is 4x SQLite's `busy_timeout`, and these
+# fetches happen with the writer lock held -- see `_process_inbound_quote`.
+_QUOTE_FETCH_TIMEOUT_SECONDS = 5.0
+
+
+def _quote_wire_fields(quoted_ap_id: str) -> dict[str, Any]:
+    """The wire-format keys advertising a quote: FEP-044f's `quote` plus the
+    legacy aliases (Fedibird/Mastodon/Misskey) -- see PLAN-quote.md's wire
+    format section. Emitting all of them means a quote still shows up (as a
+    quote, not just the `RE:` link) on servers that only understand one.
+    """
+    return {
+        "quote": quoted_ap_id,
+        "quoteUri": quoted_ap_id,
+        "quoteUrl": quoted_ap_id,
+        "_misskey_quote": quoted_ap_id,
+    }
+
+
+def _quote_tag(quoted_ap_id: str) -> ap.RawObject:
+    """FEP-e232 `tag` Link entry, the alias Misskey/Akkoma actually look at."""
+    return {
+        "type": "Link",
+        "mediaType": f'application/ld+json; profile="{ap.AS_CTX}"',
+        "rel": ap.MISSKEY_QUOTE_TAG_REL,
+        "href": quoted_ap_id,
+    }
+
+
+def _quote_reply_link_html(quoted_url: str) -> str:
+    """A visible `RE: <url>` link, appended to the content -- the same
+    degrade-to-a-link behavior Mastodon uses, so a quote posted from here
+    still makes sense on a server that understands none of the above.
+
+    `quoted_url` comes from a remote object's `url`/`id` (or an admin-supplied
+    `quote_of`), so it's escaped and scheme-checked before being embedded in
+    raw HTML: unescaped, a hostile value could break out of the `href`
+    attribute, and an unchecked scheme could turn it into a `javascript:` link.
+    """
+    if not quoted_url.startswith(("http://", "https://")):
+        return ""
+    safe_url = html.escape(quoted_url, quote=True)
+    return (
+        '<p><span class="quote-inline">RE: '
+        f'<a href="{safe_url}" rel="noopener">{safe_url}</a></span></p>'
+    )
+
+
+def _quote_interaction_policy(visibility: ap.VisibilityEnum) -> ap.RawObject:
+    """Advertise who's auto-approved to quote a post, from `quote_policy`
+    (see PLAN-quote.md's inbound policy section, which this must stay
+    consistent with -- `_handle_quote_request_activity` is what actually
+    enforces it for requests *we* receive).
+
+    `automaticApproval` only ever names the local followers collection, the
+    public collection, or (for "manual"/"nobody", where nobody but the
+    author is ever auto-approved) the author's own id -- never an empty
+    list, which `_remote_quote_policy_forbids` relies on to tell "nobody"
+    apart from "no policy published at all".
+    """
+    policy = config.CONFIG.quote_policy
+    if policy == "public" and visibility in (
+        ap.VisibilityEnum.PUBLIC,
+        ap.VisibilityEnum.UNLISTED,
+    ):
+        automatic_approval = [ap.AS_PUBLIC]
+    elif policy == "followers":
+        automatic_approval = [f"{BASE_URL}/followers"]
+    else:
+        automatic_approval = [ID]
+
+    return {
+        "interactionPolicy": {"canQuote": {"automaticApproval": automatic_approval}}
+    }
+
+
+def _remote_quote_policy_forbids(quoted_object: AnyboxObject) -> bool:
+    """True when the quoted object's own `interactionPolicy` names only its
+    author as auto-approved, i.e. nobody else can ever be auto-approved to
+    quote it. Sending a `QuoteRequest` in that case can still get a manual
+    approval on servers that support it, but on this instance's own inbound
+    handling (see `_handle_quote_request_activity`) an equivalent request
+    would always be rejected -- so fail the compose here instead of sending
+    a request that (for us, and for any GoToSocial-alike with the same
+    policy) is never going anywhere.
+    """
+    policy = quoted_object.ap_object.get("interactionPolicy")
+    if not isinstance(policy, dict):
+        return False
+
+    can_quote = policy.get("canQuote")
+    if not isinstance(can_quote, dict):
+        return False
+
+    automatic_approval = ap.as_list(can_quote.get("automaticApproval") or [])
+    if not automatic_approval:
+        return False
+
+    approved_ap_ids = {ap.get_id(item) for item in automatic_approval}
+    return approved_ap_ids == {quoted_object.ap_actor_id}
+
+
+async def _resolve_quoted_object(
+    db_session: AsyncSession, quote_of: str
+) -> AnyboxObject:
+    """Fetch-then-reload idiom from `send_like`: an unknown quoted object is
+    saved to the inbox and re-queried rather than used in place, since
+    lazy-loading its actor mid-transaction fails under the async engine.
+    """
+    quoted_object = await get_anybox_object_by_ap_id(db_session, quote_of)
+    if not quoted_object:
+        logger.info(f"Saving unknwown object {quote_of}")
+        raw_object = await ap.fetch(quote_of)
+        await save_object_to_inbox(db_session, raw_object)
+        await db_session.commit()
+        quoted_object = await get_anybox_object_by_ap_id(db_session, quote_of)
+        if not quoted_object:
+            raise ValueError("Should never happen")
+
+    return quoted_object
+
+
+async def _mint_quote_authorization(
+    db_session: AsyncSession,
+    quoting_object_ap_id: str,
+    quoted_object_ap_id: str,
+    relates_to_inbox_object_id: int | None = None,
+) -> activitypub.models.OutboxObject:
+    """Mint a `QuoteAuthorization` (FEP-044f's "stamp"). Reuses OutboxObject
+    rather than a dedicated table -- see PLAN-quote.md's data model notes --
+    which makes it servable at its own `/o/{public_id}` for free.
+
+    The spec forbids embedding the quoting/quoted objects in the stamp
+    (information leakage), so both stay bare AP ids.
+    """
+    stamp_id = allocate_outbox_id()
+    stamp = {
+        "@context": ap.AS_EXTENDED_CTX,
+        "id": outbox_object_id(stamp_id),
+        "type": "QuoteAuthorization",
+        "attributedTo": ID,
+        "interactingObject": quoting_object_ap_id,
+        "interactionTarget": quoted_object_ap_id,
+    }
+    stamp_object = await save_outbox_object(
+        db_session,
+        stamp_id,
+        stamp,
+        relates_to_inbox_object_id=relates_to_inbox_object_id,
+    )
+    if not stamp_object.id:
+        raise ValueError("Should never happen")
+
+    # Not a reply, so save_outbox_object would default this to False; a
+    # stamp is metadata, not something to show on the homepage.
+    stamp_object.is_hidden_from_homepage = True
+
+    return stamp_object
+
+
+async def send_quote_request(
+    db_session: AsyncSession,
+    quote_outbox_object: activitypub.models.OutboxObject,
+    quoted_object: activitypub.models.InboxObject,
+) -> None:
+    """Ask the quoted post's author for a `QuoteAuthorization`, modelled on
+    `send_like`: a single-inbox delivery, no `_compute_recipients`.
+    """
+    quote_request_id = allocate_outbox_id()
+    quote_request = {
+        "@context": ap.AS_EXTENDED_CTX,
+        "id": outbox_object_id(quote_request_id),
+        "type": "QuoteRequest",
+        "actor": ID,
+        "object": quoted_object.ap_id,
+        "instrument": quote_outbox_object.ap_id,
+    }
+    outbox_object = await save_outbox_object(
+        db_session,
+        quote_request_id,
+        quote_request,
+        # So the Accept/Reject handler (which resolves `relates_to_outbox_object`
+        # from the *QuoteRequest's own ap_id*, addressed by the incoming Accept)
+        # can navigate back to the quote post.
+        relates_to_outbox_object_id=quote_outbox_object.id,
+    )
+    if not outbox_object.id:
+        raise ValueError("Should never happen")
+
+    await new_outgoing_activity(
+        db_session, quoted_object.actor.inbox_url, outbox_object.id
+    )
 
 
 async def send_like(db_session: AsyncSession, ap_object_id: str) -> None:
@@ -632,6 +832,7 @@ async def send_create(
     poll_duration_in_minutes: int | None = None,
     name: str | None = None,
     language: str | None = None,
+    quote_of: str | None = None,
 ) -> tuple[str, activitypub.models.OutboxObject]:
     note_id = allocate_outbox_id()
     published = now().replace(microsecond=0).isoformat().replace("+00:00", "Z")
@@ -657,6 +858,17 @@ async def send_create(
         else:
             context = in_reply_to_object.ap_context
             conversation = in_reply_to_object.ap_context
+
+    quoted_object: AnyboxObject | None = None
+    quote_state: str | None = None
+    if quote_of:
+        quoted_object = await _resolve_quoted_object(db_session, quote_of)
+        if not quoted_object.is_from_outbox and _remote_quote_policy_forbids(
+            quoted_object
+        ):
+            raise ValueError(f"{quote_of} does not allow being quoted")
+        quote_state = "accepted" if quoted_object.is_from_outbox else "pending"
+        content += _quote_reply_link_html(quoted_object.url or quoted_object.ap_id)
 
     for upload, filename, alt_text in uploads:
         attachments.append(upload_to_attachment(upload, filename, alt_text))
@@ -726,6 +938,12 @@ async def send_create(
         if ap_type == "Article" and name:
             lang_maps["nameMap"] = {language: name}
 
+    tag_list = dedup_tags(tags)
+    quote_wire_fields: dict[str, Any] = {}
+    if quoted_object:
+        tag_list = tag_list + [_quote_tag(quoted_object.ap_id)]
+        quote_wire_fields = _quote_wire_fields(quoted_object.ap_id)
+
     obj = {
         "@context": ap.AS_EXTENDED_CTX,
         "type": ap_type,
@@ -738,13 +956,15 @@ async def send_create(
         "context": context,
         "conversation": context,
         "url": url,
-        "tag": dedup_tags(tags),
+        "tag": tag_list,
         "summary": content_warning,
         "inReplyTo": in_reply_to,
         "sensitive": is_sensitive,
         "attachment": attachments,
         **extra_obj_attrs,  # type: ignore
         **lang_maps,  # type: ignore
+        **quote_wire_fields,  # type: ignore
+        **_quote_interaction_policy(visibility),  # type: ignore
     }
     outbox_object = await save_outbox_object(
         db_session,
@@ -756,6 +976,21 @@ async def send_create(
     )
     if not outbox_object.id:
         raise ValueError("Should never happen")
+
+    if quoted_object:
+        outbox_object.quote_ap_id = quoted_object.ap_id
+        outbox_object.quote_state = quote_state
+        if quoted_object.is_from_outbox:
+            # Quoting our own post: no consent to ask, mint the stamp locally.
+            stamp_object = await _mint_quote_authorization(
+                db_session,
+                quoting_object_ap_id=outbox_object.ap_id,
+                quoted_object_ap_id=quoted_object.ap_id,
+            )
+            outbox_object.quote_authorization_ap_id = stamp_object.ap_id
+            updated_note = dict(outbox_object.ap_object)
+            updated_note["quoteAuthorization"] = stamp_object.ap_id
+            outbox_object.ap_object = updated_note
 
     for tag in tags:
         if tag["type"] == "Hashtag":
@@ -773,6 +1008,9 @@ async def send_create(
             upload_id=upload.id,
         )
         db_session.add(outbox_object_attachment)
+
+    if quoted_object and isinstance(quoted_object, activitypub.models.InboxObject):
+        await send_quote_request(db_session, outbox_object, quoted_object)
 
     recipients = await _compute_recipients(db_session, obj)
     for rcp in recipients:
@@ -892,6 +1130,8 @@ async def send_update(
     content_warning: Any = _UNSET,
     is_sensitive: Any = _UNSET,
     uploads: Any = _UNSET,
+    *,
+    _commit: bool = True,
 ) -> str:
     outbox_object = await get_outbox_object_by_ap_id(db_session, ap_id)
     if not outbox_object:
@@ -945,6 +1185,22 @@ async def send_update(
                 )
             )
 
+    # send_create() spreads extra keys (poll answers, language maps, and the
+    # quote fields below) into the note it builds; this rebuilds the note as a
+    # fresh literal dict, so anything not re-added here is silently dropped on
+    # the first edit. Quote fields are re-added below -- the poll/language-map
+    # fields have the same latent gap, left alone as out of scope here.
+    tag_list = dedup_tags(tags)
+    quote_wire_fields: dict[str, Any] = {}
+    if outbox_object.quote_ap_id:
+        tag_list = tag_list + [_quote_tag(outbox_object.quote_ap_id)]
+        quote_wire_fields = _quote_wire_fields(outbox_object.quote_ap_id)
+        if outbox_object.quote_authorization_ap_id:
+            quote_wire_fields["quoteAuthorization"] = (
+                outbox_object.quote_authorization_ap_id
+            )
+        content += _quote_reply_link_html(outbox_object.quote_ap_id)
+
     note = {
         "@context": ap.AS_EXTENDED_CTX,
         "type": outbox_object.ap_type,
@@ -957,12 +1213,14 @@ async def send_update(
         "context": outbox_object.ap_context,
         "conversation": outbox_object.ap_context,
         "url": outbox_object.url,
-        "tag": dedup_tags(tags),
+        "tag": tag_list,
         "summary": resolved_content_warning,
         "inReplyTo": outbox_object.in_reply_to,
         "sensitive": resolved_is_sensitive,
         "attachment": attachments,
         "updated": updated,
+        **quote_wire_fields,  # type: ignore
+        **_quote_interaction_policy(outbox_object.visibility),  # type: ignore
     }
     if outbox_object.ap_type == "Article" and name:
         note["name"] = name
@@ -1004,7 +1262,8 @@ async def send_update(
                     webmention_target=target,
                 )
 
-    await db_session.commit()
+    if _commit:
+        await db_session.commit()
     return outbox_object.public_id  # type: ignore
 
 
@@ -1126,6 +1385,7 @@ async def get_notification_by_id(
                 joinedload(models.Notification.inbox_object).options(
                     joinedload(activitypub.models.InboxObject.actor)
                 ),
+                joinedload(models.Notification.outbox_object),
             )
         )
     ).scalar_one_or_none()  # type: ignore
@@ -1238,6 +1498,29 @@ async def get_anybox_object_by_ap_id(
         return await get_outbox_object_by_ap_id(db_session, ap_id)
     else:
         return await get_inbox_object_by_ap_id(db_session, ap_id)
+
+
+async def get_quoted_object_for_display(
+    db_session: AsyncSession, obj: AnyboxObject
+) -> AnyboxObject | None:
+    """The quoted object, only when the quote is authorized.
+
+    See PLAN-quote.md's rendering section: an unverified, pending or
+    rejected quote shows nothing beyond the `RE:` link already in the
+    content, so there's nothing to fetch for those.
+    """
+    if not obj.quote_ap_id:
+        return None
+
+    is_authorized = (
+        obj.quote_state == "accepted"
+        if isinstance(obj, activitypub.models.OutboxObject)
+        else bool(obj.quote_is_verified)
+    )
+    if not is_authorized:
+        return None
+
+    return await get_anybox_object_by_ap_id(db_session, obj.quote_ap_id)
 
 
 async def get_inbox_objects_by_ap_ids(
@@ -1486,6 +1769,27 @@ async def _get_replies_count(
                 == replied_object_ap_id,
                 activitypub.models.OutboxObject.is_deleted.is_(False),
             )
+        )
+    )
+
+
+async def _get_quotes_count(
+    db_session: AsyncSession,
+    quoted_object_ap_id: str,
+) -> int:
+    """Authorized remote quotes of one of our posts.
+
+    Recomputed rather than incremented, like `_get_replies_count`: a counter
+    that is only ever bumped drifts upward for good the first time a quoting
+    post is deleted. Inbound-only by design (a self-quote is authorized but
+    not a *remote* quote), which keeps this to a single lookup on
+    `ix_inbox_quote_ap_id`.
+    """
+    return await db_session.scalar(
+        select(func.count(activitypub.models.InboxObject.id)).where(
+            activitypub.models.InboxObject.quote_ap_id == quoted_object_ap_id,
+            activitypub.models.InboxObject.quote_is_verified.is_(True),
+            activitypub.models.InboxObject.is_deleted.is_(False),
         )
     )
 
@@ -1751,6 +2055,26 @@ async def _revert_side_effect_for_deleted_object(
                     .values(replies_count=new_replies_count - 1)
                 )
 
+    # Same for the quotes counter. `is_deleted` is set by the caller *after*
+    # this runs, so the deleted quote is still counted here -- hence the -1,
+    # matching the replies/likes/announces blocks above.
+    if deleted_ap_object.quote_ap_id and deleted_ap_object.quote_is_verified:
+        quoted_object = await get_outbox_object_by_ap_id(
+            db_session,
+            deleted_ap_object.quote_ap_id,
+        )
+        if quoted_object:
+            quotes_count = await _get_quotes_count(
+                db_session, deleted_ap_object.quote_ap_id
+            )
+            await db_session.execute(
+                update(activitypub.models.OutboxObject)
+                .where(
+                    activitypub.models.OutboxObject.id == quoted_object.id,
+                )
+                .values(quotes_count=quotes_count - 1)
+            )
+
     if deleted_ap_object.ap_type == "Like" and deleted_ap_object.activity_object_ap_id:
         related_object = await get_outbox_object_by_ap_id(
             db_session,
@@ -1964,6 +2288,365 @@ async def _send_reject(
             actor_id=from_actor.id,
         )
         db_session.add(notif)
+
+
+async def _verify_quote_authorization(
+    db_session: AsyncSession,
+    quote_authorization_ap_id: str,
+    quoting_object_ap_id: str,
+    quoted_object_ap_id: str,
+    quoted_actor_ap_id: str,
+) -> bool:
+    """FEP-044f stamp verification (see PLAN-quote.md's wire format section):
+    dereference it -- or read it straight from our own outbox when we're the
+    one who minted it -- and check every field matches what it's being
+    presented for, plus that its own host matches the quoted author's: a
+    stamp minted by anyone else is worthless.
+    """
+    if quote_authorization_ap_id.startswith(BASE_URL):
+        stamp_object = await get_outbox_object_by_ap_id(
+            db_session, quote_authorization_ap_id
+        )
+        if not stamp_object:
+            return False
+        stamp = stamp_object.ap_object
+    else:
+        try:
+            # Bounded explicitly: this runs with the inbox write transaction
+            # open (see `_process_inbound_quote`), and `ap.fetch` passes no
+            # timeout of its own.
+            stamp = await asyncio.wait_for(
+                ap.fetch(quote_authorization_ap_id),
+                timeout=_QUOTE_FETCH_TIMEOUT_SECONDS,
+            )
+        except Exception:
+            logger.exception(f"Failed to fetch stamp {quote_authorization_ap_id}")
+            return False
+
+    try:
+        if ap.as_list(stamp.get("type"))[0] != "QuoteAuthorization":
+            return False
+        if (
+            "attributedTo" not in stamp
+            or ap.get_id(stamp["attributedTo"]) != quoted_actor_ap_id
+        ):
+            return False
+        if (
+            "interactingObject" not in stamp
+            or ap.get_id(stamp["interactingObject"]) != quoting_object_ap_id
+        ):
+            return False
+        if (
+            "interactionTarget" not in stamp
+            or ap.get_id(stamp["interactionTarget"]) != quoted_object_ap_id
+        ):
+            return False
+    except (ValueError, IndexError):
+        return False
+
+    return (
+        urlparse(quote_authorization_ap_id).hostname
+        == urlparse(quoted_actor_ap_id).hostname
+    )
+
+
+async def _accept_quote_request(
+    db_session: AsyncSession,
+    from_actor: activitypub.models.Actor,
+    quote_request_activity: activitypub.models.InboxObject,
+    quoted_object: activitypub.models.OutboxObject,
+    quoting_ap_id: str,
+) -> None:
+    stamp_object = await _mint_quote_authorization(
+        db_session,
+        quoting_object_ap_id=quoting_ap_id,
+        quoted_object_ap_id=quoted_object.ap_id,
+        relates_to_inbox_object_id=quote_request_activity.id,
+    )
+
+    reply_id = allocate_outbox_id()
+    reply = {
+        "@context": ap.AS_EXTENDED_CTX,
+        "id": outbox_object_id(reply_id),
+        "type": "Accept",
+        "actor": ID,
+        "object": quote_request_activity.ap_id,
+        "result": stamp_object.ap_id,
+    }
+    outbox_activity = await save_outbox_object(
+        db_session,
+        reply_id,
+        reply,
+        relates_to_inbox_object_id=quote_request_activity.id,
+    )
+    if not outbox_activity.id:
+        raise ValueError("Should never happen")
+
+    await new_outgoing_activity(db_session, from_actor.inbox_url, outbox_activity.id)
+
+
+async def _reject_quote_request(
+    db_session: AsyncSession,
+    from_actor: activitypub.models.Actor,
+    quote_request_activity: activitypub.models.InboxObject,
+) -> None:
+    reply_id = allocate_outbox_id()
+    reply = {
+        "@context": ap.AS_CTX,
+        "id": outbox_object_id(reply_id),
+        "type": "Reject",
+        "actor": ID,
+        "object": quote_request_activity.ap_id,
+    }
+    outbox_activity = await save_outbox_object(
+        db_session,
+        reply_id,
+        reply,
+        relates_to_inbox_object_id=quote_request_activity.id,
+    )
+    if not outbox_activity.id:
+        raise ValueError("Should never happen")
+
+    await new_outgoing_activity(db_session, from_actor.inbox_url, outbox_activity.id)
+
+
+async def _handle_quote_request_activity(
+    db_session: AsyncSession,
+    from_actor: activitypub.models.Actor,
+    quote_request_activity: activitypub.models.InboxObject,
+) -> None:
+    """A remote actor asks to quote one of the owner's posts (FEP-044f)."""
+    quoted_ap_id = quote_request_activity.activity_object_ap_id
+    if not quoted_ap_id or not quoted_ap_id.startswith(BASE_URL):
+        logger.warning(f"Received a QuoteRequest for a foreign object {quoted_ap_id=}")
+        await db_session.delete(quote_request_activity)
+        return
+
+    quoted_object = await get_outbox_object_by_ap_id(db_session, quoted_ap_id)
+    if not quoted_object or quoted_object.is_deleted:
+        logger.warning(f"Received a QuoteRequest for an unknown object {quoted_ap_id}")
+        await db_session.delete(quote_request_activity)
+        return
+
+    instrument = quote_request_activity.ap_object.get("instrument")
+    quoting_ap_id = ap.get_id(instrument) if instrument else None
+    if not quoting_ap_id:
+        logger.warning(
+            f"Received a QuoteRequest with no instrument: {quote_request_activity.ap_id}"
+        )
+        await db_session.delete(quote_request_activity)
+        return
+
+    policy = config.CONFIG.quote_policy
+    is_public_target = quoted_object.visibility in (
+        ap.VisibilityEnum.PUBLIC,
+        ap.VisibilityEnum.UNLISTED,
+    )
+
+    if policy == "nobody" or not is_public_target:
+        await _reject_quote_request(db_session, from_actor, quote_request_activity)
+        return
+
+    if policy == "public":
+        await _accept_quote_request(
+            db_session,
+            from_actor,
+            quote_request_activity,
+            quoted_object,
+            quoting_ap_id,
+        )
+        return
+
+    if policy == "followers":
+        is_follower = (
+            await db_session.scalars(
+                select(activitypub.models.Follower).where(
+                    activitypub.models.Follower.actor_id == from_actor.id
+                )
+            )
+        ).one_or_none()
+        if is_follower:
+            await _accept_quote_request(
+                db_session,
+                from_actor,
+                quote_request_activity,
+                quoted_object,
+                quoting_ap_id,
+            )
+        else:
+            await _reject_quote_request(db_session, from_actor, quote_request_activity)
+        return
+
+    # policy == "manual": surface a notification and let the owner decide,
+    # like a follow request (`send_quote_accept`/`send_quote_reject`).
+    if is_notification_enabled(models.NotificationType.PENDING_INCOMING_QUOTE_REQUEST):
+        notif = models.Notification(
+            notification_type=models.NotificationType.PENDING_INCOMING_QUOTE_REQUEST,
+            actor_id=from_actor.id,
+            inbox_object_id=quote_request_activity.id,
+            outbox_object_id=quoted_object.id,
+        )
+        db_session.add(notif)
+
+
+async def _get_incoming_quote_request_from_notification_id(
+    db_session: AsyncSession,
+    notification_id: int,
+) -> tuple[
+    models.Notification,
+    activitypub.models.InboxObject,
+    activitypub.models.OutboxObject,
+]:
+    notif = await get_notification_by_id(db_session, notification_id)
+    if notif is None:
+        raise ValueError(f"Notification {notification_id=} not found")
+
+    if notif.inbox_object is None or notif.outbox_object is None:
+        raise ValueError("Should never happen")
+
+    if (ap_type := notif.inbox_object.ap_type) != "QuoteRequest":
+        raise ValueError(f"Unexpected {ap_type=}")
+
+    return notif, notif.inbox_object, notif.outbox_object
+
+
+async def send_quote_accept(db_session: AsyncSession, notification_id: int) -> None:
+    (
+        notif,
+        quote_request_activity,
+        quoted_object,
+    ) = await _get_incoming_quote_request_from_notification_id(
+        db_session, notification_id
+    )
+
+    instrument = quote_request_activity.ap_object.get("instrument")
+    quoting_ap_id = ap.get_id(instrument) if instrument else None
+    if not quoting_ap_id:
+        raise ValueError("Should never happen")
+
+    await _accept_quote_request(
+        db_session,
+        quote_request_activity.actor,
+        quote_request_activity,
+        quoted_object,
+        quoting_ap_id,
+    )
+    notif.is_accepted = True
+
+    await db_session.commit()
+
+
+async def send_quote_reject(db_session: AsyncSession, notification_id: int) -> None:
+    (
+        notif,
+        quote_request_activity,
+        _quoted_object,
+    ) = await _get_incoming_quote_request_from_notification_id(
+        db_session, notification_id
+    )
+
+    await _reject_quote_request(
+        db_session, quote_request_activity.actor, quote_request_activity
+    )
+    notif.is_rejected = True
+
+    await db_session.commit()
+
+
+async def _handle_quote_request_accept_or_reject(
+    db_session: AsyncSession,
+    accept_or_reject_activity: activitypub.models.InboxObject,
+    quote_request_outbox_object: activitypub.models.OutboxObject,
+) -> None:
+    """Our own `QuoteRequest` got an `Accept` (carrying the stamp as
+    `result`) or a `Reject` back.
+    """
+    quote_outbox_object = quote_request_outbox_object.relates_to_outbox_object
+    if not quote_outbox_object:
+        logger.warning(
+            f"QuoteRequest {quote_request_outbox_object.ap_id} has no related "
+            "quote post"
+        )
+        return
+
+    if quote_outbox_object.quote_state != "pending":
+        logger.info(
+            f"Quote {quote_outbox_object.ap_id} is already "
+            f"{quote_outbox_object.quote_state}, ignoring"
+        )
+        return
+
+    quoted_ap_id = quote_outbox_object.quote_ap_id
+    if not quoted_ap_id:
+        raise ValueError("Should never happen")
+
+    # The Accept/Reject must come from the quoted post's own author -- not
+    # just from whoever sent an activity naming our QuoteRequest. Otherwise
+    # any third party could self-issue a stamp (attributedTo themselves) and
+    # have it verify, since _verify_quote_authorization only checks that the
+    # stamp's attributedTo/host match whatever `quoted_actor_ap_id` it's
+    # given. Resolving that independently from the quoted post itself (which
+    # is already in our inbox/outbox from when the QuoteRequest was sent) is
+    # what makes that check meaningful.
+    quoted_object = await get_anybox_object_by_ap_id(db_session, quoted_ap_id)
+    quoted_actor_ap_id = quoted_object.ap_actor_id if quoted_object else None
+    if (
+        not quoted_actor_ap_id
+        or accept_or_reject_activity.actor.ap_id != quoted_actor_ap_id
+    ):
+        logger.warning(
+            f"Ignoring {accept_or_reject_activity.ap_type} for QuoteRequest "
+            f"{quote_request_outbox_object.ap_id} from "
+            f"{accept_or_reject_activity.actor.ap_id}, which is not the "
+            f"quoted post's author ({quoted_actor_ap_id})"
+        )
+        return
+
+    if accept_or_reject_activity.ap_type == "Reject":
+        quote_outbox_object.quote_state = "rejected"
+        return
+
+    result = accept_or_reject_activity.ap_object.get("result")
+    if not result:
+        logger.warning(
+            "Accept for QuoteRequest "
+            f"{quote_request_outbox_object.ap_id} has no result, treating as "
+            "a Reject"
+        )
+        quote_outbox_object.quote_state = "rejected"
+        return
+
+    stamp_ap_id = ap.get_id(result)
+    is_verified = await _verify_quote_authorization(
+        db_session,
+        quote_authorization_ap_id=stamp_ap_id,
+        quoting_object_ap_id=quote_outbox_object.ap_id,
+        quoted_object_ap_id=quoted_ap_id,
+        quoted_actor_ap_id=quoted_actor_ap_id,
+    )
+    if not is_verified:
+        logger.warning(f"Invalid QuoteAuthorization {stamp_ap_id}")
+        quote_outbox_object.quote_state = "rejected"
+        return
+
+    quote_outbox_object.quote_authorization_ap_id = stamp_ap_id
+    quote_outbox_object.quote_state = "accepted"
+
+    # Let followers know the quote is now authorized. `_commit=False`: this
+    # runs from inside `save_to_inbox`'s dispatch, which commits once at the
+    # end -- internal helpers here don't commit on their own.
+    if not quote_outbox_object.source:
+        # `send_update` re-renders the note from its source, so an empty one
+        # would blank the post we just got authorized. Fail loudly instead:
+        # the worker rolls back and retries, leaving the quote pending.
+        raise ValueError(f"{quote_outbox_object.ap_id} has no source")
+
+    await send_update(
+        db_session,
+        quote_outbox_object.ap_id,
+        quote_outbox_object.source,
+        _commit=False,
+    )
 
 
 async def remove_follower(
@@ -2358,6 +3041,7 @@ async def _process_note_object(
         is_hidden_from_stream=not stream_visibility_callback(object_info),
         # We may already have some replies in DB
         replies_count=await _get_replies_count(db_session, ro.ap_id),
+        quote_ap_id=ro.quote_ap_id,
     )
 
     db_session.add(inbox_object)
@@ -2365,6 +3049,9 @@ async def _process_note_object(
     await db_session.refresh(inbox_object)
 
     parent_activity.relates_to_inbox_object_id = inbox_object.id
+
+    if inbox_object.quote_ap_id:
+        await _process_inbound_quote(db_session, inbox_object, ro)
 
     if inbox_object.in_reply_to:
         replied_object = await get_anybox_object_by_ap_id(
@@ -2437,6 +3124,78 @@ async def _process_note_object(
             inbox_object_id=inbox_object.id,
         )
         db_session.add(notif)
+
+
+async def _process_inbound_quote(
+    db_session: AsyncSession,
+    inbox_object: activitypub.models.InboxObject,
+    ro: RemoteObject,
+) -> None:
+    """A remote quote arrived (FEP-044f or a legacy alias, per
+    `ap_object.Object.quote_ap_id`). Verify any presented stamp, persist the
+    result, and -- when there is a stamp to verify -- best-effort fetch the
+    quoted object so it can be rendered. A legacy-alias quote with no stamp is
+    stored, but stays unverified (and so is never rendered).
+    """
+    quoted_ap_id = inbox_object.quote_ap_id
+    if not quoted_ap_id:
+        raise ValueError("Should never happen")
+
+    quote_authorization_ap_id = ro.quote_authorization_ap_id
+
+    quoted_object = await get_anybox_object_by_ap_id(db_session, quoted_ap_id)
+    if not quoted_object and quote_authorization_ap_id:
+        # Only fetched when there's a stamp to check it against. Without one
+        # the quote stays unverified, and an unverified quote is never shown
+        # (`get_quoted_object_for_display`, the Mastodon `_serialize_quote`),
+        # so fetching its target would be work nothing reads.
+        #
+        # Bounded and savepointed on purpose. `save_to_inbox` inserts the
+        # activity before dispatching here, so SQLite's writer lock is already
+        # held: every second spent in here is a second the web app cannot
+        # write (`busy_timeout` is 15s). And `save_object_to_inbox` fans out
+        # network calls of its own -- the actor, the conversation root, and an
+        # OpenGraph scrape per link in the quoted post -- off a URL a remote
+        # actor chose for us. `begin_nested` means a failure rolls back to the
+        # savepoint and leaves the session usable, so a broken quote target
+        # costs the enrichment and not the whole inbound activity.
+        try:
+            async with db_session.begin_nested():
+                raw_quoted_object = await asyncio.wait_for(
+                    ap.fetch(quoted_ap_id), timeout=_QUOTE_FETCH_TIMEOUT_SECONDS
+                )
+                await save_object_to_inbox(db_session, raw_quoted_object)
+            quoted_object = await get_anybox_object_by_ap_id(db_session, quoted_ap_id)
+        except Exception:
+            logger.exception(f"Failed to fetch quoted object {quoted_ap_id}")
+
+    is_verified = False
+    if quote_authorization_ap_id and quoted_object and quoted_object.ap_actor_id:
+        is_verified = await _verify_quote_authorization(
+            db_session,
+            quote_authorization_ap_id=quote_authorization_ap_id,
+            quoting_object_ap_id=inbox_object.ap_id,
+            quoted_object_ap_id=quoted_ap_id,
+            quoted_actor_ap_id=quoted_object.ap_actor_id,
+        )
+
+    inbox_object.quote_authorization_ap_id = quote_authorization_ap_id
+    inbox_object.quote_is_verified = is_verified
+
+    if is_verified and quoted_object and quoted_object.is_from_outbox:
+        # Flushed first so the recompute below sees this quote.
+        await db_session.flush()
+        quoted_object.quotes_count = await _get_quotes_count(  # type: ignore
+            db_session, quoted_ap_id
+        )
+        if is_notification_enabled(models.NotificationType.QUOTE):
+            notif = models.Notification(
+                notification_type=models.NotificationType.QUOTE,
+                actor_id=inbox_object.actor_id,
+                inbox_object_id=inbox_object.id,
+                outbox_object_id=quoted_object.id,
+            )
+            db_session.add(notif)
 
 
 async def _handle_vote_answer(
@@ -2981,6 +3740,10 @@ async def save_to_inbox(
                         logger.info("Removing actor from following")
                         await db_session.delete(maybe_following)
 
+            elif relates_to_outbox_object.ap_type == "QuoteRequest":
+                await _handle_quote_request_accept_or_reject(
+                    db_session, inbox_object, relates_to_outbox_object
+                )
             else:
                 logger.info(
                     "Received an Accept for an unsupported activity: "
@@ -3023,6 +3786,12 @@ async def save_to_inbox(
         )
     elif activity_ro.ap_type == "Flag":
         await _handle_flag_activity(
+            db_session,
+            actor,
+            inbox_object,
+        )
+    elif activity_ro.ap_type == "QuoteRequest":
+        await _handle_quote_request_activity(
             db_session,
             actor,
             inbox_object,

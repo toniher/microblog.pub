@@ -38,6 +38,10 @@ class ActivityPubResponse(JSONResponse):
 AS_CTX = "https://www.w3.org/ns/activitystreams"
 AS_PUBLIC = "https://www.w3.org/ns/activitystreams#Public"
 
+# FEP-e232 `tag` Link rel used by Misskey/Akkoma/Fedibird to advertise a quote
+# to servers that don't understand `quote`/`quoteUri`/`quoteUrl`.
+MISSKEY_QUOTE_TAG_REL = "https://misskey-hub.net/ns#_misskey_quote"
+
 ACTOR_TYPES = ["Application", "Group", "Organization", "Person", "Service"]
 
 AS_EXTENDED_CTX = [
@@ -70,6 +74,26 @@ AS_EXTENDED_CTX = [
         # ostatus
         "ostatus": "http://ostatus.org#",
         "conversation": "ostatus:conversation",
+        # FEP-044f: consent-respecting quote posts
+        "QuoteRequest": "https://w3id.org/fep/044f#QuoteRequest",
+        "QuoteAuthorization": "https://w3id.org/fep/044f#QuoteAuthorization",
+        "quote": {"@id": "https://w3id.org/fep/044f#quote", "@type": "@id"},
+        "quoteAuthorization": {
+            "@id": "https://w3id.org/fep/044f#quoteAuthorization",
+            "@type": "@id",
+        },
+        # GoToSocial interaction policies, used here only to advertise
+        # `canQuote.automaticApproval`
+        "gts": "https://gotosocial.org/ns#",
+        "interactingObject": {"@id": "gts:interactingObject", "@type": "@id"},
+        "interactionTarget": {"@id": "gts:interactionTarget", "@type": "@id"},
+        "interactionPolicy": {"@id": "gts:interactionPolicy", "@type": "@id"},
+        "canQuote": {"@id": "gts:canQuote", "@type": "@id"},
+        "automaticApproval": {"@id": "gts:automaticApproval", "@type": "@id"},
+        # Legacy quote aliases, emitted for Misskey/Akkoma/Fedibird compat
+        "quoteUrl": "as:quoteUrl",
+        "quoteUri": "http://fedibird.com/ns#quoteUri",
+        "_misskey_quote": "https://misskey-hub.net/ns/#_misskey_quote",
     },
 ]
 

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-19 22:27+0200\n"
+"POT-Creation-Date: 2026-08-20 13:06+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,31 +17,31 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: app/admin.py:1438 app/admin.py:1457 app/admin.py:1582
+#: app/admin.py:1494 app/admin.py:1513 app/admin.py:1639
 msgid "Error: object must have a content"
 msgstr ""
 
-#: app/admin.py:1445
+#: app/admin.py:1501
 msgid "Error: invalid language code"
 msgstr ""
 
-#: app/admin.py:1472
+#: app/admin.py:1528
 msgid "Error: file is too large"
 msgstr ""
 
-#: app/admin.py:1480
+#: app/admin.py:1536
 msgid "Error: unable to process upload"
 msgstr ""
 
-#: app/admin.py:1496
+#: app/admin.py:1552
 msgid "Error: Unable to process upload"
 msgstr ""
 
-#: app/config.py:410
+#: app/config.py:422
 msgid "please try again"
 msgstr ""
 
-#: app/config.py:420
+#: app/config.py:432
 #, python-format
 msgid "The security token has expired, %(please_try_again)s"
 msgstr ""
@@ -115,8 +115,8 @@ msgstr ""
 msgid "%(name)s - New"
 msgstr ""
 
-#: app/templates/admin_edit_text.html:19 app/templates/admin_new.html:48
-#: app/templates/admin_new_post.html:53
+#: app/templates/admin_edit_text.html:19 app/templates/admin_new.html:53
+#: app/templates/admin_new_post.html:58
 msgid "Title"
 msgstr ""
 
@@ -143,7 +143,7 @@ msgstr ""
 msgid "shared"
 msgstr ""
 
-#: app/templates/admin_inbox.html:37 app/templates/notifications.html:16
+#: app/templates/admin_inbox.html:37 app/templates/notifications.html:17
 msgid "followed you"
 msgstr ""
 
@@ -169,76 +169,80 @@ msgstr ""
 msgid "In reply to:"
 msgstr ""
 
-#: app/templates/admin_new.html:31 app/templates/admin_new_post.html:36
+#: app/templates/admin_new.html:18 app/templates/admin_new_post.html:21
+msgid "Quoting:"
+msgstr ""
+
+#: app/templates/admin_new.html:36 app/templates/admin_new_post.html:41
 #: app/templates/components/filters.html:22 app/templates/object.html:18
 msgid "Note"
 msgstr ""
 
-#: app/templates/admin_new.html:31 app/templates/admin_new_post.html:36
+#: app/templates/admin_new.html:36 app/templates/admin_new_post.html:41
 #: app/templates/components/filters.html:22
 msgid "Article"
 msgstr ""
 
-#: app/templates/admin_new.html:31 app/templates/admin_new_post.html:36
+#: app/templates/admin_new.html:36 app/templates/admin_new_post.html:41
 #: app/templates/components/filters.html:22
 msgid "Question"
 msgstr ""
 
-#: app/templates/admin_new.html:59 app/templates/admin_new_post.html:64
+#: app/templates/admin_new.html:64 app/templates/admin_new_post.html:69
 msgid "Hey!"
 msgstr ""
 
-#: app/templates/admin_new.html:64 app/templates/admin_new_post.html:71
+#: app/templates/admin_new.html:69 app/templates/admin_new_post.html:76
 msgid "single choice"
 msgstr ""
 
-#: app/templates/admin_new.html:65 app/templates/admin_new_post.html:72
+#: app/templates/admin_new.html:70 app/templates/admin_new_post.html:77
 msgid "multiple choices"
 msgstr ""
 
-#: app/templates/admin_new.html:70 app/templates/admin_new_post.html:77
+#: app/templates/admin_new.html:75 app/templates/admin_new_post.html:82
 msgid "ends in 5 minutes"
 msgstr ""
 
-#: app/templates/admin_new.html:71 app/templates/admin_new_post.html:78
+#: app/templates/admin_new.html:76 app/templates/admin_new_post.html:83
 msgid "ends in 30 minutes"
 msgstr ""
 
-#: app/templates/admin_new.html:72 app/templates/admin_new_post.html:79
+#: app/templates/admin_new.html:77 app/templates/admin_new_post.html:84
 msgid "ends in 1 hour"
 msgstr ""
 
-#: app/templates/admin_new.html:73 app/templates/admin_new_post.html:80
+#: app/templates/admin_new.html:78 app/templates/admin_new_post.html:85
 msgid "ends in 6 hours"
 msgstr ""
 
-#: app/templates/admin_new.html:74 app/templates/admin_new_post.html:81
+#: app/templates/admin_new.html:79 app/templates/admin_new_post.html:86
 msgid "ends in 1 day"
 msgstr ""
 
-#: app/templates/admin_new.html:79 app/templates/admin_new_post.html:86
+#: app/templates/admin_new.html:84 app/templates/admin_new_post.html:91
 #, python-format
 msgid "Option %(n)s, leave empty to disable"
 msgstr ""
 
-#: app/templates/admin_new.html:85 app/templates/admin_new_post.html:92
+#: app/templates/admin_new.html:90 app/templates/admin_new_post.html:97
 msgid "content warning (will mark the post as sensitive)"
 msgstr ""
 
-#: app/templates/admin_new.html:88 app/templates/admin_new_post.html:95
+#: app/templates/admin_new.html:93 app/templates/admin_new_post.html:100
 #, python-format
 msgid "language code (optional, e.g. %(lang)s)"
 msgstr ""
 
-#: app/templates/admin_new.html:88 app/templates/admin_new_post.html:95
+#: app/templates/admin_new.html:93 app/templates/admin_new_post.html:100
 msgid "BCP 47 language code, e.g. en or pt-BR"
 msgstr ""
 
-#: app/templates/admin_new.html:91 app/templates/admin_new_post.html:98
+#: app/templates/admin_new.html:96 app/templates/admin_new_post.html:103
 msgid "Mark attachment(s) as sensitive"
 msgstr ""
 
-#: app/templates/admin_new.html:99 app/templates/admin_new_post.html:106
+#: app/templates/admin_new.html:105 app/templates/admin_new_post.html:112
 msgid "Publish"
 msgstr ""
 
@@ -458,82 +462,90 @@ msgstr ""
 msgid "Unexpected error, please check the logs and report an issue if needed."
 msgstr ""
 
-#: app/templates/notifications.html:7
+#: app/templates/notifications.html:8
 #, python-format
 msgid "%(name)s - Notifications"
 msgstr ""
 
-#: app/templates/notifications.html:19
+#: app/templates/notifications.html:20
 msgid "sent a follow request"
 msgstr ""
 
-#: app/templates/notifications.html:23
+#: app/templates/notifications.html:24
 msgid "unfollowed you"
 msgstr ""
 
-#: app/templates/notifications.html:26
+#: app/templates/notifications.html:27
 msgid "accepted your follow request"
 msgstr ""
 
-#: app/templates/notifications.html:29
+#: app/templates/notifications.html:30
 msgid "rejected your follow request"
 msgstr ""
 
-#: app/templates/components/actor.html:64 app/templates/notifications.html:32
+#: app/templates/components/actor.html:64 app/templates/notifications.html:33
 msgid "blocked you"
 msgstr ""
 
-#: app/templates/notifications.html:35
+#: app/templates/notifications.html:36
 msgid "unblocked you"
 msgstr ""
 
-#: app/templates/notifications.html:38
+#: app/templates/notifications.html:39
 msgid "was blocked"
 msgstr ""
 
-#: app/templates/notifications.html:41
+#: app/templates/notifications.html:42
 msgid "was unblocked"
 msgstr ""
 
 #: app/templates/notifications.html:45
+msgid "asked to quote a post"
+msgstr ""
+
+#: app/templates/notifications.html:58
+msgid "quoted a post"
+msgstr ""
+
+#: app/templates/notifications.html:64
 msgid "sent a report"
 msgstr ""
 
-#: app/templates/notifications.html:56
+#: app/templates/notifications.html:75
 msgid "has moved to"
 msgstr ""
 
-#: app/templates/notifications.html:63
+#: app/templates/notifications.html:82
 msgid "liked a post"
 msgstr ""
 
-#: app/templates/notifications.html:66
+#: app/templates/notifications.html:85
 msgid "unliked a post"
 msgstr ""
 
-#: app/templates/notifications.html:69
+#: app/templates/notifications.html:88
 msgid "shared a post"
 msgstr ""
 
-#: app/templates/notifications.html:72
+#: app/templates/notifications.html:91
 msgid "unshared a post"
 msgstr ""
 
-#: app/templates/notifications.html:75
+#: app/templates/notifications.html:94
 msgid "mentioned you"
 msgstr ""
 
-#: app/templates/notifications.html:82
+#: app/templates/notifications.html:101
 #, python-format
 msgid "new webmention from %(source)s"
 msgstr ""
 
-#: app/templates/notifications.html:90
+#: app/templates/notifications.html:109
 #, python-format
 msgid "updated webmention from %(source)s"
 msgstr ""
 
-#: app/templates/notifications.html:98
+#: app/templates/notifications.html:117
 #, python-format
 msgid "deleted webmention from %(source)s"
 msgstr ""
@@ -607,7 +619,7 @@ msgstr ""
 msgid "Interact with this object"
 msgstr ""
 
-#: app/templates/remote_interact.html:24 app/templates/utils.html:234
+#: app/templates/remote_interact.html:24 app/templates/utils.html:242
 msgid "interact from your instance"
 msgstr ""
 
@@ -619,7 +631,7 @@ msgid ""
 "    </a>"
 msgstr ""
 
-#: app/templates/utils.html:55 app/templates/utils.html:228
+#: app/templates/utils.html:55 app/templates/utils.html:236
 msgid "permalink"
 msgstr ""
 
@@ -631,99 +643,99 @@ msgid ""
 "        </a>"
 msgstr ""
 
-#: app/templates/utils.html:126
+#: app/templates/utils.html:134
 #, python-format
 msgid ""
 "On %(start)s\n"
 "            (ends %(end)s)"
 msgstr ""
 
-#: app/templates/utils.html:135
+#: app/templates/utils.html:143
 msgid "Location"
 msgstr ""
 
-#: app/templates/utils.html:187
+#: app/templates/utils.html:195
 msgid "you voted for this answer"
 msgstr ""
 
-#: app/templates/utils.html:194
+#: app/templates/utils.html:202
 #, python-format
 msgid "%(count)s vote"
 msgid_plural "%(count)s votes"
 msgstr[0] ""
 msgstr[1] ""
 
-#: app/templates/utils.html:206
+#: app/templates/utils.html:214
 msgid "vote"
 msgstr ""
 
-#: app/templates/utils.html:248
+#: app/templates/utils.html:256
 msgid "ended"
 msgstr ""
 
-#: app/templates/utils.html:248
+#: app/templates/utils.html:256
 msgid "ends"
 msgstr ""
 
-#: app/templates/utils.html:255
+#: app/templates/utils.html:263
 #, python-format
 msgid "%(count)s voter"
 msgid_plural "%(count)s voters"
 msgstr[0] ""
 msgstr[1] ""
 
-#: app/templates/utils.html:267
+#: app/templates/utils.html:275
 #, python-format
 msgid "<strong>%(count)s</strong> like"
 msgid_plural "<strong>%(count)s</strong> likes"
 msgstr[0] ""
 msgstr[1] ""
 
-#: app/templates/utils.html:273
+#: app/templates/utils.html:281
 #, python-format
 msgid "<strong>%(count)s</strong> share"
 msgid_plural "<strong>%(count)s</strong> shares"
 msgstr[0] ""
 msgstr[1] ""
 
-#: app/templates/utils.html:279
+#: app/templates/utils.html:287
 #, python-format
 msgid "<strong>%(count)s</strong> webmention"
 msgid_plural "<strong>%(count)s</strong> webmentions"
 msgstr[0] ""
 msgstr[1] ""
 
-#: app/templates/utils.html:288
+#: app/templates/utils.html:296
 #, python-format
 msgid "<strong>%(count)s</strong> reply"
 msgid_plural "<strong>%(count)s</strong> replies"
 msgstr[0] ""
 msgstr[1] ""
 
-#: app/templates/utils.html:327
+#: app/templates/utils.html:341
 msgid "unlike"
 msgstr ""
 
-#: app/templates/utils.html:344
+#: app/templates/utils.html:358
 msgid "unshare"
 msgstr ""
 
-#: app/templates/utils.html:378
+#: app/templates/utils.html:392
 msgid "Likes"
 msgstr ""
 
-#: app/templates/utils.html:387 app/templates/utils.html:404
+#: app/templates/utils.html:401 app/templates/utils.html:418
 #, python-format
 msgid "and %(count)s more."
 msgid_plural "and %(count)s more."
 msgstr[0] ""
 msgstr[1] ""
 
-#: app/templates/utils.html:395
+#: app/templates/utils.html:409
 msgid "Shares"
 msgstr ""
 
-#: app/templates/utils.html:412
+#: app/templates/utils.html:426
 msgid "Webmentions"
 msgstr ""
 
@@ -818,71 +830,83 @@ msgid "reject follow"
 msgstr ""
 
 #: app/templates/components/admin_buttons.html:89
-msgid "like"
+msgid "accept quote"
 msgstr ""
 
 #: app/templates/components/admin_buttons.html:98
-msgid "bookmark"
+msgid "reject quote"
 msgstr ""
 
 #: app/templates/components/admin_buttons.html:107
-msgid "unbookmark"
+msgid "like"
 msgstr ""
 
 #: app/templates/components/admin_buttons.html:116
-msgid "pin"
+msgid "bookmark"
 msgstr ""
 
 #: app/templates/components/admin_buttons.html:125
+msgid "unbookmark"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:134
+msgid "pin"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:143
 msgid "unpin"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:132
+#: app/templates/components/admin_buttons.html:150
 msgid "edit"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:137
+#: app/templates/components/admin_buttons.html:155
 msgid "history"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:145
+#: app/templates/components/admin_buttons.html:163
 msgid "delete"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:154
-#: app/templates/components/admin_buttons.html:163
+#: app/templates/components/admin_buttons.html:172
+#: app/templates/components/admin_buttons.html:181
 msgid "local delete"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:172
+#: app/templates/components/admin_buttons.html:190
 msgid "share"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:181
+#: app/templates/components/admin_buttons.html:199
 msgid "undo"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:188
+#: app/templates/components/admin_buttons.html:206
 msgid "reply"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:196
+#: app/templates/components/admin_buttons.html:213
+msgid "quote"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:221
 msgid "direct message"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:203
+#: app/templates/components/admin_buttons.html:228
 msgid "mention"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:210
+#: app/templates/components/admin_buttons.html:235
 msgid "profile"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:218
+#: app/templates/components/admin_buttons.html:243
 msgid "expand"
 msgstr ""
 
-#: app/templates/components/admin_buttons.html:227
+#: app/templates/components/admin_buttons.html:252
 msgid "fetch replies"
 msgstr ""
 

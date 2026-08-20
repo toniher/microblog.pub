@@ -143,6 +143,30 @@ hides_followers = true
 hides_following = true
 ```
 
+### Quote posts
+
+When a remote server asks to quote one of your posts (FEP-044f), the `quote_policy`
+config item controls how the request is handled:
+
+```toml
+quote_policy = "public"
+```
+
+ - `"public"` (the default) — auto-accept a request targeting a public or unlisted
+   post, reject anything else.
+ - `"followers"` — like `"public"`, but the requester must also be one of your
+   followers.
+ - `"manual"` — every request surfaces as a notification with accept/reject
+   buttons, like an incoming follow request. This one can't be turned off via
+   `disabled_notifications`, for the same reason a pending follow request can't be:
+   it's the only place to act on it.
+ - `"nobody"` — always reject.
+
+Quoting someone else's post from here always sends that server a request first
+(except quoting your own post, which needs no request); the status stays pending
+until they respond. See the [federation guide](../federation.md) for the protocol
+details.
+
 ### Default language
 
 You can set a default language for your instance with the `language_code` config item in
@@ -231,6 +255,7 @@ disabled_notifications = ["like", "announce"]
  - `block`
  - `unblock`
  - `reported`
+ - `quote`
 
 ### Outgoing HTTP connections
 

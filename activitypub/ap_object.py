@@ -273,6 +273,52 @@ class Object:
         return None
 
     @property
+    def quote_ap_id(self) -> str | None:
+        """The post this one quotes, from any of the aliases servers use.
+
+        Checked in order: FEP-044f `quote`, Fedibird `quoteUri`, Mastodon's
+        `quoteUrl`, Misskey's `_misskey_quote`, then a FEP-e232 `tag` Link
+        carrying the Misskey quote `rel`.
+        """
+        for key in ("quote", "quoteUri", "quoteUrl", "_misskey_quote"):
+            raw = self.ap_object.get(key)
+            if not raw:
+                continue
+            for item in ap.as_list(raw):
+                if isinstance(item, str) and item:
+                    return item
+                if isinstance(item, dict):
+                    if item_id := item.get("id"):
+                        return ap.get_id(item_id)
+                    if href := item.get("href"):
+                        return href
+
+        for tag in self.tags:
+            if tag.get("type") != "Link":
+                continue
+            if tag.get("rel") == ap.MISSKEY_QUOTE_TAG_REL and tag.get("href"):
+                return tag["href"]
+
+        return None
+
+    @property
+    def quote_authorization_ap_id(self) -> str | None:
+        raw = self.ap_object.get("quoteAuthorization")
+        if not raw:
+            return None
+
+        for item in ap.as_list(raw):
+            if isinstance(item, str) and item:
+                return item
+            if isinstance(item, dict):
+                if item_id := item.get("id"):
+                    return ap.get_id(item_id)
+                if href := item.get("href"):
+                    return href
+
+        return None
+
+    @property
     def is_local_reply(self) -> bool:
         if not self.in_reply_to:
             return False

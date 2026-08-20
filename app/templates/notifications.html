@@ -1,5 +1,6 @@
 {%- import "utils.html" as utils with context -%}
 {%- import "components/actor.html" as actor_component with context -%}
+{%- import "components/admin_buttons.html" as admin_buttons with context -%}
 {%- import "components/pagination.html" as pagination with context -%}
 {% extends "layout.html" %}
 
@@ -40,6 +41,24 @@
             {% elif notif.notification_type.value == "unblock" %}
                 {{ actor_component.actor_action(url_for("admin_profile"), notif, _("was unblocked"), new_flag=notif.is_new) }}
                 {{ actor_component.display_actor(request, csrf_token, is_admin, notif.actor, actors_metadata) }}
+            {% elif notif.notification_type.value == "pending_incoming_quote_request" %}
+                {{ actor_component.actor_action(url_for("admin_profile"), notif, _("asked to quote a post"), new_flag=notif.is_new) }}
+                {% if notif.outbox_object %}
+                    {{ utils.display_object(notif.outbox_object, is_h_entry=False) }}
+                {% endif %}
+                {% if notif.is_accepted is none and notif.is_rejected is none %}
+                <nav>
+                    <ul>
+                        <li>{{ admin_buttons.admin_accept_incoming_quote_request_button(request, csrf_token, notif) }}</li>
+                        <li>{{ admin_buttons.admin_reject_incoming_quote_request_button(request, csrf_token, notif) }}</li>
+                    </ul>
+                </nav>
+                {% endif %}
+            {% elif notif.notification_type.value == "quote" %}
+                {{ actor_component.actor_action(url_for("admin_profile"), notif, _("quoted a post"), with_icon=True, new_flag=notif.is_new) }}
+                {% if notif.inbox_object %}
+                    {{ utils.display_object(notif.inbox_object, is_h_entry=False) }}
+                {% endif %}
             {% elif notif.notification_type.value == "reported" %}
                 {# an inbound Flag: sent by the reporter's instance actor, not by the reporter #}
                 {{ actor_component.actor_action(url_for("admin_profile"), notif, _("sent a report"), new_flag=notif.is_new) }}

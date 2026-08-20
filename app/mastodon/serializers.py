@@ -159,13 +159,15 @@ async def _get_anybox_object(
 
 def _related_ap_ids(objects: Iterable[AnyboxObject]) -> set[str]:
     """The ap_ids `serialize_status` resolves for each object: the boost
-    target and the in-reply-to parent."""
+    target, the in-reply-to parent, and the quoted post."""
     ap_ids = set()
     for obj in objects:
         if obj.in_reply_to:
             ap_ids.add(obj.in_reply_to)
         if obj.ap_type == "Announce" and obj.activity_object_ap_id:
             ap_ids.add(obj.activity_object_ap_id)
+        if obj.quote_ap_id:
+            ap_ids.add(obj.quote_ap_id)
     return ap_ids
 
 
@@ -714,11 +716,43 @@ def serialize_card(obj: AnyboxObject) -> dict | None:
     return None
 
 
+async def _serialize_quote(db_session: AsyncSession, obj: AnyboxObject) -> dict | None:
+    """FEP-044f quote, mapped to Mastodon's `Quote` entity: `{state,
+    quoted_status}`. `quoted_status` is only populated for an accepted
+    quote -- a pending/rejected/unauthorized one has nothing to show beyond
+    the `RE:` link already in the content, and Mastodon's own client
+    doesn't render one either.
+    """
+    quote_ap_id = obj.quote_ap_id
+    if not quote_ap_id:
+        return None
+
+    quoted_object = await _get_anybox_object(db_session, quote_ap_id)
+
+    if isinstance(obj, activitypub.models.OutboxObject):
+        state = obj.quote_state or "pending"
+    else:
+        state = "accepted" if obj.quote_is_verified else "unauthorized"
+
+    if quoted_object is None:
+        # Either never fetched, or gone since -- either way nothing to embed.
+        state = "deleted" if state == "accepted" else state
+
+    quoted_status = None
+    if state == "accepted" and quoted_object is not None:
+        quoted_status = await serialize_status(
+            db_session, quoted_object, _resolve_reblog=False, _resolve_quote=False
+        )
+
+    return {"state": state, "quoted_status": quoted_status}
+
+
 async def serialize_status(
     db_session: AsyncSession,
     obj: AnyboxObject,
     *,
     _resolve_reblog: bool = True,
+    _resolve_quote: bool = True,
 ) -> dict:
     if isinstance(obj, activitypub.models.OutboxObject):
         status_id = ids.encode_outbox_id(obj)
@@ -747,6 +781,8 @@ async def serialize_status(
         target = await _get_anybox_object(db_session, obj.activity_object_ap_id)
         if target is not None:
             reblog = await serialize_status(db_session, target, _resolve_reblog=False)
+
+    quote = await _serialize_quote(db_session, obj) if _resolve_quote else None
 
     in_reply_to_id = None
     in_reply_to_account_id = None
@@ -799,6 +835,7 @@ async def serialize_status(
         "bookmarked": bookmarked,
         "pinned": pinned,
         "reblog": reblog,
+        "quote": quote,
         "in_reply_to_id": in_reply_to_id,
         "in_reply_to_account_id": in_reply_to_account_id,
         "poll": serialize_poll(obj, status_id),

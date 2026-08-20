@@ -792,6 +792,7 @@ async def post_outbox(
             visibility=visibility,
             content_warning=obj.get("summary"),
             is_sensitive=obj.get("sensitive", False),
+            quote_of=obj.get("quote"),
         )
     else:
         raise ValueError("TODO")
@@ -1005,6 +1006,12 @@ async def outbox_by_public_id(
             await boxes.fetch_ap_object_with_collections(db_session, maybe_object)
         )
 
+    # A QuoteAuthorization "stamp" (see PLAN-quote.md) has no HTML rendering
+    # -- `utils.display_object`'s type guard doesn't know it -- so a browser
+    # hitting its permalink gets a 404 rather than a blank page.
+    if maybe_object.ap_type == "QuoteAuthorization":
+        raise HTTPException(status_code=404)
+
     if maybe_object.ap_type == "Article":
         return RedirectResponse(
             f"{BASE_URL}/articles/{public_id[:7]}/{maybe_object.slug}",
@@ -1020,6 +1027,7 @@ async def outbox_by_public_id(
     webmentions = await _fetch_webmentions(db_session, maybe_object)
     likes = await _fetch_likes(db_session, maybe_object)
     shares = await _fetch_shares(db_session, maybe_object)
+    quoted_object = await boxes.get_quoted_object_for_display(db_session, maybe_object)
     return await templates.render_template(
         db_session,
         request,
@@ -1027,6 +1035,7 @@ async def outbox_by_public_id(
         {
             "replies_tree": _merge_replies(replies_tree, webmentions),
             "outbox_object": maybe_object,
+            "quoted_object": quoted_object,
             "likes": _merge_faces_from_inbox_object_and_webmentions(
                 likes,
                 webmentions,
@@ -1131,6 +1140,7 @@ async def article_by_slug(
     likes = await _fetch_likes(db_session, maybe_object)
     shares = await _fetch_shares(db_session, maybe_object)
     webmentions = await _fetch_webmentions(db_session, maybe_object)
+    quoted_object = await boxes.get_quoted_object_for_display(db_session, maybe_object)
     return await templates.render_template(
         db_session,
         request,
@@ -1138,6 +1148,7 @@ async def article_by_slug(
         {
             "replies_tree": _merge_replies(replies_tree, webmentions),
             "outbox_object": maybe_object,
+            "quoted_object": quoted_object,
             "likes": _merge_faces_from_inbox_object_and_webmentions(
                 likes,
                 webmentions,

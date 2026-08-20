@@ -160,8 +160,15 @@ async def post_micropub_endpoint(
 
     if is_json:
         content = _prop_get(form_data["properties"], "content")  # type: ignore
+        quote_of_prop = form_data["properties"].get("quote-of")  # type: ignore
+        quote_of = (
+            (quote_of_prop[0] if isinstance(quote_of_prop, list) else quote_of_prop)
+            if quote_of_prop
+            else None
+        )
     else:
         content = str(form_data["content"])
+        quote_of = str(form_data["quote-of"]) if "quote-of" in form_data else None
 
     public_id, _ = await send_create(
         db_session,
@@ -170,6 +177,7 @@ async def post_micropub_endpoint(
         uploads=[],
         in_reply_to=None,
         visibility=ap.VisibilityEnum.PUBLIC,
+        quote_of=quote_of,
     )
 
     return JSONResponse(

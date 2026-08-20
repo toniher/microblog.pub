@@ -91,6 +91,12 @@ They are listed in dependency order — the order `inv migrate-db` applies them,
 so also the order of the `alembic_version` values a database passes through. The
 last row is the current head.
 
+**Whenever a new migration is added to `alembic/versions/` (see the autogenerate
+caveat below), add a matching row to this table in the same change** — revision id,
+date, and a one-line description of what it does and why. This table is the only
+place that history is summarized; a migration without a row here is invisible to
+anyone reading this guide instead of grepping the directory.
+
 | Revision | Date | Description |
 | --- | --- | --- |
 | `6aafc8f7dd54` | 2026-07-11 | Add `upload.description` (alt text for uploaded media). |
@@ -109,6 +115,7 @@ last row is the current head.
 | `c8d2f4a71e63` | 2026-08-18 | Add the `scheduled_status` table (statuses queued for later publication). |
 | `cc8f551f6765` | 2026-08-19 | Add `upload.focus_x` / `upload.focus_y` (media focal point / crop hint). |
 | `a3f61c9d20b7` | 2026-08-19 | Add the expression indexes `ix_inbox_in_reply_to` / `ix_outbox_in_reply_to` on `json_extract(ap_object, '$.inReplyTo')`, so reply lookups (the AP `replies` collection and the reply counters) stop scanning both tables. |
+| `f4c2a7e8b910` | 2026-08-20 | Add quote-post support (FEP-044f): `inbox`/`outbox.quote_ap_id`, `quote_authorization_ap_id`; `outbox.quote_state`, `quotes_count`; `inbox.quote_is_verified`; and `ix_inbox_quote_ap_id`. |
 
 Running `poetry run inv migrate-db` (or `inv update`, see [Updating](install.md#updating))
 applies any migration not yet present in your local database, regardless of

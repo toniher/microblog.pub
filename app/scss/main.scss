@@ -577,6 +577,15 @@ a.label-btn {
     border: 2px dashed $secondary-color;
 }
 
+.quoted-object {
+    margin: 10px 0;
+    border: 1px solid $muted-color;
+    border-radius: 4px;
+    .ap-object {
+        margin: 0;
+    }
+}
+
 .error-box, .scolor {
     color: $secondary-color;
 }

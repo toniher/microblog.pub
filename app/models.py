@@ -173,6 +173,14 @@ class NotificationType(str, enum.Enum):
     # notification and nothing else.
     REPORTED = "reported"
 
+    # A remote actor's quote of one of the owner's posts was authorized
+    # (FEP-044f), whether by auto-accept or manual approval.
+    QUOTE = "quote"
+
+    # `quote_policy = "manual"`: a remote actor's QuoteRequest is waiting on
+    # the owner to accept/reject it, like PENDING_INCOMING_FOLLOWER.
+    PENDING_INCOMING_QUOTE_REQUEST = "pending_incoming_quote_request"
+
     # outgoing
     BLOCK = "block"
     UNBLOCK = "unblock"

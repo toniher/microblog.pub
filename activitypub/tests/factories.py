@@ -140,12 +140,23 @@ def build_note_object(
     cc: list[str] | None = None,
     tags: list[ap.RawObject] | None = None,
     in_reply_to: str | None = None,
+    quote: str | None = None,
+    quote_authorization: str | None = None,
+    legacy_quote_alias: str | None = None,
 ) -> ap.RawObject:
     published = now().replace(microsecond=0).isoformat().replace("+00:00", "Z")
     context = from_remote_actor.ap_id + "/ctx/" + uuid4().hex
     note_id = outbox_public_id or uuid4().hex
+    quote_fields: ap.RawObject = {}
+    if quote:
+        quote_fields["quote"] = quote
+        if quote_authorization:
+            quote_fields["quoteAuthorization"] = quote_authorization
+    if legacy_quote_alias:
+        # Only the alias, no FEP-044f `quote` -- exercises the unverified path.
+        quote_fields["quoteUrl"] = legacy_quote_alias
     return {
-        "@context": ap.AS_CTX,
+        "@context": ap.AS_EXTENDED_CTX,
         "type": "Note",
         "id": from_remote_actor.ap_id + "/note/" + note_id,
         "attributedTo": from_remote_actor.ap_id,
@@ -160,6 +171,47 @@ def build_note_object(
         "summary": None,
         "sensitive": False,
         "inReplyTo": in_reply_to,
+        **quote_fields,
+    }
+
+
+def build_quote_request_activity(
+    from_remote_actor: actor.RemoteActor,
+    quoted_ap_id: str,
+    instrument_ap_id: str,
+    outbox_public_id: str | None = None,
+) -> ap.RawObject:
+    return {
+        "@context": ap.AS_EXTENDED_CTX,
+        "type": "QuoteRequest",
+        "id": (
+            from_remote_actor.ap_id
+            + "/quote_request/"
+            + (outbox_public_id or uuid4().hex)
+        ),
+        "actor": from_remote_actor.ap_id,
+        "object": quoted_ap_id,
+        "instrument": instrument_ap_id,
+    }
+
+
+def build_quote_authorization(
+    from_remote_actor: actor.RemoteActor,
+    quoting_object_ap_id: str,
+    quoted_object_ap_id: str,
+    outbox_public_id: str | None = None,
+) -> ap.RawObject:
+    """A FEP-044f "stamp", as if minted by `from_remote_actor` (the quoted
+    post's author)."""
+    return {
+        "@context": ap.AS_EXTENDED_CTX,
+        "type": "QuoteAuthorization",
+        "id": (
+            from_remote_actor.ap_id + "/quote_auth/" + (outbox_public_id or uuid4().hex)
+        ),
+        "attributedTo": from_remote_actor.ap_id,
+        "interactingObject": quoting_object_ap_id,
+        "interactionTarget": quoted_object_ap_id,
     }
 
 

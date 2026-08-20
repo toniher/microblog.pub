@@ -9,11 +9,11 @@ from sqlalchemy import DateTime
 from sqlalchemy import Enum
 from sqlalchemy import Float
 from sqlalchemy import ForeignKey
-from sqlalchemy import func
 from sqlalchemy import Index
 from sqlalchemy import Integer
 from sqlalchemy import String
 from sqlalchemy import UniqueConstraint
+from sqlalchemy import func
 from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy import text
@@ -165,6 +165,7 @@ class InboxObject(Base, BaseObject):
             "ap_published_at",
         ),
         Index("ix_inbox_in_reply_to", text(_IN_REPLY_TO_INDEX_EXPR)),
+        Index("ix_inbox_quote_ap_id", "quote_ap_id"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -236,6 +237,16 @@ class InboxObject(Base, BaseObject):
     is_transient = Column(Boolean, nullable=False, default=False, server_default="0")
 
     replies_count: Mapped[int] = Column(Integer, nullable=False, default=0)
+
+    # FEP-044f quote posts (see ap_object.Object.quote_ap_id/quote_authorization_ap_id
+    # for the tolerant parsing of the various wire aliases). Columns rather than a
+    # json_extract() lookup, per the ix_*_in_reply_to lesson above -- maintaining
+    # OutboxObject.quotes_count queries quote_ap_id, and that must not scan `ap_object`.
+    quote_ap_id = Column(String, nullable=True)
+    quote_authorization_ap_id = Column(String, nullable=True)
+    quote_is_verified = Column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
 
     og_meta: Mapped[list[dict[str, Any]] | None] = Column(JSON, nullable=True)
 
@@ -365,6 +376,19 @@ class OutboxObject(Base, BaseObject):
     undone_by_outbox_object_id = Column(
         Integer, ForeignKey("outbox.id"), nullable=True, index=True
     )
+
+    # FEP-044f quote posts: set on the *quoting* outbox row (the post we quote,
+    # the stamp we received back, and where the request stands). Also reused
+    # for the stamp itself when this row is an outbound `QuoteAuthorization`
+    # (an OutboxObject with ap_type="QuoteAuthorization", see PLAN-quote.md).
+    quote_ap_id = Column(String, nullable=True)
+    quote_authorization_ap_id = Column(String, nullable=True)
+    quote_state = Column(String, nullable=True)
+    # Authorized *remote* quotes of this post (maintained on the quoted side,
+    # not the quoting side). Recomputed from `inbox.quote_ap_id` by
+    # `boxes._get_quotes_count` rather than incremented, so a deleted quote
+    # does not leave the count drifting upward.
+    quotes_count = Column(Integer, nullable=False, default=0, server_default="0")
 
     @property
     def actor(self) -> BaseActor:

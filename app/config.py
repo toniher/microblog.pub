@@ -149,6 +149,17 @@ class Config(pydantic.BaseModel):
 
     disabled_notifications: list[str] = []
 
+    # FEP-044f quote posts: how an inbound `QuoteRequest` targeting one of the
+    # owner's posts is handled. "public" (default) auto-accepts requests
+    # targeting a public/unlisted post and rejects the rest; "followers" also
+    # requires the requester to follow the owner; "manual" surfaces a
+    # notification to accept/reject, like a follow request; "nobody" always
+    # rejects.
+    quote_policy: str = pydantic.Field(
+        default="public",
+        pattern="^(public|followers|manual|nobody)$",
+    )
+
     # Hashtags pinned to the profile (Mastodon's "featured tags"), shown as-is
     # without the leading "#".
     featured_tags: list[str] = []
@@ -268,6 +279,7 @@ ENABLE_MICRODATA = CONFIG.enable_microdata
 FEATURED_TAGS = CONFIG.featured_tags
 DISCOVERABLE = CONFIG.discoverable
 INDEXABLE = CONFIG.indexable
+QUOTE_POLICY = CONFIG.quote_policy
 PRIVACY_REPLACE = None
 if CONFIG.privacy_replace:
     PRIVACY_REPLACE = {pr.domain: pr.replace_by for pr in CONFIG.privacy_replace}

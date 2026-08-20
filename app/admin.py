@@ -173,12 +173,25 @@ async def admin_new(
     request: Request,
     query: str | None = None,
     in_reply_to: str | None = None,
+    quote_of: str | None = None,
     with_content: str | None = None,
     with_visibility: str | None = None,
     db_session: AsyncSession = Depends(get_db_session),
 ) -> templates.TemplateResponse:
     content = ""
     content_warning = None
+    quoted_object = None
+    if quote_of:
+        quoted_object = await boxes.get_anybox_object_by_ap_id(db_session, quote_of)
+        if not quoted_object:
+            logger.info(f"Saving unknwown object {quote_of}")
+            raw_object = await ap.fetch(quote_of)
+            await boxes.save_object_to_inbox(db_session, raw_object)
+            await db_session.commit()
+            quoted_object = await boxes.get_anybox_object_by_ap_id(db_session, quote_of)
+        if not quoted_object:
+            raise ValueError(f"Unknown object {quote_of=}")
+
     in_reply_to_object = None
     if in_reply_to:
         in_reply_to_object = await boxes.get_anybox_object_by_ap_id(
@@ -218,6 +231,7 @@ async def admin_new(
         "admin_new.html",
         {
             "in_reply_to_object": in_reply_to_object,
+            "quoted_object": quoted_object,
             "content": content,
             "content_warning": content_warning,
             "visibility_choices": [
@@ -239,12 +253,25 @@ async def admin_new_post(
     request: Request,
     query: str | None = None,
     in_reply_to: str | None = None,
+    quote_of: str | None = None,
     with_content: str | None = None,
     with_visibility: str | None = None,
     db_session: AsyncSession = Depends(get_db_session),
 ) -> templates.TemplateResponse:
     content = ""
     content_warning = None
+    quoted_object = None
+    if quote_of:
+        quoted_object = await boxes.get_anybox_object_by_ap_id(db_session, quote_of)
+        if not quoted_object:
+            logger.info(f"Saving unknown object {quote_of}")
+            raw_object = await ap.fetch(quote_of)
+            await boxes.save_object_to_inbox(db_session, raw_object)
+            await db_session.commit()
+            quoted_object = await boxes.get_anybox_object_by_ap_id(db_session, quote_of)
+        if not quoted_object:
+            raise ValueError(f"Unknown object {quote_of=}")
+
     in_reply_to_object = None
     if in_reply_to:
         in_reply_to_object = await boxes.get_anybox_object_by_ap_id(
@@ -284,6 +311,7 @@ async def admin_new_post(
         "admin_new_post.html",
         {
             "in_reply_to_object": in_reply_to_object,
+            "quoted_object": quoted_object,
             "content": content,
             "content_warning": content_warning,
             "visibility_choices": [
@@ -1001,12 +1029,15 @@ async def admin_object(
         requested_object,
         is_current_user_admin=True,
     )
+    quoted_object = await boxes.get_quoted_object_for_display(
+        db_session, requested_object
+    )
 
     return await templates.render_template(
         db_session,
         request,
         "object.html",
-        {"replies_tree": replies_tree},
+        {"replies_tree": replies_tree, "quoted_object": quoted_object},
     )
 
 
@@ -1285,6 +1316,30 @@ async def admin_actions_reject_incoming_follow(
     return RedirectResponse(redirect_url, status_code=302)
 
 
+@router.post("/actions/accept_incoming_quote_request", response_model=None)
+async def admin_actions_accept_incoming_quote_request(
+    request: Request,
+    notification_id: int = Form(),
+    redirect_url: str = Form(),
+    csrf_check: None = Depends(verify_csrf_token),
+    db_session: AsyncSession = Depends(get_db_session),
+) -> RedirectResponse:
+    await boxes.send_quote_accept(db_session, notification_id)
+    return RedirectResponse(redirect_url, status_code=302)
+
+
+@router.post("/actions/reject_incoming_quote_request", response_model=None)
+async def admin_actions_reject_incoming_quote_request(
+    request: Request,
+    notification_id: int = Form(),
+    redirect_url: str = Form(),
+    csrf_check: None = Depends(verify_csrf_token),
+    db_session: AsyncSession = Depends(get_db_session),
+) -> RedirectResponse:
+    await boxes.send_quote_reject(db_session, notification_id)
+    return RedirectResponse(redirect_url, status_code=302)
+
+
 @router.post("/actions/like", response_model=None)
 async def admin_actions_like(
     request: Request,
@@ -1424,6 +1479,7 @@ async def admin_actions_new(
     content: str | None = Form(None),
     redirect_url: str = Form(),
     in_reply_to: str | None = Form(None),
+    quote_of: str | None = Form(None),
     content_warning: str | None = Form(None),
     is_sensitive: bool = Form(False),
     visibility: str = Form(),
@@ -1528,6 +1584,7 @@ async def admin_actions_new(
         poll_duration_in_minutes=poll_duration_in_minutes,
         name=name,
         language=language,
+        quote_of=quote_of or None,
     )
     return RedirectResponse(
         request.url_for("outbox_by_public_id", public_id=public_id),

@@ -69,7 +69,7 @@
 {% endblock %}
 {% endmacro %}
 
-{% macro display_object(object, likes=[], shares=[], webmentions=[], expanded=False, actors_metadata={}, is_object_page=False, is_h_entry=True, md_container_prop="") %}
+{% macro display_object(object, likes=[], shares=[], webmentions=[], expanded=False, actors_metadata={}, is_object_page=False, is_h_entry=True, md_container_prop="", quoted_object=None) %}
 {% block display_object scoped %}
 {% set is_article_mode = object.is_from_outbox and object.ap_type == "Article" and is_object_page %}
 {% set md_type = "SocialMediaPosting" %}
@@ -115,6 +115,14 @@
     <p class="in-reply-to">{% trans href=reply_href, title=object.in_reply_to %}in reply to <a href="{{ href }}" title="{{ title }}" rel="nofollow">
             this object
         </a>{% endtrans %}</p>
+    {% endif %}
+
+    {% if object.quote_ap_id %}
+        {% if quoted_object %}
+        <div class="quoted-object h-cite u-quotation-of">
+            {{ display_object(quoted_object, is_h_entry=False) }}
+        </div>
+        {% endif %}
     {% endif %}
 
     {% if object.ap_type in ["Article", "Event", "Page"] %}
@@ -320,6 +328,12 @@
         <li>
             {{ admin_buttons.admin_reply_button(request, csrf_token, object.ap_id) }}
         </li>
+
+        {% if object.ap_type in ["Note", "Article"] %}
+        <li>
+            {{ admin_buttons.admin_quote_button(request, csrf_token, object.ap_id) }}
+        </li>
+        {% endif %}
 
         {% if not object.is_from_outbox %}
             <li>

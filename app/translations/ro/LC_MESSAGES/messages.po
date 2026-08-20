@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-19 22:27+0200\n"
+"POT-Creation-Date: 2026-08-20 13:06+0200\n"
 "PO-Revision-Date: 2026-07-17 22:20+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ro\n"
@@ -19,32 +19,32 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: app/admin.py:1438 app/admin.py:1457 app/admin.py:1582
+#: app/admin.py:1494 app/admin.py:1513 app/admin.py:1639
 msgid "Error: object must have a content"
 msgstr "Eroare: conținutul este obligatoriu"
 
-#: app/admin.py:1445
+#: app/admin.py:1501
 msgid "Error: invalid language code"
 msgstr "Eroare: cod de limbă invalid"
 
-#: app/admin.py:1472
+#: app/admin.py:1528
 msgid "Error: file is too large"
 msgstr ""
 
-#: app/admin.py:1480
+#: app/admin.py:1536
 #, fuzzy
 msgid "Error: unable to process upload"
 msgstr "Eroare: nu s-a putut procesa încărcarea"
 
-#: app/admin.py:1496
+#: app/admin.py:1552
 msgid "Error: Unable to process upload"
 msgstr "Eroare: nu s-a putut procesa încărcarea"
 
-#: app/config.py:410
+#: app/config.py:422
 msgid "please try again"
 msgstr "încercați din nou"
 
-#: app/config.py:420
+#: app/config.py:432
 #, python-format
 msgid "The security token has expired, %(please_try_again)s"
 msgstr "Jetonul de securitate a expirat, %(please_try_again)s"
@@ -118,8 +118,8 @@ msgstr "Versiunea actuală"
 msgid "%(name)s - New"
 msgstr "%(name)s - Nou"
 
-#: app/templates/admin_edit_text.html:19 app/templates/admin_new.html:48
-#: app/templates/admin_new_post.html:53
+#: app/templates/admin_edit_text.html:19 app/templates/admin_new.html:53
+#: app/templates/admin_new_post.html:58
 msgid "Title"
 msgstr "Titlu"
 
@@ -146,7 +146,7 @@ msgstr "Nimic de văzut încă, %(link)s."
 msgid "shared"
 msgstr "a distribuit"
 
-#: app/templates/admin_inbox.html:37 app/templates/notifications.html:16
+#: app/templates/admin_inbox.html:37 app/templates/notifications.html:17
 msgid "followed you"
 msgstr "v-a urmărit"
 
@@ -174,76 +174,80 @@ msgstr ""
 msgid "In reply to:"
 msgstr "Ca răspuns la:"
 
-#: app/templates/admin_new.html:31 app/templates/admin_new_post.html:36
+#: app/templates/admin_new.html:18 app/templates/admin_new_post.html:21
+msgid "Quoting:"
+msgstr "Citând:"
+
+#: app/templates/admin_new.html:36 app/templates/admin_new_post.html:41
 #: app/templates/components/filters.html:22 app/templates/object.html:18
 msgid "Note"
 msgstr "Notă"
 
-#: app/templates/admin_new.html:31 app/templates/admin_new_post.html:36
+#: app/templates/admin_new.html:36 app/templates/admin_new_post.html:41
 #: app/templates/components/filters.html:22
 msgid "Article"
 msgstr "Articol"
 
-#: app/templates/admin_new.html:31 app/templates/admin_new_post.html:36
+#: app/templates/admin_new.html:36 app/templates/admin_new_post.html:41
 #: app/templates/components/filters.html:22
 msgid "Question"
 msgstr "Sondaj"
 
-#: app/templates/admin_new.html:59 app/templates/admin_new_post.html:64
+#: app/templates/admin_new.html:64 app/templates/admin_new_post.html:69
 msgid "Hey!"
 msgstr "Salut!"
 
-#: app/templates/admin_new.html:64 app/templates/admin_new_post.html:71
+#: app/templates/admin_new.html:69 app/templates/admin_new_post.html:76
 msgid "single choice"
 msgstr "răspuns unic"
 
-#: app/templates/admin_new.html:65 app/templates/admin_new_post.html:72
+#: app/templates/admin_new.html:70 app/templates/admin_new_post.html:77
 msgid "multiple choices"
 msgstr "răspunsuri multiple"
 
-#: app/templates/admin_new.html:70 app/templates/admin_new_post.html:77
+#: app/templates/admin_new.html:75 app/templates/admin_new_post.html:82
 msgid "ends in 5 minutes"
 msgstr "se termină în 5 minute"
 
-#: app/templates/admin_new.html:71 app/templates/admin_new_post.html:78
+#: app/templates/admin_new.html:76 app/templates/admin_new_post.html:83
 msgid "ends in 30 minutes"
 msgstr "se termină în 30 de minute"
 
-#: app/templates/admin_new.html:72 app/templates/admin_new_post.html:79
+#: app/templates/admin_new.html:77 app/templates/admin_new_post.html:84
 msgid "ends in 1 hour"
 msgstr "se termină într-o oră"
 
-#: app/templates/admin_new.html:73 app/templates/admin_new_post.html:80
+#: app/templates/admin_new.html:78 app/templates/admin_new_post.html:85
 msgid "ends in 6 hours"
 msgstr "se termină în 6 ore"
 
-#: app/templates/admin_new.html:74 app/templates/admin_new_post.html:81
+#: app/templates/admin_new.html:79 app/templates/admin_new_post.html:86
 msgid "ends in 1 day"
 msgstr "se termină într-o zi"
 
-#: app/templates/admin_new.html:79 app/templates/admin_new_post.html:86
+#: app/templates/admin_new.html:84 app/templates/admin_new_post.html:91
 #, python-format
 msgid "Option %(n)s, leave empty to disable"
 msgstr "Opțiunea %(n)s, lăsați gol pentru a o dezactiva"
 
-#: app/templates/admin_new.html:85 app/templates/admin_new_post.html:92
+#: app/templates/admin_new.html:90 app/templates/admin_new_post.html:97
 msgid "content warning (will mark the post as sensitive)"
 msgstr "avertisment de conținut (va marca publicația ca sensibilă)"
 
-#: app/templates/admin_new.html:88 app/templates/admin_new_post.html:95
+#: app/templates/admin_new.html:93 app/templates/admin_new_post.html:100
 #, python-format
 msgid "language code (optional, e.g. %(lang)s)"
 msgstr "cod de limbă (opțional, de ex. %(lang)s)"
 
-#: app/templates/admin_new.html:88 app/templates/admin_new_post.html:95
+#: app/templates/admin_new.html:93 app/templates/admin_new_post.html:100
 msgid "BCP 47 language code, e.g. en or pt-BR"
 msgstr "cod de limbă BCP 47, de ex. en sau pt-BR"
 
-#: app/templates/admin_new.html:91 app/templates/admin_new_post.html:98
+#: app/templates/admin_new.html:96 app/templates/admin_new_post.html:103
 msgid "Mark attachment(s) as sensitive"
 msgstr "Marchează atașamentele ca fiind sensibile"
 
-#: app/templates/admin_new.html:99 app/templates/admin_new_post.html:106
+#: app/templates/admin_new.html:105 app/templates/admin_new_post.html:112
 msgid "Publish"
 msgstr "Publică"
 
@@ -470,82 +474,90 @@ msgstr ""
 "Eroare neașteptată, verificați jurnalele și raportați o problemă dacă "
 "este necesar."
 
-#: app/templates/notifications.html:7
+#: app/templates/notifications.html:8
 #, python-format
 msgid "%(name)s - Notifications"
 msgstr "%(name)s - Notificări"
 
-#: app/templates/notifications.html:19
+#: app/templates/notifications.html:20
 msgid "sent a follow request"
 msgstr "a trimis o cerere de urmărire"
 
-#: app/templates/notifications.html:23
+#: app/templates/notifications.html:24
 msgid "unfollowed you"
 msgstr "nu vă mai urmărește"
 
-#: app/templates/notifications.html:26
+#: app/templates/notifications.html:27
 msgid "accepted your follow request"
 msgstr "a acceptat cererea dvs. de urmărire"
 
-#: app/templates/notifications.html:29
+#: app/templates/notifications.html:30
 msgid "rejected your follow request"
 msgstr "a respins cererea dvs. de urmărire"
 
-#: app/templates/components/actor.html:64 app/templates/notifications.html:32
+#: app/templates/components/actor.html:64 app/templates/notifications.html:33
 msgid "blocked you"
 msgstr "v-a blocat"
 
-#: app/templates/notifications.html:35
+#: app/templates/notifications.html:36
 msgid "unblocked you"
 msgstr "v-a deblocat"
 
-#: app/templates/notifications.html:38
+#: app/templates/notifications.html:39
 msgid "was blocked"
 msgstr "a fost blocat"
 
-#: app/templates/notifications.html:41
+#: app/templates/notifications.html:42
 msgid "was unblocked"
 msgstr "a fost deblocat"
 
 #: app/templates/notifications.html:45
+msgid "asked to quote a post"
+msgstr "a cerut să citeze o publicație"
+
+#: app/templates/notifications.html:58
+msgid "quoted a post"
+msgstr "a citat o publicație"
+
+#: app/templates/notifications.html:64
 msgid "sent a report"
 msgstr "a trimis un raport"
 
-#: app/templates/notifications.html:56
+#: app/templates/notifications.html:75
 msgid "has moved to"
 msgstr "s-a mutat la"
 
-#: app/templates/notifications.html:63
+#: app/templates/notifications.html:82
 msgid "liked a post"
 msgstr "a apreciat o publicație"
 
-#: app/templates/notifications.html:66
+#: app/templates/notifications.html:85
 msgid "unliked a post"
 msgstr "nu mai apreciază o publicație"
 
-#: app/templates/notifications.html:69
+#: app/templates/notifications.html:88
 msgid "shared a post"
 msgstr "a distribuit o publicație"
 
-#: app/templates/notifications.html:72
+#: app/templates/notifications.html:91
 msgid "unshared a post"
 msgstr "nu mai distribuie o publicație"
 
-#: app/templates/notifications.html:75
+#: app/templates/notifications.html:94
 msgid "mentioned you"
 msgstr "v-a menționat"
 
-#: app/templates/notifications.html:82
+#: app/templates/notifications.html:101
 #, python-format
 msgid "new webmention from %(source)s"
 msgstr "webmention nou de la %(source)s"
 
-#: app/templates/notifications.html:90
+#: app/templates/notifications.html:109
 #, python-format
 msgid "updated webmention from %(source)s"
 msgstr "webmention actualizat de la %(source)s"
 
-#: app/templates/notifications.html:98
+#: app/templates/notifications.html:117
 #, python-format
 msgid "deleted webmention from %(source)s"
 msgstr "webmention șters de la %(source)s"
@@ -624,7 +636,7 @@ msgstr "Interacționează din instanța dvs."
 msgid "Interact with this object"
 msgstr "Interacționează cu acest obiect"
 
-#: app/templates/remote_interact.html:24 app/templates/utils.html:234
+#: app/templates/remote_interact.html:24 app/templates/utils.html:242
 msgid "interact from your instance"
 msgstr "interacționează din instanța dvs."
 
@@ -639,7 +651,7 @@ msgstr ""
 "        acest obiect\n"
 "    </a>"
 
-#: app/templates/utils.html:55 app/templates/utils.html:228
+#: app/templates/utils.html:55 app/templates/utils.html:236
 msgid "permalink"
 msgstr "permalink"
 
@@ -654,7 +666,7 @@ msgstr ""
 "            acest obiect\n"
 "        </a>"
 
-#: app/templates/utils.html:126
+#: app/templates/utils.html:134
 #, python-format
 msgid ""
 "On %(start)s\n"
@@ -663,15 +675,15 @@ msgstr ""
 "Pe %(start)s\n"
 "            (se termină pe %(end)s)"
 
-#: app/templates/utils.html:135
+#: app/templates/utils.html:143
 msgid "Location"
 msgstr "Locație"
 
-#: app/templates/utils.html:187
+#: app/templates/utils.html:195
 msgid "you voted for this answer"
 msgstr "ați votat acest răspuns"
 
-#: app/templates/utils.html:194
+#: app/templates/utils.html:202
 #, python-format
 msgid "%(count)s vote"
 msgid_plural "%(count)s votes"
@@ -679,19 +691,19 @@ msgstr[0] "%(count)s vot"
 msgstr[1] "%(count)s voturi"
 msgstr[2] "%(count)s de voturi"
 
-#: app/templates/utils.html:206
+#: app/templates/utils.html:214
 msgid "vote"
 msgstr "votează"
 
-#: app/templates/utils.html:248
+#: app/templates/utils.html:256
 msgid "ended"
 msgstr "s-a încheiat"
 
-#: app/templates/utils.html:248
+#: app/templates/utils.html:256
 msgid "ends"
 msgstr "se încheie"
 
-#: app/templates/utils.html:255
+#: app/templates/utils.html:263
 #, python-format
 msgid "%(count)s voter"
 msgid_plural "%(count)s voters"
@@ -699,7 +711,7 @@ msgstr[0] "%(count)s votant"
 msgstr[1] "%(count)s votanți"
 msgstr[2] "%(count)s de votanți"
 
-#: app/templates/utils.html:267
+#: app/templates/utils.html:275
 #, python-format
 msgid "<strong>%(count)s</strong> like"
 msgid_plural "<strong>%(count)s</strong> likes"
@@ -707,7 +719,7 @@ msgstr[0] "<strong>%(count)s</strong> apreciere"
 msgstr[1] "<strong>%(count)s</strong> aprecieri"
 msgstr[2] "<strong>%(count)s</strong> de aprecieri"
 
-#: app/templates/utils.html:273
+#: app/templates/utils.html:281
 #, python-format
 msgid "<strong>%(count)s</strong> share"
 msgid_plural "<strong>%(count)s</strong> shares"
@@ -715,7 +727,7 @@ msgstr[0] "<strong>%(count)s</strong> distribuire"
 msgstr[1] "<strong>%(count)s</strong> distribuiri"
 msgstr[2] "<strong>%(count)s</strong> de distribuiri"
 
-#: app/templates/utils.html:279
+#: app/templates/utils.html:287
 #, python-format
 msgid "<strong>%(count)s</strong> webmention"
 msgid_plural "<strong>%(count)s</strong> webmentions"
@@ -723,7 +735,7 @@ msgstr[0] "<strong>%(count)s</strong> webmention"
 msgstr[1] "<strong>%(count)s</strong> webmentions"
 msgstr[2] "<strong>%(count)s</strong> de webmentions"
 
-#: app/templates/utils.html:288
+#: app/templates/utils.html:296
 #, python-format
 msgid "<strong>%(count)s</strong> reply"
 msgid_plural "<strong>%(count)s</strong> replies"
@@ -731,19 +743,19 @@ msgstr[0] "<strong>%(count)s</strong> răspuns"
 msgstr[1] "<strong>%(count)s</strong> răspunsuri"
 msgstr[2] "<strong>%(count)s</strong> de răspunsuri"
 
-#: app/templates/utils.html:327
+#: app/templates/utils.html:341
 msgid "unlike"
 msgstr "anulează aprecierea"
 
-#: app/templates/utils.html:344
+#: app/templates/utils.html:358
 msgid "unshare"
 msgstr "anulează distribuirea"
 
-#: app/templates/utils.html:378
+#: app/templates/utils.html:392
 msgid "Likes"
 msgstr "Aprecieri"
 
-#: app/templates/utils.html:387 app/templates/utils.html:404
+#: app/templates/utils.html:401 app/templates/utils.html:418
 #, python-format
 msgid "and %(count)s more."
 msgid_plural "and %(count)s more."
@@ -751,11 +763,11 @@ msgstr[0] "și încă %(count)s."
 msgstr[1] "și încă %(count)s."
 msgstr[2] "și încă %(count)s."
 
-#: app/templates/utils.html:395
+#: app/templates/utils.html:409
 msgid "Shares"
 msgstr "Distribuiri"
 
-#: app/templates/utils.html:412
+#: app/templates/utils.html:426
 msgid "Webmentions"
 msgstr "Webmentions"
 
@@ -850,71 +862,83 @@ msgid "reject follow"
 msgstr "respinge urmărirea"
 
 #: app/templates/components/admin_buttons.html:89
+msgid "accept quote"
+msgstr "acceptă citarea"
+
+#: app/templates/components/admin_buttons.html:98
+msgid "reject quote"
+msgstr "respinge citarea"
+
+#: app/templates/components/admin_buttons.html:107
 msgid "like"
 msgstr "apreciază"
 
-#: app/templates/components/admin_buttons.html:98
+#: app/templates/components/admin_buttons.html:116
 msgid "bookmark"
 msgstr "adaugă la favorite"
 
-#: app/templates/components/admin_buttons.html:107
+#: app/templates/components/admin_buttons.html:125
 msgid "unbookmark"
 msgstr "elimină din favorite"
 
-#: app/templates/components/admin_buttons.html:116
+#: app/templates/components/admin_buttons.html:134
 msgid "pin"
 msgstr "fixează"
 
-#: app/templates/components/admin_buttons.html:125
+#: app/templates/components/admin_buttons.html:143
 msgid "unpin"
 msgstr "anulează fixarea"
 
-#: app/templates/components/admin_buttons.html:132
+#: app/templates/components/admin_buttons.html:150
 msgid "edit"
 msgstr "editează"
 
-#: app/templates/components/admin_buttons.html:137
+#: app/templates/components/admin_buttons.html:155
 msgid "history"
 msgstr "istoric"
 
-#: app/templates/components/admin_buttons.html:145
+#: app/templates/components/admin_buttons.html:163
 msgid "delete"
 msgstr "șterge"
 
-#: app/templates/components/admin_buttons.html:154
-#: app/templates/components/admin_buttons.html:163
+#: app/templates/components/admin_buttons.html:172
+#: app/templates/components/admin_buttons.html:181
 msgid "local delete"
 msgstr "șterge local"
 
-#: app/templates/components/admin_buttons.html:172
+#: app/templates/components/admin_buttons.html:190
 msgid "share"
 msgstr "distribuie"
 
-#: app/templates/components/admin_buttons.html:181
+#: app/templates/components/admin_buttons.html:199
 msgid "undo"
 msgstr "anulează"
 
-#: app/templates/components/admin_buttons.html:188
+#: app/templates/components/admin_buttons.html:206
 msgid "reply"
 msgstr "răspunde"
 
-#: app/templates/components/admin_buttons.html:196
+#: app/templates/components/admin_buttons.html:213
+msgid "quote"
+msgstr "citează"
+
+#: app/templates/components/admin_buttons.html:221
 msgid "direct message"
 msgstr "mesaj direct"
 
-#: app/templates/components/admin_buttons.html:203
+#: app/templates/components/admin_buttons.html:228
 msgid "mention"
 msgstr "menționează"
 
-#: app/templates/components/admin_buttons.html:210
+#: app/templates/components/admin_buttons.html:235
 msgid "profile"
 msgstr "profil"
 
-#: app/templates/components/admin_buttons.html:218
+#: app/templates/components/admin_buttons.html:243
 msgid "expand"
 msgstr "extinde"
 
-#: app/templates/components/admin_buttons.html:227
+#: app/templates/components/admin_buttons.html:252
 msgid "fetch replies"
 msgstr "recuperează răspunsurile"
 

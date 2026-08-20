@@ -67,6 +67,7 @@ class ComposeParams:
     visibility: ap.VisibilityEnum = ap.VisibilityEnum.PUBLIC
     language: str | None = None
     in_reply_to_id: str | None = None
+    quote_id: str | None = None
     media_ids: list[str] = dataclasses.field(default_factory=list)
     poll_options: list[str] = dataclasses.field(default_factory=list)
     poll_multiple: bool = False
@@ -137,6 +138,13 @@ async def publish(
             )
         in_reply_to = parent.ap_id
 
+    quote_of = None
+    if params.quote_id:
+        quoted = await ids.get_object_by_mastodon_id(db_session, params.quote_id)
+        if quoted is None:
+            raise ScheduledStatusError(f"unknown quote_id {params.quote_id}")
+        quote_of = quoted.ap_id
+
     ap_type = "Note"
     poll_type = None
     poll_answers = None
@@ -166,6 +174,7 @@ async def publish(
         poll_duration_in_minutes=poll_duration_in_minutes,
         name=None,
         language=params.language,
+        quote_of=quote_of,
     )
     return outbox_object
 

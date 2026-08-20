@@ -53,6 +53,17 @@ forgotten on the device.
   be a false promise rather than a feature.
 - **Interactions** — favourite, reblog, bookmark, pin, with their "who
   favourited/reblogged this" endpoints.
+- **Quote posts** — `quote_id` on `POST /api/v1/statuses`, and a `quote` key next
+  to `reblog` in the status entity: `{state, quoted_status}`, with `state` one of
+  `pending`, `accepted`, `rejected`, `deleted` or `unauthorized`, and
+  `quoted_status` populated only once `accepted`. Quoting your own post is
+  auto-authorized; quoting anyone else's sends a federated `QuoteRequest` (FEP-044f)
+  and the status starts out `pending` until the remote server responds. The
+  `quote_policy` config key (`public`/`followers`/`manual`/`nobody`, default
+  `public`) controls whether an incoming `QuoteRequest` for one of your own posts
+  is auto-accepted, requires being a follower, needs manual approval (a
+  notification with accept/reject buttons, like a follow request), or is always
+  declined. **Not supported**: revoking a quote authorization once granted.
 - **Link previews** — posts containing a link carry a Mastodon `card`, built from
   the OpenGraph metadata this instance already scrapes for its own web UI, so
   clients render the same preview box. The thumbnail goes through the media
