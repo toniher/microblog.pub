@@ -515,12 +515,44 @@ class OutgoingActivityWorker(Worker[activitypub.models.OutgoingActivity]):
 
         await publish_due_scheduled_statuses(db_session)
 
+    # Same ride-along shape as scheduled statuses above: notifying about an
+    # ended poll isn't outbox work either, but this worker runs in every
+    # deployment already, so an upgraded install can't silently miss a new
+    # supervisord entry.
+    poll_notifications_interval = 5.0
+    _last_poll_notifications_pass = 0.0
+
+    async def _notify_ended_polls(self, db_session: AsyncSession) -> None:
+        if (
+            time.monotonic() - self._last_poll_notifications_pass
+            < self.poll_notifications_interval
+        ):
+            return
+        self._last_poll_notifications_pass = time.monotonic()
+
+        # Imported here rather than at module level: it imports
+        # `activitypub.boxes` (for `is_notification_enabled`), which imports
+        # this module.
+        from app.poll_notifications import notify_ended_polls
+
+        # Isolated from the caller: delivering activities is this worker's
+        # actual job, and it happens *after* this in `get_next_messages`. An
+        # escaping exception here would be caught by `_main_loop`, but only
+        # after skipping that pass's delivery entirely -- so a bad poll row
+        # must not be able to hold up federation.
+        try:
+            await notify_ended_polls(db_session)
+        except Exception:
+            logger.exception("Failed to notify ended polls")
+            await db_session.rollback()
+
     async def get_next_messages(
         self,
         db_session: AsyncSession,
         limit: int,
     ) -> list[activitypub.models.OutgoingActivity]:
         await self._publish_due_scheduled_statuses(db_session)
+        await self._notify_ended_polls(db_session)
 
         return await fetch_next_outgoing_activities(db_session, limit)
 

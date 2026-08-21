@@ -256,6 +256,9 @@ disabled_notifications = ["like", "announce"]
  - `unblock`
  - `reported`
  - `quote`
+ - `status`
+ - `update`
+ - `poll`
 
 ### Outgoing HTTP connections
 

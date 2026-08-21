@@ -17,6 +17,16 @@ The server has 4 components:
  - One process that takes care of processing "incoming activities"
  - One process that delivers Web Push notifications (`app/push_notifications.py`)
 
+Two periodic jobs ride along on the outgoing-activities process rather than
+getting a process of their own — publishing due scheduled statuses
+(`app/scheduled_statuses.py`) and emitting `poll`-ended notifications
+(`app/poll_notifications.py`). That process runs in every deployment (nothing
+federates without it), so an install that upgrades without adding a new
+supervisord entry can't silently lose either job. Both are rate-limited to a
+few seconds so they don't interleave with every delivery batch, and both are
+isolated from the delivery path: a failure in one can't stop activities going
+out.
+
 The Mastodon streaming API (`app/mastodon/streaming.py`) adds no fifth process:
 it's a background `asyncio` task inside the web server, since that's the only
 component with an open WebSocket to push events to. It learns about activity
@@ -116,6 +126,8 @@ anyone reading this guide instead of grepping the directory.
 | `cc8f551f6765` | 2026-08-19 | Add `upload.focus_x` / `upload.focus_y` (media focal point / crop hint). |
 | `a3f61c9d20b7` | 2026-08-19 | Add the expression indexes `ix_inbox_in_reply_to` / `ix_outbox_in_reply_to` on `json_extract(ap_object, '$.inReplyTo')`, so reply lookups (the AP `replies` collection and the reply counters) stop scanning both tables. |
 | `f4c2a7e8b910` | 2026-08-20 | Add quote-post support (FEP-044f): `inbox`/`outbox.quote_ap_id`, `quote_authorization_ap_id`; `outbox.quote_state`, `quotes_count`; `inbox.quote_is_verified`; and `ix_inbox_quote_ap_id`. |
+| `d4e1f6a2b837` | 2026-08-21 | Add `actor.are_new_posts_notified`, the storage behind Mastodon's `notify` follow parameter (a `status` notification for a followed account's new posts). `showing_reblogs` reuses the existing `are_announces_hidden_from_stream`, so it needs no column of its own. |
+| `e7b5c3a19d42` | 2026-08-22 | Index `notifications.outbox_object_id` / `inbox_object_id` (the `poll`-ended sweep correlates a `NOT EXISTS` on them every few seconds, and was scanning the whole table per candidate), and `actor.are_announces_hidden_from_stream` (its subquery runs on every timeline read; unindexed, SQLite rebuilt a transient covering index over `actor` on each execution). |
 
 Running `poetry run inv migrate-db` (or `inv update`, see [Updating](install.md#updating))
 applies any migration not yet present in your local database, regardless of

@@ -128,10 +128,17 @@
                     <li>{{ _("rejected") }}</li>
                 {% endif %}
             {% endif %}
-            {% if actor.are_announces_hidden_from_stream %}
-                <li>{{ admin_buttons.admin_show_shares_button(request, csrf_token, actor) }}</li>
-            {% else %}
-                <li>{{ admin_buttons.admin_hide_shares_button(request, csrf_token, actor) }}</li>
+            {% if metadata.is_following %}
+                {% if actor.are_announces_hidden_from_stream %}
+                    <li>{{ admin_buttons.admin_show_shares_button(request, csrf_token, actor) }}</li>
+                {% else %}
+                    <li>{{ admin_buttons.admin_hide_shares_button(request, csrf_token, actor) }}</li>
+                {% endif %}
+                {% if actor.are_new_posts_notified %}
+                    <li>{{ admin_buttons.admin_notify_off_button(request, csrf_token, actor) }}</li>
+                {% else %}
+                    <li>{{ admin_buttons.admin_notify_on_button(request, csrf_token, actor) }}</li>
+                {% endif %}
             {% endif %}
             {% if with_details %}
                 <li><a href="{{ actor.url }}" class="label-btn">{{ _("remote profile") }}</a></li>

@@ -59,6 +59,9 @@ NOTIFICATION_TYPE_MAP = {
     models.NotificationType.ANNOUNCE: "reblog",
     models.NotificationType.MENTION: "mention",
     models.NotificationType.MOVE: "move",
+    models.NotificationType.STATUS: "status",
+    models.NotificationType.UPDATE: "update",
+    models.NotificationType.POLL: "poll",
 }
 
 NOTIFICATION_OPTIONS = [
@@ -77,7 +80,14 @@ NOTIFICATION_OPTIONS = [
 async def serialize_notification(
     db_session: AsyncSession, notification: models.Notification
 ) -> dict | None:
-    if notification.notification_type is None or notification.actor is None:
+    if notification.notification_type is None:
+        return None
+    # A POLL notification about the owner's own poll has no remote actor;
+    # every other type is dropped without one.
+    if (
+        notification.actor is None
+        and notification.notification_type != models.NotificationType.POLL
+    ):
         return None
 
     mastodon_type = NOTIFICATION_TYPE_MAP.get(notification.notification_type)
@@ -85,11 +95,16 @@ async def serialize_notification(
         return None
 
     created_at = notification.created_at or datetime.min.replace(tzinfo=timezone.utc)
+    account = (
+        await serialize_account(db_session, notification.actor)
+        if notification.actor is not None
+        else await serialize_owner_account(db_session)
+    )
     result = {
         "id": str(notification.id),
         "type": mastodon_type,
         "created_at": format_datetime(created_at),
-        "account": await serialize_account(db_session, notification.actor),
+        "account": account,
     }
 
     target = notification.outbox_object or notification.inbox_object

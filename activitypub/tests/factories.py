@@ -1,3 +1,4 @@
+from datetime import timedelta
 from urllib.parse import urlparse
 from uuid import uuid4
 
@@ -212,6 +213,62 @@ def build_quote_authorization(
         "attributedTo": from_remote_actor.ap_id,
         "interactingObject": quoting_object_ap_id,
         "interactionTarget": quoted_object_ap_id,
+    }
+
+
+def build_update_activity(
+    from_remote_actor: actor.RemoteActor,
+    updated_object: ap.RawObject,
+    outbox_public_id: str | None = None,
+) -> ap.RawObject:
+    return {
+        "@context": ap.AS_CTX,
+        "type": "Update",
+        "id": from_remote_actor.ap_id + "/update/" + (outbox_public_id or uuid4().hex),
+        "actor": from_remote_actor.ap_id,
+        "object": updated_object,
+    }
+
+
+def build_question_object(
+    from_remote_actor: actor.RemoteActor,
+    outbox_public_id: str | None = None,
+    options: list[str] | None = None,
+    multiple: bool = False,
+    end_time: str | None = None,
+) -> ap.RawObject:
+    published = now().replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    context = from_remote_actor.ap_id + "/ctx/" + uuid4().hex
+    poll_id = outbox_public_id or uuid4().hex
+    key = "anyOf" if multiple else "oneOf"
+    return {
+        "@context": ap.AS_CTX,
+        "type": "Question",
+        "id": from_remote_actor.ap_id + "/poll/" + poll_id,
+        "attributedTo": from_remote_actor.ap_id,
+        "content": "Pick one",
+        "to": [ap.AS_PUBLIC],
+        "cc": [],
+        "published": published,
+        "context": context,
+        "conversation": context,
+        "url": from_remote_actor.ap_id + "/poll/" + poll_id,
+        "tag": [],
+        "summary": None,
+        "sensitive": False,
+        "endTime": end_time
+        or (now() + timedelta(hours=1))
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z"),
+        key: [
+            {
+                "type": "Note",
+                "name": option,
+                "replies": {"type": "Collection", "totalItems": 0},
+            }
+            for option in (options or ["A", "B"])
+        ],
     }
 
 

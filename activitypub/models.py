@@ -64,7 +64,21 @@ class Actor(Base, BaseActor):
         Boolean, nullable=False, default=False, server_default="0"
     )
 
+    # Whether boosts from this actor are hidden from the stream (Mastodon's
+    # `reblogs` follow parameter, inverted). Read-time and retroactive —
+    # applied wherever the stream is queried, not at ingestion.
+    #
+    # Indexed because `announces_hidden_actor_ids()` runs as a subquery on
+    # every timeline read: without it SQLite builds a transient AUTOMATIC
+    # PARTIAL COVERING INDEX over the whole actor table on each execution
+    # (measured at +0.25ms/query over 5k actors, vs +0.006ms with the index).
+    # Plain, not partial — see the note on `5eabb060f447`.
     are_announces_hidden_from_stream = Column(
+        Boolean, nullable=False, default=False, server_default="0", index=True
+    )
+    # Whether a new top-level post from this actor generates a `status`
+    # notification (Mastodon's `notify` follow parameter).
+    are_new_posts_notified = Column(
         Boolean, nullable=False, default=False, server_default="0"
     )
 
@@ -132,6 +146,25 @@ def not_from_muted_actors() -> list[Any]:
                 select(related.id).where(related.actor_id.in_(muted_actor_ids()))
             ),
         ),
+    ]
+
+
+def announces_hidden_actor_ids() -> Select:
+    """Ids of the actors whose boosts are hidden from the stream."""
+    return select(Actor.id).where(Actor.are_announces_hidden_from_stream.is_(True))
+
+
+def not_hidden_announces() -> list[Any]:
+    """Where-clause dropping boosts from actors with hidden announces.
+
+    `ap_type` is non-null on every `InboxObject`, so unlike
+    `not_from_muted_actors()` this needs no NULL arm.
+    """
+    return [
+        or_(
+            InboxObject.ap_type != "Announce",
+            InboxObject.actor_id.not_in(announces_hidden_actor_ids()),
+        )
     ]
 
 

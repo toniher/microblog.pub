@@ -254,7 +254,7 @@ poetry run inv update
 This fork carries a number of Alembic migrations beyond upstream — new tables
 (scheduled statuses, Web Push subscriptions, muted threads, read markers), extra
 columns (media alt text and focal point, cached remote actor counts, account
-mutes) and several indexes. The
+mutes, per-follow boost/notify options) and several indexes. The
 [developer guide](developer_guide.md#database-migrations) lists every one of them
 in the order they are applied, and shows how to check which are still pending on
 a given database (`alembic current` vs. `alembic heads`) — useful if you're moving

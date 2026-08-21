@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-20 13:06+0200\n"
+"POT-Creation-Date: 2026-08-21 23:55+0200\n"
 "PO-Revision-Date: 2026-07-17 22:19+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ca\n"
@@ -18,24 +18,24 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: app/admin.py:1494 app/admin.py:1513 app/admin.py:1639
+#: app/admin.py:1523 app/admin.py:1542 app/admin.py:1668
 msgid "Error: object must have a content"
 msgstr "Error: el contingut és obligatori"
 
-#: app/admin.py:1501
+#: app/admin.py:1530
 msgid "Error: invalid language code"
 msgstr "Error: codi d'idioma no vàlid"
 
-#: app/admin.py:1528
+#: app/admin.py:1557
 msgid "Error: file is too large"
 msgstr ""
 
-#: app/admin.py:1536
+#: app/admin.py:1565
 #, fuzzy
 msgid "Error: unable to process upload"
 msgstr "Error: no s'ha pogut processar la pujada"
 
-#: app/admin.py:1552
+#: app/admin.py:1581
 msgid "Error: Unable to process upload"
 msgstr "Error: no s'ha pogut processar la pujada"
 
@@ -48,27 +48,27 @@ msgstr "torneu-ho a provar"
 msgid "The security token has expired, %(please_try_again)s"
 msgstr "El testimoni de seguretat ha caducat, %(please_try_again)s"
 
-#: app/push_notifications.py:97
+#: app/push_notifications.py:100
 #, fuzzy, python-format
 msgid "%(name)s mentioned you"
 msgstr "us ha mencionat"
 
-#: app/push_notifications.py:99
+#: app/push_notifications.py:102
 #, fuzzy, python-format
 msgid "%(name)s favourited your post"
 msgstr "%(name)s - Publicació nova"
 
-#: app/push_notifications.py:101
+#: app/push_notifications.py:104
 #, fuzzy, python-format
 msgid "%(name)s boosted your post"
 msgstr "%(name)s - Publicació nova"
 
-#: app/push_notifications.py:103
+#: app/push_notifications.py:106
 #, fuzzy, python-format
 msgid "%(name)s started following you"
 msgstr "Seguits per %(name)s"
 
-#: app/push_notifications.py:105
+#: app/push_notifications.py:108
 #, python-format
 msgid "%(name)s has requested to follow you"
 msgstr ""
@@ -554,7 +554,25 @@ msgstr "nova webmention de %(source)s"
 msgid "updated webmention from %(source)s"
 msgstr "webmention actualitzada de %(source)s"
 
-#: app/templates/notifications.html:117
+#: app/templates/notifications.html:113
+#, fuzzy
+msgid "published a new post"
+msgstr "ja no li agrada una publicació"
+
+#: app/templates/notifications.html:116
+#, fuzzy
+msgid "edited a post"
+msgstr "li ha agradat una publicació"
+
+#: app/templates/notifications.html:120
+msgid "a poll has ended"
+msgstr ""
+
+#: app/templates/components/actor.html:18 app/templates/notifications.html:122
+msgid "new"
+msgstr "nou"
+
+#: app/templates/notifications.html:130
 #, python-format
 msgid "deleted webmention from %(source)s"
 msgstr "webmention suprimida de %(source)s"
@@ -608,7 +626,7 @@ msgstr ""
 msgid "What's your account?"
 msgstr "Quin és el vostre compte?"
 
-#: app/templates/components/admin_buttons.html:62
+#: app/templates/components/admin_buttons.html:80
 #: app/templates/remote_follow.html:23
 msgid "follow"
 msgstr "segueix"
@@ -761,10 +779,6 @@ msgstr "Comparticions"
 msgid "Webmentions"
 msgstr "Webmentions"
 
-#: app/templates/components/actor.html:18
-msgid "new"
-msgstr "nou"
-
 #: app/templates/components/actor.html:67
 msgid "already following"
 msgstr "ja el seguiu"
@@ -815,7 +829,7 @@ msgstr "acceptat"
 msgid "rejected"
 msgstr "rebutjat"
 
-#: app/templates/components/actor.html:137
+#: app/templates/components/actor.html:144
 msgid "remote profile"
 msgstr "perfil remot"
 
@@ -843,92 +857,100 @@ msgstr "amaga les comparticions"
 msgid "show shares"
 msgstr "mostra les comparticions"
 
+#: app/templates/components/admin_buttons.html:62
+msgid "notify on new posts"
+msgstr ""
+
 #: app/templates/components/admin_buttons.html:71
+msgid "don't notify on new posts"
+msgstr ""
+
+#: app/templates/components/admin_buttons.html:89
 msgid "accept follow"
 msgstr "accepta el seguiment"
 
-#: app/templates/components/admin_buttons.html:80
+#: app/templates/components/admin_buttons.html:98
 msgid "reject follow"
 msgstr "rebutja el seguiment"
 
-#: app/templates/components/admin_buttons.html:89
+#: app/templates/components/admin_buttons.html:107
 msgid "accept quote"
 msgstr "accepta la citació"
 
-#: app/templates/components/admin_buttons.html:98
+#: app/templates/components/admin_buttons.html:116
 msgid "reject quote"
 msgstr "rebutja la citació"
 
-#: app/templates/components/admin_buttons.html:107
+#: app/templates/components/admin_buttons.html:125
 msgid "like"
 msgstr "m'agrada"
 
-#: app/templates/components/admin_buttons.html:116
+#: app/templates/components/admin_buttons.html:134
 msgid "bookmark"
 msgstr "afegeix a preferits"
 
-#: app/templates/components/admin_buttons.html:125
+#: app/templates/components/admin_buttons.html:143
 msgid "unbookmark"
 msgstr "treu de preferits"
 
-#: app/templates/components/admin_buttons.html:134
+#: app/templates/components/admin_buttons.html:152
 msgid "pin"
 msgstr "fixa"
 
-#: app/templates/components/admin_buttons.html:143
+#: app/templates/components/admin_buttons.html:161
 msgid "unpin"
 msgstr "deixa de fixar"
 
-#: app/templates/components/admin_buttons.html:150
+#: app/templates/components/admin_buttons.html:168
 msgid "edit"
 msgstr "edita"
 
-#: app/templates/components/admin_buttons.html:155
+#: app/templates/components/admin_buttons.html:173
 msgid "history"
 msgstr "historial"
 
-#: app/templates/components/admin_buttons.html:163
+#: app/templates/components/admin_buttons.html:181
 msgid "delete"
 msgstr "suprimeix"
 
-#: app/templates/components/admin_buttons.html:172
-#: app/templates/components/admin_buttons.html:181
+#: app/templates/components/admin_buttons.html:190
+#: app/templates/components/admin_buttons.html:199
 msgid "local delete"
 msgstr "suprimeix localment"
 
-#: app/templates/components/admin_buttons.html:190
+#: app/templates/components/admin_buttons.html:208
 msgid "share"
 msgstr "comparteix"
 
-#: app/templates/components/admin_buttons.html:199
+#: app/templates/components/admin_buttons.html:217
 msgid "undo"
 msgstr "desfés"
 
-#: app/templates/components/admin_buttons.html:206
+#: app/templates/components/admin_buttons.html:224
 msgid "reply"
 msgstr "respon"
 
-#: app/templates/components/admin_buttons.html:213
+#: app/templates/components/admin_buttons.html:231
 msgid "quote"
 msgstr "cita"
 
-#: app/templates/components/admin_buttons.html:221
+#: app/templates/components/admin_buttons.html:239
 msgid "direct message"
 msgstr "missatge directe"
 
-#: app/templates/components/admin_buttons.html:228
+#: app/templates/components/admin_buttons.html:246
 msgid "mention"
 msgstr "menciona"
 
-#: app/templates/components/admin_buttons.html:235
+#: app/templates/components/admin_buttons.html:253
 msgid "profile"
 msgstr "perfil"
 
-#: app/templates/components/admin_buttons.html:243
+#: app/templates/components/admin_buttons.html:261
 msgid "expand"
 msgstr "amplia"
 
-#: app/templates/components/admin_buttons.html:252
+#: app/templates/components/admin_buttons.html:270
 msgid "fetch replies"
 msgstr "recupera les respostes"
 

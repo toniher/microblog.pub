@@ -17,7 +17,9 @@ from sqlalchemy.orm import Session
 import activitypub.models
 from activitypub import activitypub as ap
 from activitypub.ap_object import ObjectType
+from activitypub.ap_object import RemoteObject
 from activitypub.boxes import send_create
+from activitypub.tests import factories
 from app import models
 from app.mastodon import ids
 from app.mastodon import streaming as streaming_module
@@ -156,6 +158,58 @@ async def test_muted_actor_produces_no_event(
     db.commit()
 
     setup_inbox_note(follower.actor, content="from a muted follower")
+
+    events, _ = await pump.tick(async_db_session)
+
+    assert events == []
+
+
+@pytest.mark.asyncio
+async def test_reblogs_hidden_actor_boost_produces_no_event(
+    async_db_session: AsyncSession,
+    db: Session,
+    respx_mock,
+) -> None:
+    """Same reuse as `test_muted_actor_produces_no_event`, for the
+    `reblogs=false` boost filter added to `fetch_inbox_timeline_page`.
+    """
+    pump = _pump()
+    await pump.seed(async_db_session)
+
+    ra = setup_remote_actor(respx_mock)
+    follower = setup_remote_actor_as_follower(ra)
+    assert follower.actor is not None
+    follower.actor.are_announces_hidden_from_stream = True
+    db.commit()
+
+    original_note = RemoteObject(
+        factories.build_note_object(from_remote_actor=ra, content="Original"),
+        ra,
+    )
+    # Mirrors `_handle_announce_activity`'s unknown-object branch: the
+    # announced object itself is cached hidden, only the Announce is visible.
+    original_inbox_object = factories.InboxObjectFactory.from_remote_object(
+        original_note, follower.actor
+    )
+    original_inbox_object.is_hidden_from_stream = True
+    db.commit()
+    boost = RemoteObject(
+        {
+            "@context": ap.AS_CTX,
+            "type": "Announce",
+            "id": f"{ra.ap_id}/announce/reblogs_hidden",
+            "actor": ra.ap_id,
+            "object": original_note.ap_id,
+            "to": [ap.AS_PUBLIC],
+            "cc": [],
+            "published": original_note.ap_object["published"],
+            "url": f"{ra.ap_id}/announce/reblogs_hidden",
+        },
+        ra,
+    )
+    factories.InboxObjectFactory.from_remote_object(
+        boost, follower.actor, relates_to_inbox_object_id=original_inbox_object.id
+    )
 
     events, _ = await pump.tick(async_db_session)
 

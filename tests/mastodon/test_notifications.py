@@ -93,6 +93,66 @@ async def test_notifications_list_maps_types_and_filters_unmapped(
 
 
 @pytest.mark.asyncio
+async def test_notifications_list_maps_status_update_and_poll_types(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    follower = setup_remote_actor_as_follower(ra)
+    assert follower.actor is not None
+
+    note = RemoteObject(
+        factories.build_note_object(from_remote_actor=ra, content="Hello"),
+        ra,
+    )
+    inbox_object = factories.InboxObjectFactory.from_remote_object(note, follower.actor)
+
+    _, outbox_object = await boxes.send_create(
+        async_db_session,
+        ObjectType.NOTE.value,
+        "My own poll target",
+        uploads=[],
+        in_reply_to=None,
+        visibility=ap.VisibilityEnum.PUBLIC,
+    )
+
+    status_notif = models.Notification(
+        notification_type=models.NotificationType.STATUS,
+        actor_id=follower.actor.id,
+        inbox_object_id=inbox_object.id,
+    )
+    update_notif = models.Notification(
+        notification_type=models.NotificationType.UPDATE,
+        actor_id=follower.actor.id,
+        inbox_object_id=inbox_object.id,
+    )
+    # An actor-less POLL row -- the owner's own poll ending.
+    poll_notif = models.Notification(
+        notification_type=models.NotificationType.POLL,
+        actor_id=None,
+        outbox_object_id=outbox_object.id,
+    )
+    async_db_session.add_all([status_notif, update_notif, poll_notif])
+    await async_db_session.commit()
+
+    token = await _make_access_token(async_db_session, "read:notifications")
+    response = client.get(
+        "/api/v1/notifications", headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    types_by_id = {n["id"]: n["type"] for n in data}
+    assert types_by_id[str(status_notif.id)] == "status"
+    assert types_by_id[str(update_notif.id)] == "update"
+    assert types_by_id[str(poll_notif.id)] == "poll"
+
+    poll_entity = next(n for n in data if n["id"] == str(poll_notif.id))
+    assert poll_entity["account"]["id"] == ids.LOCAL_ACTOR_ID
+
+
+@pytest.mark.asyncio
 async def test_notifications_list_marks_as_read(
     client: TestClient,
     async_db_session: AsyncSession,

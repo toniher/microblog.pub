@@ -73,6 +73,9 @@ _ALERT_ATTR = {
     "reblog": "alert_reblog",
     "follow": "alert_follow",
     "follow_request": "alert_follow_request",
+    "status": "alert_status",
+    "poll": "alert_poll",
+    "update": "alert_update",
 }
 
 

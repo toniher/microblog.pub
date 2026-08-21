@@ -2893,6 +2893,21 @@ async def _handle_update_activity(
             logger.info(f"Updating {existing_object.ap_id}")
             existing_object.ap_object = wrapped_object
             existing_object.updated_at = now()
+
+            was_interacted_with = (
+                existing_object.liked_via_outbox_object_ap_id is not None
+                or existing_object.announced_via_outbox_object_ap_id is not None
+            )
+            if was_interacted_with and is_notification_enabled(
+                models.NotificationType.UPDATE
+            ):
+                db_session.add(
+                    models.Notification(
+                        notification_type=models.NotificationType.UPDATE,
+                        actor_id=from_actor.id,
+                        inbox_object_id=existing_object.id,
+                    )
+                )
     else:
         # TODO(ts): support updating objects
         logger.info(f'Cannot update {wrapped_object["type"]}')
@@ -3124,6 +3139,21 @@ async def _process_note_object(
             inbox_object_id=inbox_object.id,
         )
         db_session.add(notif)
+
+    if (
+        is_from_following
+        and from_actor.are_new_posts_notified
+        and not is_reply
+        and not is_mention
+        and is_notification_enabled(models.NotificationType.STATUS)
+    ):
+        db_session.add(
+            models.Notification(
+                notification_type=models.NotificationType.STATUS,
+                actor_id=from_actor.id,
+                inbox_object_id=inbox_object.id,
+            )
+        )
 
 
 async def _process_inbound_quote(
@@ -3377,10 +3407,7 @@ async def _handle_announce_activity(
                 db_session.add(announced_inbox_object)
                 await db_session.flush()
                 announce_activity.relates_to_inbox_object_id = announced_inbox_object.id
-                announce_activity.is_hidden_from_stream = (
-                    not is_from_following
-                    or announce_activity.actor.are_announces_hidden_from_stream
-                )
+                announce_activity.is_hidden_from_stream = not is_from_following
 
 
 async def _handle_like_activity(

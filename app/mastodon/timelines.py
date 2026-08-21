@@ -57,6 +57,9 @@ async def fetch_inbox_timeline_page(
             # Applies to every timeline (home, public, hashtag), like
             # Mastodon: a mute hides the account everywhere but the profile.
             *activitypub.models.not_from_muted_actors(),
+            # Read-time and retroactive: a follow's `reblogs=false` hides
+            # their boosts everywhere the stream is queried.
+            *activitypub.models.not_hidden_announces(),
             *extra_where,
         )
         .options(joinedload(activitypub.models.InboxObject.actor))

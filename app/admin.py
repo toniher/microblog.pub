@@ -490,6 +490,7 @@ async def admin_stream(
         # Keeping muted actors out of the stream is the whole point of a
         # mute; they stay reachable from their profile and the Mutes page.
         *activitypub.models.not_from_muted_actors(),
+        *activitypub.models.not_hidden_announces(),
     ]
     if cursor:
         where.append(
@@ -1276,6 +1277,34 @@ async def admin_actions_show_announces(
 ) -> RedirectResponse:
     actor = await fetch_actor(db_session, ap_actor_id)
     actor.are_announces_hidden_from_stream = False
+    await db_session.commit()
+    return RedirectResponse(redirect_url, status_code=302)
+
+
+@router.post("/actions/notify_on", response_model=None)
+async def admin_actions_notify_on(
+    request: Request,
+    ap_actor_id: str = Form(),
+    redirect_url: str = Form(),
+    csrf_check: None = Depends(verify_csrf_token),
+    db_session: AsyncSession = Depends(get_db_session),
+) -> RedirectResponse:
+    actor = await fetch_actor(db_session, ap_actor_id)
+    actor.are_new_posts_notified = True
+    await db_session.commit()
+    return RedirectResponse(redirect_url, status_code=302)
+
+
+@router.post("/actions/notify_off", response_model=None)
+async def admin_actions_notify_off(
+    request: Request,
+    ap_actor_id: str = Form(),
+    redirect_url: str = Form(),
+    csrf_check: None = Depends(verify_csrf_token),
+    db_session: AsyncSession = Depends(get_db_session),
+) -> RedirectResponse:
+    actor = await fetch_actor(db_session, ap_actor_id)
+    actor.are_new_posts_notified = False
     await db_session.commit()
     return RedirectResponse(redirect_url, status_code=302)
 

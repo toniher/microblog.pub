@@ -71,9 +71,15 @@ forgotten on the device.
 - **Direct messages** — surfaced as Mastodon "conversations"
   (`/api/v1/conversations`), grouped the same way the `Direct messages` admin page
   groups them, with mark-as-read support.
-- **Notifications** — follows, favourites, reblogs, mentions, moves; read
-  state, per-type filtering, clear/dismiss, and an unread count
-  (`/api/v1/notifications/unread_count`) for badge counts.
+- **Notifications** — follows, favourites, reblogs, mentions, moves, new posts
+  from an account you follow with `notify` set, edits to a post you favourited
+  or boosted, and your own polls (or ones you voted in) ending; read state,
+  per-type filtering, clear/dismiss, and an unread count
+  (`/api/v1/notifications/unread_count`) for badge counts. A poll ending is the
+  one notification with no activity to react to, so it's found by a sweep — no
+  extra process is needed, the existing `outgoing_worker` runs it as part of its
+  poll, and the notification row itself is the watermark, so an ended poll is
+  never notified twice.
 - **Read-position sync** — `/api/v1/markers` is genuinely persisted (home and
   notifications timelines), so "resume where I left off" survives across
   devices and reinstalls.
@@ -89,7 +95,13 @@ forgotten on the device.
   Reject of the original follow, and they're free to follow again.
   Opening a remote actor you don't follow yet backfills their recent posts and
   follower/following/post counts on demand (fetched and cached, throttled), so
-  their profile isn't empty on first view.
+  their profile isn't empty on first view. `POST /follow` accepts `reblogs`
+  and `notify`, reflected back as `showing_reblogs`/`notifying` on the
+  relationship entity: `reblogs=false` hides that account's boosts from every
+  timeline (retroactively — toggling it back on unhides them), and
+  `notify=true` generates a `status` notification for their new top-level
+  posts. Re-`POST`ing `/follow` on an existing follow only touches the flags
+  actually sent, and never sends a second `Follow` activity.
 - **Mutes** — mute/unmute an account, with the `notifications` and `duration`
   options, plus the list of who you've muted (`/api/v1/mutes`) and the
   `muting`/`muting_notifications` relationship flags. A muted account
@@ -135,13 +147,13 @@ forgotten on the device.
   something to plot instead of blanks).
 - **Push notifications** (`/api/v1/push/subscription`, `GET`/`POST`/`PUT`/`DELETE`) —
   real Web Push, end-to-end encrypted (VAPID + `aes128gcm`), for mentions,
-  favourites, boosts, follows and follow requests, honouring the same
-  mute/conversation-mute filtering the in-app notification list applies.
-  `standard: true`; the `alerts` map advertises all ten Mastodon keys, but
-  `status`/`poll`/`update` and the admin-only `admin.sign_up`/`admin.report`
-  are always inert — this instance never generates those notification types
-  and has no admin surface to notify about. `policy` (`all`/`followed`/
-  `follower`/`none`) is honoured. New subscriptions default every alert to
+  favourites, boosts, follows, follow requests, new posts (`status`),
+  favourited/boosted post edits (`update`) and poll endings (`poll`),
+  honouring the same mute/conversation-mute filtering the in-app notification
+  list applies. `standard: true`; the `alerts` map advertises all ten
+  Mastodon keys, but the admin-only `admin.sign_up`/`admin.report` are always
+  inert — this instance has no admin surface to notify about. `policy`
+  (`all`/`followed`/`follower`/`none`) is honoured. New subscriptions default every alert to
   `true` (upstream Mastodon defaults them `false`, which leaves a fresh
   subscription silently inert until the client calls update — every real
   client sends explicit alerts anyway, so this instance opts for the less

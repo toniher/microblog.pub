@@ -504,8 +504,8 @@ def _serialize_relationship(
     return {
         "id": account_id,
         "following": meta.is_following if meta else False,
-        "showing_reblogs": True,
-        "notifying": False,
+        "showing_reblogs": not actor.are_announces_hidden_from_stream,
+        "notifying": actor.are_new_posts_notified,
         "followed_by": meta.is_follower if meta else False,
         "blocking": actor.is_blocked,
         "blocked_by": meta.has_blocked_local_actor if meta else False,
@@ -2202,7 +2202,7 @@ class _StatusParams:
         value = self.get(key)
         if isinstance(value, bool):
             return value
-        return str(value).lower() == "true"
+        return str(value).lower() in ("true", "1", "on")
 
     def get_list(self, key: str) -> list[Any]:
         if self._json is not None:
@@ -3064,11 +3064,41 @@ async def _resolve_account_or_404(
 @router.post("/api/v1/accounts/{account_id}/follow", response_model=None)
 async def accounts_follow(
     account_id: str,
+    request: Request,
     db_session: AsyncSession = Depends(get_db_session),
     token_info: AccessTokenInfo = Depends(require_scope("write:follows")),
 ) -> JSONResponse:
     actor = await _resolve_account_or_404(db_session, account_id)
-    await send_follow(db_session, actor.ap_id)
+    params = await _body_params(request)
+
+    existing_following = (
+        await db_session.scalars(
+            select(activitypub.models.Following).where(
+                activitypub.models.Following.ap_actor_id == actor.ap_id
+            )
+        )
+    ).one_or_none()
+    is_new_follow = (
+        existing_following is None
+        and await _find_own_follow_activity(db_session, actor.ap_id) is None
+    )
+
+    # On a new follow an absent param takes Mastodon's default; on an
+    # existing one an absent param leaves the flag unchanged.
+    if params.has("reblogs") or is_new_follow:
+        actor.are_announces_hidden_from_stream = not (
+            params.get_bool("reblogs") if params.has("reblogs") else True
+        )
+    if params.has("notify") or is_new_follow:
+        actor.are_new_posts_notified = (
+            params.get_bool("notify") if params.has("notify") else False
+        )
+
+    if is_new_follow:
+        await send_follow(db_session, actor.ap_id)
+    else:
+        await db_session.commit()
+
     return JSONResponse(
         content=await _relationship_for_actor(db_session, account_id, actor),
         status_code=200,

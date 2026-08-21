@@ -109,6 +109,19 @@
                     {% trans source=source_link|safe %}updated webmention from {{ source }}{% endtrans %}
                 </div>
                 {{ utils.display_object(notif.outbox_object, is_h_entry=False) }}
+            {% elif notif.notification_type.value == "status" %}
+                {{ actor_component.actor_action(url_for("admin_profile"), notif, _("published a new post"), with_icon=True, new_flag=notif.is_new) }}
+                {{ utils.display_object(notif.inbox_object, is_h_entry=False) }}
+            {% elif notif.notification_type.value == "update" %}
+                {{ actor_component.actor_action(url_for("admin_profile"), notif, _("edited a post"), with_icon=True, new_flag=notif.is_new) }}
+                {{ utils.display_object(notif.inbox_object, is_h_entry=False) }}
+            {% elif notif.notification_type.value == "poll" %}
+                <div class="actor-action" title="{{ notif.created_at.isoformat() }}">
+                    {{ _("a poll has ended") }}
+                    <span title="{{ notif.created_at.isoformat() }}">{{ notif.created_at | timeago }}</span>
+                    {% if notif.is_new %}<span class="new">{{ _("new") }}</span>{% endif %}
+                </div>
+                {{ utils.display_object(notif.outbox_object or notif.inbox_object, is_h_entry=False) }}
             {% elif notif.notification_type.value == "deleted_webmention" %}
                 {% set facepile_item = notif.webmention.as_facepile_item %}
                 {% set source_link %}{% if facepile_item %}<a href="{{ facepile_item.actor_url }}">{{ facepile_item.actor_name }}</a>{% endif %}

@@ -15,6 +15,7 @@ from app import models
 from app.mastodon import ids
 from tests.utils import setup_remote_actor
 from tests.utils import setup_remote_actor_as_follower
+from tests.utils import setup_remote_actor_as_following
 
 
 async def _make_access_token(db_session: AsyncSession, scope: str) -> str:
@@ -527,6 +528,67 @@ async def test_timelines_home_hides_boost_of_muted_actor(
     assert response.status_code == 200
     returned_ids = {status["id"] for status in response.json()}
     assert ids.encode_inbox_id(boost_object) not in returned_ids
+
+
+@pytest.mark.asyncio
+async def test_timelines_home_hides_and_unhides_boost_of_reblogs_hidden_actor(
+    client: TestClient,
+    db: Session,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    booster_ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    following = setup_remote_actor_as_following(booster_ra)
+    assert following.actor is not None
+    booster_actor = following.actor
+
+    original_note = RemoteObject(
+        factories.build_note_object(from_remote_actor=booster_ra, content="Original"),
+        booster_ra,
+    )
+    original_inbox_object = factories.InboxObjectFactory.from_remote_object(
+        original_note, booster_actor
+    )
+    boost = RemoteObject(
+        {
+            "@context": ap.AS_CTX,
+            "type": "Announce",
+            "id": f"{booster_ra.ap_id}/announce/reblogs_hidden",
+            "actor": booster_ra.ap_id,
+            "object": original_note.ap_id,
+            "to": [ap.AS_PUBLIC],
+            "cc": [],
+            "published": original_note.ap_object["published"],
+            "url": f"{booster_ra.ap_id}/announce/reblogs_hidden",
+        },
+        booster_ra,
+    )
+    boost_object = factories.InboxObjectFactory.from_remote_object(
+        boost, booster_actor, relates_to_inbox_object_id=original_inbox_object.id
+    )
+
+    token = await _make_access_token(async_db_session, "read:statuses")
+
+    booster_actor.are_announces_hidden_from_stream = True
+    db.commit()
+
+    response = client.get(
+        "/api/v1/timelines/home", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 200
+    returned_ids = {status["id"] for status in response.json()}
+    assert ids.encode_inbox_id(boost_object) not in returned_ids
+
+    # Retroactive: toggling the flag off surfaces the already-ingested boost.
+    booster_actor.are_announces_hidden_from_stream = False
+    db.commit()
+
+    response = client.get(
+        "/api/v1/timelines/home", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 200
+    returned_ids = {status["id"] for status in response.json()}
+    assert ids.encode_inbox_id(boost_object) in returned_ids
 
 
 @pytest.mark.asyncio

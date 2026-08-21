@@ -185,6 +185,13 @@ class NotificationType(str, enum.Enum):
     BLOCK = "block"
     UNBLOCK = "unblock"
 
+    # A followed actor (with `notify` set) published a new top-level post.
+    STATUS = "status"
+    # A followed actor edited a post the owner favourited or boosted.
+    UPDATE = "update"
+    # A poll the owner posted, or voted in, has ended.
+    POLL = "poll"
+
 
 class Notification(Base):
     __tablename__ = "notifications"
@@ -197,10 +204,16 @@ class Notification(Base):
     actor_id = Column(Integer, ForeignKey("actor.id"), nullable=True)
     actor = relationship(Actor, uselist=False)
 
-    outbox_object_id = Column(Integer, ForeignKey("outbox.id"), nullable=True)
+    # Indexed for the `poll` sweep's watermark check
+    # (`app.poll_notifications`), which correlates a NOT EXISTS on these
+    # columns every few seconds; unindexed they turned into a full scan of
+    # this table per candidate poll, growing with the notification history.
+    outbox_object_id = Column(
+        Integer, ForeignKey("outbox.id"), nullable=True, index=True
+    )
     outbox_object = relationship(OutboxObject, uselist=False)
 
-    inbox_object_id = Column(Integer, ForeignKey("inbox.id"), nullable=True)
+    inbox_object_id = Column(Integer, ForeignKey("inbox.id"), nullable=True, index=True)
     inbox_object = relationship(InboxObject, uselist=False)
 
     webmention_id = Column(

@@ -249,6 +249,101 @@ def test_inbox__create_from_follower(
     assert note_activity_from_inbox.ap_id == ro.activity_object_ap_id
 
 
+def test_inbox__create_from_notified_following_produces_status_notification(
+    db: Session,
+    client: TestClient,
+    respx_mock: respx.MockRouter,
+) -> None:
+    # Given a remote actor we follow, with `notify` set
+    ra = setup_remote_actor(respx_mock)
+    following = setup_remote_actor_as_following(ra)
+    assert following.actor is not None
+    following.actor.are_new_posts_notified = True
+    db.commit()
+
+    create_activity = factories.build_create_activity(
+        factories.build_note_object(
+            from_remote_actor=ra,
+            outbox_public_id=str(uuid4()),
+            content="A new top-level post",
+        )
+    )
+    ro = RemoteObject(create_activity, ra)
+
+    with mock_httpsig_checker(ra):
+        response = client.post(
+            "/inbox",
+            headers={"Content-Type": ap.AS_CTX},
+            json=ro.ap_object,
+        )
+    assert response.status_code == 202
+
+    run_process_next_incoming_activity()
+
+    note_from_inbox: activitypub.models.InboxObject | None = db.execute(
+        select(activitypub.models.InboxObject).where(
+            activitypub.models.InboxObject.ap_type == "Note"
+        )
+    ).scalar_one_or_none()
+    assert note_from_inbox
+
+    notif: models.Notification | None = db.execute(
+        select(models.Notification).where(
+            models.Notification.notification_type == models.NotificationType.STATUS
+        )
+    ).scalar_one_or_none()
+    assert notif is not None
+    assert notif.actor_id == following.actor.id
+    assert notif.inbox_object_id == note_from_inbox.id
+
+
+def test_inbox__update_of_favourited_post_produces_update_notification(
+    db: Session,
+    client: TestClient,
+    respx_mock: respx.MockRouter,
+) -> None:
+    ra = setup_remote_actor(respx_mock)
+    follower = setup_remote_actor_as_follower(ra)
+    assert follower.actor is not None
+
+    note_object = factories.build_note_object(from_remote_actor=ra, content="Original")
+    existing_object = factories.InboxObjectFactory.from_remote_object(
+        RemoteObject(note_object, ra), follower.actor
+    )
+    # As if we'd favourited it via `send_like` (`boxes.py:518`).
+    existing_object.liked_via_outbox_object_ap_id = "https://example.net/o/some-like"
+    db.commit()
+
+    updated_note_object = dict(note_object)
+    updated_note_object["content"] = "Edited"
+    update_activity = factories.build_update_activity(
+        from_remote_actor=ra, updated_object=updated_note_object
+    )
+    ro = RemoteObject(update_activity, ra)
+
+    with mock_httpsig_checker(ra):
+        response = client.post(
+            "/inbox",
+            headers={"Content-Type": ap.AS_CTX},
+            json=ro.ap_object,
+        )
+    assert response.status_code == 202
+
+    run_process_next_incoming_activity()
+
+    db.refresh(existing_object)
+    assert existing_object.ap_object["content"] == "Edited"
+
+    notif: models.Notification | None = db.execute(
+        select(models.Notification).where(
+            models.Notification.notification_type == models.NotificationType.UPDATE
+        )
+    ).scalar_one_or_none()
+    assert notif is not None
+    assert notif.inbox_object_id == existing_object.id
+    assert notif.outbox_object_id is None
+
+
 def test_inbox__announce_of_unknown_object_sets_conversation(
     db: Session,
     client: TestClient,

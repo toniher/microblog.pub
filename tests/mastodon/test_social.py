@@ -64,6 +64,81 @@ async def test_follow_and_unfollow(
 
 
 @pytest.mark.asyncio
+async def test_follow_with_reblogs_and_notify_params(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    actor = factories.ActorFactory.from_remote_actor(ra)
+    account_id = ids.encode_account_id(actor)
+
+    token = await _make_access_token(async_db_session, "write:follows")
+    followed = client.post(
+        f"/api/v1/accounts/{account_id}/follow",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"reblogs": False, "notify": True},
+    ).json()
+
+    assert followed["showing_reblogs"] is False
+    assert followed["notifying"] is True
+
+
+@pytest.mark.asyncio
+async def test_follow_absent_params_take_mastodon_defaults(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    actor = factories.ActorFactory.from_remote_actor(ra)
+    account_id = ids.encode_account_id(actor)
+
+    token = await _make_access_token(async_db_session, "write:follows")
+    followed = client.post(
+        f"/api/v1/accounts/{account_id}/follow",
+        headers={"Authorization": f"Bearer {token}"},
+    ).json()
+
+    assert followed["showing_reblogs"] is True
+    assert followed["notifying"] is False
+
+
+@pytest.mark.asyncio
+async def test_reposting_follow_toggles_flags_without_a_second_follow_activity(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    actor = factories.ActorFactory.from_remote_actor(ra)
+    account_id = ids.encode_account_id(actor)
+
+    token = await _make_access_token(async_db_session, "write:follows")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    client.post(f"/api/v1/accounts/{account_id}/follow", headers=headers)
+    toggled = client.post(
+        f"/api/v1/accounts/{account_id}/follow",
+        headers=headers,
+        json={"reblogs": False, "notify": True},
+    ).json()
+
+    assert toggled["showing_reblogs"] is False
+    assert toggled["notifying"] is True
+
+    follow_activities = (
+        await async_db_session.scalars(
+            select(activitypub.models.OutboxObject).where(
+                activitypub.models.OutboxObject.ap_type == "Follow",
+                activitypub.models.OutboxObject.activity_object_ap_id == actor.ap_id,
+            )
+        )
+    ).all()
+    assert len(follow_activities) == 1
+
+
+@pytest.mark.asyncio
 async def test_unfollow_when_not_following_is_noop(
     client: TestClient,
     async_db_session: AsyncSession,
