@@ -128,6 +128,7 @@ anyone reading this guide instead of grepping the directory.
 | `f4c2a7e8b910` | 2026-08-20 | Add quote-post support (FEP-044f): `inbox`/`outbox.quote_ap_id`, `quote_authorization_ap_id`; `outbox.quote_state`, `quotes_count`; `inbox.quote_is_verified`; and `ix_inbox_quote_ap_id`. |
 | `d4e1f6a2b837` | 2026-08-21 | Add `actor.are_new_posts_notified`, the storage behind Mastodon's `notify` follow parameter (a `status` notification for a followed account's new posts). `showing_reblogs` reuses the existing `are_announces_hidden_from_stream`, so it needs no column of its own. |
 | `e7b5c3a19d42` | 2026-08-22 | Index `notifications.outbox_object_id` / `inbox_object_id` (the `poll`-ended sweep correlates a `NOT EXISTS` on them every few seconds, and was scanning the whole table per candidate), and `actor.are_announces_hidden_from_stream` (its subquery runs on every timeline read; unindexed, SQLite rebuilt a transient covering index over `actor` on each execution). |
+| `b8f31a6c9e05` | 2026-08-22 | Index `actor.is_muted`, the pre-existing sibling of `are_announces_hidden_from_stream` above: `muted_actor_ids()` runs the same shape of subquery on every timeline *and* notification read, rendered twice per timeline query. Measured over 5k actors, 1% muted: 0.386ms -> 0.178ms per timeline query. |
 
 Running `poetry run inv migrate-db` (or `inv update`, see [Updating](install.md#updating))
 applies any migration not yet present in your local database, regardless of

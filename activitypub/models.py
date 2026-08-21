@@ -52,7 +52,17 @@ class Actor(Base, BaseActor):
 
     # Muting is purely local (nothing is federated, unlike a block): the actor
     # keeps following/being followed, their posts just stop showing up.
-    is_muted = Column(Boolean, nullable=False, default=False, server_default="0")
+    #
+    # Indexed because `muted_actor_ids()` runs as a subquery on every timeline
+    # *and* notification read (it renders twice per timeline query, once for
+    # the actor and once nested for boosts of a muted actor's posts): without
+    # it SQLite pays for an AUTOMATIC PARTIAL COVERING INDEX build plus a bare
+    # SCAN actor on every execution (measured over 5k actors, 1% muted: 0.386ms
+    # -> 0.178ms/query, both scans gone, with the index). Plain, not partial —
+    # see the note on `5eabb060f447`.
+    is_muted = Column(
+        Boolean, nullable=False, default=False, server_default="0", index=True
+    )
     # Null while muted means "until I unmute"; a timestamp makes the mute
     # lapse on its own (Mastodon's `duration` parameter). Nothing sweeps
     # expired rows — `is_muted_now`/`muted_actor_ids()` apply the expiry at

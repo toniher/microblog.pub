@@ -257,3 +257,31 @@ def test_reply_lookup_uses_the_expression_index(
     )
 
     assert index_name in plan, plan
+
+
+def test_actor_mute_and_announce_columns_are_indexed(db: Session) -> None:
+    """`is_muted` and `are_announces_hidden_from_stream` each back a subquery
+    (`muted_actor_ids()`/`announces_hidden_actor_ids()`) that runs on every
+    timeline read, and the mute one on every notification read too. Unindexed,
+    SQLite falls back to a bare `SCAN actor` or an AUTOMATIC PARTIAL COVERING
+    INDEX build on every execution instead of a seek — a real, measured cost
+    (see `b8f31a6c9e05`/`e7b5c3a19d42`).
+
+    This can't follow `test_reply_lookup_uses_the_expression_index`'s
+    EXPLAIN-based pattern: that index is the *only* way SQLite can serve a
+    `json_extract` equality at all, so the planner always takes it regardless
+    of table size or statistics. `is_muted`/`are_announces_hidden_from_stream`
+    are plain columns with a real alternative (a full scan), so whether the
+    planner actually *prefers* the index is a cost-based decision — verified
+    (not assumed) to depend on the row counts and statistical shape of both
+    `actor` and `inbox` together, down to which access path SQLite picks for
+    the *outer* query. That makes an EXPLAIN assertion either need a slow,
+    carefully-tuned multi-table seed to reproduce, or go flaky when it
+    doesn't; the actual before/after cost was instead measured directly
+    (`b8f31a6c9e05`'s docstring) rather than asserted here. This test instead
+    pins the one thing a unit test can assert deterministically: the index
+    exists, so a future edit can't silently drop `index=True` again.
+    """
+    index_names = {row[1] for row in db.execute(text("PRAGMA index_list(actor)")).all()}
+    assert "ix_actor_is_muted" in index_names
+    assert "ix_actor_are_announces_hidden_from_stream" in index_names
