@@ -683,6 +683,71 @@ async def test_search_local_statuses(
 
 
 @pytest.mark.asyncio
+async def test_search_statuses_reaches_past_the_first_page(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    """Matching is done by the query, not over a fixed window of recent rows:
+    the old implementation scanned the newest 100 statuses per box and filtered
+    in Python, so anything older was unfindable."""
+    _, buried = await boxes.send_create(
+        async_db_session,
+        ObjectType.NOTE.value,
+        "A very unique searchable phrase",
+        uploads=[],
+        in_reply_to=None,
+        visibility=ap.VisibilityEnum.PUBLIC,
+    )
+    for i in range(120):
+        await boxes.send_create(
+            async_db_session,
+            ObjectType.NOTE.value,
+            f"filler {i}",
+            uploads=[],
+            in_reply_to=None,
+            visibility=ap.VisibilityEnum.PUBLIC,
+        )
+
+    token = await _make_access_token(async_db_session, "read:search")
+    response = client.get(
+        "/api/v2/search?q=unique+searchable&type=statuses",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert ids.encode_outbox_id(buried) in {
+        s["id"] for s in response.json()["statuses"]
+    }
+
+
+@pytest.mark.asyncio
+async def test_search_escapes_sql_wildcards(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    """`%` and `_` are literal characters in a search box, not LIKE wildcards."""
+    _, outbox_object = await boxes.send_create(
+        async_db_session,
+        ObjectType.NOTE.value,
+        "battery at 100% today",
+        uploads=[],
+        in_reply_to=None,
+        visibility=ap.VisibilityEnum.PUBLIC,
+    )
+    token = await _make_access_token(async_db_session, "read:search")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    hit = client.get("/api/v2/search?q=100%25+today&type=statuses", headers=headers)
+    assert hit.status_code == 200
+    assert ids.encode_outbox_id(outbox_object) in {
+        s["id"] for s in hit.json()["statuses"]
+    }
+
+    # A bare wildcard must not match everything.
+    miss = client.get("/api/v2/search?q=%25zzz%25&type=statuses", headers=headers)
+    assert miss.status_code == 200
+    assert miss.json()["statuses"] == []
+
+
+@pytest.mark.asyncio
 async def test_search_hashtags_stub(
     client: TestClient, async_db_session: AsyncSession
 ) -> None:

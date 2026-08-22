@@ -8,6 +8,7 @@ upload surface, Phase 2b's status-write surface, and Phase 3's social
 graph + search surface.
 """
 
+import asyncio
 import re
 from datetime import datetime
 from datetime import timedelta
@@ -23,6 +24,7 @@ from fastapi import UploadFile as FastAPIUploadFile
 from loguru import logger
 from sqlalchemy import delete
 from sqlalchemy import func
+from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy import update
 from sqlalchemy.orm import joinedload
@@ -3400,70 +3402,121 @@ async def follow_requests_reject(
 # --- Search --------------------------------------------------------------------
 
 
+def _substring_pattern(query: str) -> str:
+    """`query` as a SQL `LIKE` substring pattern, with the wildcards it may
+    itself contain escaped (`\\` is the `escape` character passed alongside)."""
+    escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
+def _matches_substring(column: Any, pattern: str) -> Any:
+    """Case-insensitive substring match, evaluated by SQLite rather than in
+    Python. `LIKE` already ignores case, but only for ASCII; `lower()` on both
+    sides is no better (it is ASCII-only too), so this is the same fold the
+    previous Python `.lower()` did for every realistic query, minus the cost of
+    materializing the whole table to run it."""
+    return column.like(pattern, escape="\\")
+
+
 async def _search_accounts(
     db_session: AsyncSession, query: str, limit: int
 ) -> list[dict]:
-    # Same pragmatic approach as accounts/lookup (PR-1a): the single-user
-    # instance's cached-actor table is small, so scan-then-filter in Python
-    # rather than a DB-specific JSON query against ap_actor.
-    query_lower = query.lstrip("@").lower()
-    known_actors = (await db_session.scalars(select(activitypub.models.Actor))).all()
-    matches = [
-        actor
-        for actor in known_actors
-        if query_lower in actor.preferred_username.lower()
-        or query_lower in actor.display_name.lower()
-        or query_lower in actor.ap_id.lower()
-    ]
-    return [
-        await serializers.serialize_account(db_session, actor)
-        for actor in matches[:limit]
-    ]
+    # Filtered by SQLite, not in Python: loading every cached actor to scan it
+    # here decoded each row's `ap_actor` JSON on the event loop, and with a
+    # single worker process that stalled *every* concurrent request for the
+    # duration (measured over 20k actors: ~860ms per call, ~640ms of it a hard
+    # loop stall, vs. ~64ms and no measurable stall for this query). Clients
+    # like Ice Cubes search on every keystroke, so those stalls overlapped and
+    # the instance stopped responding altogether.
+    pattern = _substring_pattern(query.lstrip("@"))
+    model = activitypub.models.Actor
+    matches = (
+        await db_session.scalars(
+            select(model)
+            .where(
+                or_(
+                    _matches_substring(
+                        activitypub.models.preferred_username_expr(model.ap_actor),
+                        pattern,
+                    ),
+                    # `display_name` is `name` falling back to
+                    # `preferredUsername`, both of which are already covered.
+                    _matches_substring(
+                        activitypub.models.actor_name_expr(model.ap_actor), pattern
+                    ),
+                    _matches_substring(model.ap_id, pattern),
+                )
+            )
+            # Insertion order, which is what `matches[:limit]` off an unordered
+            # scan effectively returned before.
+            .order_by(model.id)
+            .limit(limit)
+        )
+    ).all()
+    return [await serializers.serialize_account(db_session, actor) for actor in matches]
 
 
 async def _search_statuses(
     db_session: AsyncSession, query: str, limit: int
 ) -> list[dict]:
-    # Same bounded-scan-then-filter approach as timelines/tag (PR-1b) — there
-    # is no full-text index (the outbox_fts table some code comments allude
-    # to was never wired up: no migration creates it, nothing keeps it in
-    # sync). Fine for a single-user instance's post volume.
-    query_lower = query.lower()
-    scan_limit = max(limit * 5, 100)
+    # There is no full-text index (the outbox_fts table some code comments
+    # allude to was never wired up: no migration creates it, nothing keeps it
+    # in sync), so this is a substring match — but pushed into SQL rather than
+    # run over a page of hydrated ORM objects. That both keeps the JSON decode
+    # off the event loop and drops the old scan window: matching the newest 100
+    # rows per box meant search silently never found anything older.
+    pattern = _substring_pattern(query)
     inbox_items = await timelines.fetch_inbox_timeline_page(
         db_session,
         before=None,
         after=None,
-        limit=scan_limit,
+        limit=limit,
         extra_where=(
             activitypub.models.InboxObject.visibility == ap.VisibilityEnum.PUBLIC,
+            _matches_substring(
+                activitypub.models.content_expr(
+                    activitypub.models.InboxObject.ap_object
+                ),
+                pattern,
+            ),
         ),
     )
     outbox_items = await timelines.fetch_outbox_timeline_page(
         db_session,
         before=None,
         after=None,
-        limit=scan_limit,
+        limit=limit,
         extra_where=(
             activitypub.models.OutboxObject.visibility == ap.VisibilityEnum.PUBLIC,
+            _matches_substring(
+                activitypub.models.content_expr(
+                    activitypub.models.OutboxObject.ap_object
+                ),
+                pattern,
+            ),
         ),
     )
     combined: list[AnyboxObject] = [*inbox_items, *outbox_items]
-    matches = [
-        obj for obj in combined if obj.content and query_lower in obj.content.lower()
-    ]
-    matches.sort(key=timelines.status_id_int, reverse=True)
-    page = matches[:limit]
+    combined.sort(key=timelines.status_id_int, reverse=True)
+    page = combined[:limit]
     await serializers.prefetch_status_relations(db_session, page)
     return [await serializers.serialize_status(db_session, obj) for obj in page]
 
 
+# Long enough for a healthy remote to answer, short enough that a dead host
+# can't pin the request: `lookup()` may webfinger and then fetch, each with
+# httpx's own 5s timeout, and a client searching per keystroke fires this at
+# every half-typed handle.
+_RESOLVE_TIMEOUT = 5.0
+
+
 async def _resolve_remote(db_session: AsyncSession, query: str):
     try:
-        return await lookup(db_session, query)
+        return await asyncio.wait_for(lookup(db_session, query), _RESOLVE_TIMEOUT)
     except Exception:
-        # Network/parse failures just mean "nothing resolved" — search must
-        # not 500 because a query isn't a fetchable handle/URL.
+        # Network/parse failures (and the timeout above) just mean "nothing
+        # resolved" — search must not 500, or hang, because a query isn't a
+        # fetchable handle/URL.
         return None
 
 

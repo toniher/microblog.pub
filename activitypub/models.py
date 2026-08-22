@@ -197,6 +197,29 @@ def in_reply_to_expr(ap_object_column: Any) -> Any:
     return func.json_extract(ap_object_column, text(_IN_REPLY_TO_JSON_PATH))
 
 
+# Same literal-path convention (there is no index to defeat here yet, but the
+# form stays indexable if one is ever added). These back the Mastodon search
+# endpoint's SQL-side filtering -- see `app/mastodon/router.py`.
+_CONTENT_JSON_PATH = "'$.content'"
+_PREFERRED_USERNAME_JSON_PATH = "'$.preferredUsername'"
+_NAME_JSON_PATH = "'$.name'"
+
+
+def content_expr(ap_object_column: Any) -> Any:
+    """An object's `content`, for matching without loading the whole payload."""
+    return func.json_extract(ap_object_column, text(_CONTENT_JSON_PATH))
+
+
+def preferred_username_expr(ap_actor_column: Any) -> Any:
+    """An actor's `preferredUsername`, ditto."""
+    return func.json_extract(ap_actor_column, text(_PREFERRED_USERNAME_JSON_PATH))
+
+
+def actor_name_expr(ap_actor_column: Any) -> Any:
+    """An actor's `name` (its display name when set), ditto."""
+    return func.json_extract(ap_actor_column, text(_NAME_JSON_PATH))
+
+
 class InboxObject(Base, BaseObject):
     __tablename__ = "inbox"
     __table_args__ = (
