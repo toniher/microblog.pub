@@ -259,6 +259,35 @@ def test_reply_lookup_uses_the_expression_index(
     assert index_name in plan, plan
 
 
+@pytest.mark.parametrize(
+    "fts_table",
+    [
+        activitypub.models.ACTOR_SEARCH,
+        activitypub.models.INBOX_SEARCH,
+        activitypub.models.OUTBOX_SEARCH,
+    ],
+)
+def test_search_text_glob_uses_the_trigram_index(db: Session, fts_table) -> None:
+    """The FTS5 trigram tokenizer backing `*_search` only serves a `LIKE`/
+    `GLOB` query when the planner marks it `L0`/`G0` -- a stray `ESCAPE`
+    clause (the form the old substring search used) silently drops it back to
+    a full scan (see `app/utils/search_text.py`, `PLAN-search.md`). This
+    guards `matches_search()` staying a plain `GLOB` with no `ESCAPE`, so a
+    regression back to that form is caught here rather than just making
+    search slow again.
+    """
+    stmt = select(fts_table.c.rowid).where(
+        activitypub.models.matches_search(fts_table, "*hello*")
+    )
+    sql = str(stmt.compile(compile_kwargs={"literal_binds": True}))
+
+    plan = " ".join(
+        str(row) for row in db.execute(text("EXPLAIN QUERY PLAN " + sql)).all()
+    )
+
+    assert "G0" in plan, plan
+
+
 def test_actor_mute_and_announce_columns_are_indexed(db: Session) -> None:
     """`is_muted` and `are_announces_hidden_from_stream` each back a subquery
     (`muted_actor_ids()`/`announces_hidden_actor_ids()`) that runs on every

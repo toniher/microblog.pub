@@ -748,6 +748,144 @@ async def test_search_escapes_sql_wildcards(
 
 
 @pytest.mark.asyncio
+async def test_search_local_accounts_unicode_case_folding(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    """SQLite's `LIKE`/`lower()` fold ASCII case only; `search_text` is
+    normalized with NFC + `casefold()` at write time instead (see
+    `app/utils/search_text.py`), so an actor named `José` is found searching
+    either case of the accented letter -- the regression this whole plan
+    exists to fix."""
+    ra = factories.RemoteActorFactory(
+        base_url="https://example.com/users/jose",
+        username="José",
+        public_key="pk",
+    )
+    actor = factories.ActorFactory.from_remote_actor(ra)
+
+    token = await _make_access_token(async_db_session, "read:search")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    for query in ("JOSÉ", "josé"):
+        response = client.get(
+            "/api/v2/search",
+            params={"q": query, "type": "accounts"},
+            headers=headers,
+        )
+        assert response.status_code == 200
+        assert ids.encode_account_id(actor) in {
+            a["id"] for a in response.json()["accounts"]
+        }, query
+
+
+@pytest.mark.asyncio
+async def test_search_escapes_glob_metacharacters(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    """`*`, `?` and `[` are literal characters in a search box, not `GLOB`
+    metacharacters -- mirrors `test_search_escapes_sql_wildcards` for the old
+    `LIKE` form."""
+    _, outbox_object = await boxes.send_create(
+        async_db_session,
+        ObjectType.NOTE.value,
+        "5*3=15? see [final] score",
+        uploads=[],
+        in_reply_to=None,
+        visibility=ap.VisibilityEnum.PUBLIC,
+    )
+    _, filler = await boxes.send_create(
+        async_db_session,
+        ObjectType.NOTE.value,
+        "just a filler status",
+        uploads=[],
+        in_reply_to=None,
+        visibility=ap.VisibilityEnum.PUBLIC,
+    )
+    token = await _make_access_token(async_db_session, "read:search")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    for query in ("5*3=15", "15?", "[final]"):
+        hit = client.get(
+            "/api/v2/search",
+            params={"q": query, "type": "statuses"},
+            headers=headers,
+        )
+        assert hit.status_code == 200
+        assert ids.encode_outbox_id(outbox_object) in {
+            s["id"] for s in hit.json()["statuses"]
+        }, query
+
+    # A bare `*` must not match every status just because none contain one.
+    miss = client.get(
+        "/api/v2/search", params={"q": "*", "type": "statuses"}, headers=headers
+    )
+    assert miss.status_code == 200
+    statuses = {s["id"] for s in miss.json()["statuses"]}
+    assert ids.encode_outbox_id(outbox_object) in statuses
+    assert ids.encode_outbox_id(filler) not in statuses
+
+
+@pytest.mark.asyncio
+async def test_search_index_stays_in_sync_with_edits_and_deletes(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    """The FTS5 shadow index is kept in sync by the SQL triggers in
+    `activitypub.models.fts5_ddl_statements`, not just the mapper events that
+    populate `search_text` -- this is what those triggers exist to
+    guarantee."""
+    _, outbox_object = await boxes.send_create(
+        async_db_session,
+        ObjectType.NOTE.value,
+        "before the edit",
+        uploads=[],
+        in_reply_to=None,
+        visibility=ap.VisibilityEnum.PUBLIC,
+    )
+    token = await _make_access_token(async_db_session, "read:search")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    found = client.get(
+        "/api/v2/search",
+        params={"q": "before the edit", "type": "statuses"},
+        headers=headers,
+    )
+    assert ids.encode_outbox_id(outbox_object) in {
+        s["id"] for s in found.json()["statuses"]
+    }
+
+    await boxes.send_update(async_db_session, outbox_object.ap_id, "after the edit")
+
+    stale = client.get(
+        "/api/v2/search",
+        params={"q": "before the edit", "type": "statuses"},
+        headers=headers,
+    )
+    assert ids.encode_outbox_id(outbox_object) not in {
+        s["id"] for s in stale.json()["statuses"]
+    }
+
+    updated = client.get(
+        "/api/v2/search",
+        params={"q": "after the edit", "type": "statuses"},
+        headers=headers,
+    )
+    assert ids.encode_outbox_id(outbox_object) in {
+        s["id"] for s in updated.json()["statuses"]
+    }
+
+    await boxes.send_delete(async_db_session, outbox_object.ap_id)
+
+    gone = client.get(
+        "/api/v2/search",
+        params={"q": "after the edit", "type": "statuses"},
+        headers=headers,
+    )
+    assert ids.encode_outbox_id(outbox_object) not in {
+        s["id"] for s in gone.json()["statuses"]
+    }
+
+
+@pytest.mark.asyncio
 async def test_search_hashtags_stub(
     client: TestClient, async_db_session: AsyncSession
 ) -> None:

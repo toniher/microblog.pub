@@ -24,7 +24,6 @@ from fastapi import UploadFile as FastAPIUploadFile
 from loguru import logger
 from sqlalchemy import delete
 from sqlalchemy import func
-from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy import update
 from sqlalchemy.orm import joinedload
@@ -81,6 +80,8 @@ from app.utils.datetime import as_utc
 from app.utils.datetime import now
 from app.utils.datetime import parse_isoformat
 from app.utils.emoji import EMOJIS
+from app.utils.search_text import glob_pattern
+from app.utils.search_text import normalize
 from app.utils.url import InvalidURLError
 from app.utils.url import check_url_async
 from app.webpush import decode_client_key
@@ -3517,49 +3518,37 @@ async def follow_requests_reject(
 # --- Search --------------------------------------------------------------------
 
 
-def _substring_pattern(query: str) -> str:
-    """`query` as a SQL `LIKE` substring pattern, with the wildcards it may
-    itself contain escaped (`\\` is the `escape` character passed alongside)."""
-    escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    return f"%{escaped}%"
-
-
-def _matches_substring(column: Any, pattern: str) -> Any:
-    """Case-insensitive substring match, evaluated by SQLite rather than in
-    Python. `LIKE` already ignores case, but only for ASCII; `lower()` on both
-    sides is no better (it is ASCII-only too), so this is the same fold the
-    previous Python `.lower()` did for every realistic query, minus the cost of
-    materializing the whole table to run it."""
-    return column.like(pattern, escape="\\")
+def _query_pattern(query: str) -> str:
+    """`query` as a `GLOB` substring pattern against already-normalized
+    (NFC + casefolded) `search_text` columns -- see `app/utils/search_text.py`.
+    `GLOB`, not `LIKE ... ESCAPE`: the FTS5 trigram tokenizer backing
+    `*_search` only serves a query the planner marks `L0` (plain `LIKE`) or
+    `G0` (`GLOB`); an `ESCAPE` clause silently drops it back to a full scan."""
+    return glob_pattern(normalize(query))
 
 
 async def _search_accounts(
     db_session: AsyncSession, query: str, limit: int
 ) -> list[dict]:
-    # Filtered by SQLite, not in Python: loading every cached actor to scan it
-    # here decoded each row's `ap_actor` JSON on the event loop, and with a
-    # single worker process that stalled *every* concurrent request for the
-    # duration (measured over 20k actors: ~860ms per call, ~640ms of it a hard
-    # loop stall, vs. ~64ms and no measurable stall for this query). Clients
-    # like Ice Cubes search on every keystroke, so those stalls overlapped and
-    # the instance stopped responding altogether.
-    pattern = _substring_pattern(query.lstrip("@"))
+    # Matched through the `actor_search` FTS5 trigram index rather than
+    # loading every cached actor to scan it here: that used to decode each
+    # row's `ap_actor` JSON on the event loop, and with a single worker
+    # process that stalled *every* concurrent request for the duration
+    # (measured over 20k actors: ~860ms per call, ~640ms of it a hard loop
+    # stall). Clients like Ice Cubes search on every keystroke, so those
+    # stalls overlapped and the instance stopped responding altogether.
+    pattern = _query_pattern(query.lstrip("@"))
     model = activitypub.models.Actor
     matches = (
         await db_session.scalars(
             select(model)
             .where(
-                or_(
-                    _matches_substring(
-                        activitypub.models.preferred_username_expr(model.ap_actor),
-                        pattern,
-                    ),
-                    # `display_name` is `name` falling back to
-                    # `preferredUsername`, both of which are already covered.
-                    _matches_substring(
-                        activitypub.models.actor_name_expr(model.ap_actor), pattern
-                    ),
-                    _matches_substring(model.ap_id, pattern),
+                model.id.in_(
+                    select(activitypub.models.ACTOR_SEARCH.c.rowid).where(
+                        activitypub.models.matches_search(
+                            activitypub.models.ACTOR_SEARCH, pattern
+                        )
+                    )
                 )
             )
             # Insertion order, which is what `matches[:limit]` off an unordered
@@ -3574,13 +3563,12 @@ async def _search_accounts(
 async def _search_statuses(
     db_session: AsyncSession, query: str, limit: int
 ) -> list[dict]:
-    # There is no full-text index (the outbox_fts table some code comments
-    # allude to was never wired up: no migration creates it, nothing keeps it
-    # in sync), so this is a substring match — but pushed into SQL rather than
-    # run over a page of hydrated ORM objects. That both keeps the JSON decode
-    # off the event loop and drops the old scan window: matching the newest 100
-    # rows per box meant search silently never found anything older.
-    pattern = _substring_pattern(query)
+    # Matched through the `inbox_search`/`outbox_search` FTS5 trigram
+    # indexes, pushed into SQL rather than run over a page of hydrated ORM
+    # objects. That both keeps the JSON decode off the event loop and drops
+    # the old scan window: matching the newest 100 rows per box meant search
+    # silently never found anything older.
+    pattern = _query_pattern(query)
     inbox_items = await timelines.fetch_inbox_timeline_page(
         db_session,
         before=None,
@@ -3588,11 +3576,12 @@ async def _search_statuses(
         limit=limit,
         extra_where=(
             activitypub.models.InboxObject.visibility == ap.VisibilityEnum.PUBLIC,
-            _matches_substring(
-                activitypub.models.content_expr(
-                    activitypub.models.InboxObject.ap_object
-                ),
-                pattern,
+            activitypub.models.InboxObject.id.in_(
+                select(activitypub.models.INBOX_SEARCH.c.rowid).where(
+                    activitypub.models.matches_search(
+                        activitypub.models.INBOX_SEARCH, pattern
+                    )
+                )
             ),
         ),
     )
@@ -3603,11 +3592,12 @@ async def _search_statuses(
         limit=limit,
         extra_where=(
             activitypub.models.OutboxObject.visibility == ap.VisibilityEnum.PUBLIC,
-            _matches_substring(
-                activitypub.models.content_expr(
-                    activitypub.models.OutboxObject.ap_object
-                ),
-                pattern,
+            activitypub.models.OutboxObject.id.in_(
+                select(activitypub.models.OUTBOX_SEARCH.c.rowid).where(
+                    activitypub.models.matches_search(
+                        activitypub.models.OUTBOX_SEARCH, pattern
+                    )
+                )
             ),
         ),
     )

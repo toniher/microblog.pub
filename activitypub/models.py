@@ -2,6 +2,7 @@ from typing import Any
 from typing import Optional
 from typing import Union
 
+from sqlalchemy import DDL
 from sqlalchemy import JSON
 from sqlalchemy import Boolean
 from sqlalchemy import Column
@@ -13,9 +14,13 @@ from sqlalchemy import Index
 from sqlalchemy import Integer
 from sqlalchemy import String
 from sqlalchemy import UniqueConstraint
+from sqlalchemy import column
+from sqlalchemy import event
 from sqlalchemy import func
+from sqlalchemy import inspect
 from sqlalchemy import or_
 from sqlalchemy import select
+from sqlalchemy import table
 from sqlalchemy import text
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import aliased
@@ -30,6 +35,7 @@ from activitypub.ap_object import Object as BaseObject
 from activitypub.ap_object import format_xsd_duration
 from app.config import BASE_URL
 from app.database import Base
+from app.utils import search_text
 from app.utils.datetime import as_utc
 from app.utils.datetime import now
 
@@ -108,6 +114,12 @@ class Actor(Base, BaseActor):
     following_count = Column(Integer, nullable=True)
     statuses_count = Column(Integer, nullable=True)
     counts_refreshed_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Normalized (NFC + casefold) handle/name/ID, kept in sync by the mapper
+    # events below and indexed by `actor_search`'s FTS5 trigram index -- see
+    # `app/utils/search_text.py`. Nullable so a row written before this
+    # column existed degrades to "not indexed" rather than breaking.
+    search_text = Column(String, nullable=True)
 
     @property
     def is_from_db(self) -> bool:
@@ -195,29 +207,6 @@ _IN_REPLY_TO_INDEX_EXPR = f"json_extract(ap_object, {_IN_REPLY_TO_JSON_PATH})"
 def in_reply_to_expr(ap_object_column: Any) -> Any:
     """`inReplyTo`, extracted so the expression indexes below can serve it."""
     return func.json_extract(ap_object_column, text(_IN_REPLY_TO_JSON_PATH))
-
-
-# Same literal-path convention (there is no index to defeat here yet, but the
-# form stays indexable if one is ever added). These back the Mastodon search
-# endpoint's SQL-side filtering -- see `app/mastodon/router.py`.
-_CONTENT_JSON_PATH = "'$.content'"
-_PREFERRED_USERNAME_JSON_PATH = "'$.preferredUsername'"
-_NAME_JSON_PATH = "'$.name'"
-
-
-def content_expr(ap_object_column: Any) -> Any:
-    """An object's `content`, for matching without loading the whole payload."""
-    return func.json_extract(ap_object_column, text(_CONTENT_JSON_PATH))
-
-
-def preferred_username_expr(ap_actor_column: Any) -> Any:
-    """An actor's `preferredUsername`, ditto."""
-    return func.json_extract(ap_actor_column, text(_PREFERRED_USERNAME_JSON_PATH))
-
-
-def actor_name_expr(ap_actor_column: Any) -> Any:
-    """An actor's `name` (its display name when set), ditto."""
-    return func.json_extract(ap_actor_column, text(_NAME_JSON_PATH))
 
 
 class InboxObject(Base, BaseObject):
@@ -316,6 +305,13 @@ class InboxObject(Base, BaseObject):
 
     og_meta: Mapped[list[dict[str, Any]] | None] = Column(JSON, nullable=True)
 
+    # Normalized (NFC + casefold) visible content plus link targets, kept in
+    # sync by the mapper events below and indexed by `inbox_search`'s FTS5
+    # trigram index -- see `app/utils/search_text.py`. Nullable so a row
+    # written before this column existed degrades to "not indexed" rather
+    # than breaking.
+    search_text = Column(String, nullable=True)
+
     @property
     def relates_to_anybox_object(self) -> Union["InboxObject", "OutboxObject"] | None:
         if self.relates_to_inbox_object_id:
@@ -394,6 +390,13 @@ class OutboxObject(Base, BaseObject):
     # reactions: Mapped[list[dict[str, Any]] | None] = Column(JSON, nullable=True)
 
     og_meta: Mapped[list[dict[str, Any]] | None] = Column(JSON, nullable=True)
+
+    # Normalized (NFC + casefold) visible content plus link targets, kept in
+    # sync by the mapper events below and indexed by `outbox_search`'s FTS5
+    # trigram index -- see `app/utils/search_text.py`. Nullable so a row
+    # written before this column existed degrades to "not indexed" rather
+    # than breaking.
+    search_text = Column(String, nullable=True)
 
     # For the featured collection
     is_pinned = Column(Boolean, nullable=False, default=False)
@@ -535,6 +538,135 @@ class OutboxObject(Base, BaseObject):
         if self.ap_type == "Article" and self.slug and self.public_id:
             return f"{BASE_URL}/articles/{self.public_id[:7]}/{self.slug}"
         return super().url
+
+
+# --- Full-text search ------------------------------------------------------
+#
+# `search_text` (defined on each model above) is normalized (NFC + casefold)
+# at write time by the mapper events below -- that's what makes search
+# Unicode-correct, since SQLite's `LIKE`/`lower()` fold ASCII only. It is
+# indexed by an FTS5 external-content table per source table, using the
+# trigram tokenizer so a substring `GLOB` query is served from the index
+# instead of a full scan -- see `matches_search()` and
+# `app/mastodon/router.py`'s search functions.
+#
+# The DDL lives here, rather than only in the migration, because
+# `tests/conftest.py` builds its schema with `Base.metadata.create_all`;
+# DDL that lived only in the migration would leave every test running
+# unindexed. The migration imports `fts5_ddl_statements()` so the two stay
+# identical -- the same discipline `_IN_REPLY_TO_INDEX_EXPR` follows for the
+# reply index.
+
+
+def fts5_ddl_statements(table_name: str) -> tuple[list[str], list[str]]:
+    """`(create, drop)` DDL statements for `table_name`'s FTS5 shadow index.
+
+    Each entry is executed as its own statement -- SQLite (and so
+    SQLAlchemy's `DDL`) only runs one statement per `execute()` call, so this
+    can't be a single multi-statement script.
+    """
+    fts = f"{table_name}_search"
+    create = [
+        f"CREATE VIRTUAL TABLE IF NOT EXISTS {fts} USING fts5("
+        f"search_text, content='{table_name}', content_rowid='id', "
+        f"tokenize='trigram')",
+        f"CREATE TRIGGER IF NOT EXISTS {fts}_ai AFTER INSERT ON {table_name} BEGIN "
+        f"INSERT INTO {fts}(rowid, search_text) VALUES (new.id, new.search_text); "
+        f"END",
+        f"CREATE TRIGGER IF NOT EXISTS {fts}_ad AFTER DELETE ON {table_name} BEGIN "
+        f"INSERT INTO {fts}({fts}, rowid, search_text) "
+        f"VALUES('delete', old.id, old.search_text); "
+        f"END",
+        f"CREATE TRIGGER IF NOT EXISTS {fts}_au AFTER UPDATE ON {table_name} BEGIN "
+        f"INSERT INTO {fts}({fts}, rowid, search_text) "
+        f"VALUES('delete', old.id, old.search_text); "
+        f"INSERT INTO {fts}(rowid, search_text) VALUES (new.id, new.search_text); "
+        f"END",
+    ]
+    drop = [
+        f"DROP TRIGGER IF EXISTS {fts}_au",
+        f"DROP TRIGGER IF EXISTS {fts}_ad",
+        f"DROP TRIGGER IF EXISTS {fts}_ai",
+        f"DROP TABLE IF EXISTS {fts}",
+    ]
+    return create, drop
+
+
+def _search_table(table_name: str) -> Any:
+    """A lightweight, unmapped handle onto `table_name`'s FTS5 shadow table,
+    for building `GLOB` queries against it. It deliberately isn't a `Base`
+    model/`Table` on `Base.metadata`: the DDL above creates it as a virtual
+    table, not one `create_all` should try to `CREATE TABLE` itself."""
+    return table(f"{table_name}_search", column("rowid"), column("search_text"))
+
+
+ACTOR_SEARCH = _search_table("actor")
+INBOX_SEARCH = _search_table("inbox")
+OUTBOX_SEARCH = _search_table("outbox")
+
+for _model, _table_name in (
+    (Actor, "actor"),
+    (InboxObject, "inbox"),
+    (OutboxObject, "outbox"),
+):
+    _create_stmts, _drop_stmts = fts5_ddl_statements(_table_name)
+    for _stmt in _create_stmts:
+        event.listen(_model.__table__, "after_create", DDL(_stmt))
+    for _stmt in _drop_stmts:
+        event.listen(_model.__table__, "before_drop", DDL(_stmt))
+del _model, _table_name, _create_stmts, _drop_stmts, _stmt
+
+
+def matches_search(fts_table: Any, pattern: str) -> Any:
+    """`fts_table.search_text GLOB pattern`, evaluated through the trigram
+    index rather than `LIKE ... ESCAPE`: the FTS5 trigram tokenizer only
+    serves `L0` (plain `LIKE`) or `G0` (`GLOB`) -- an `ESCAPE` clause
+    silently drops the query back to a full scan, which is why the old
+    `LIKE ... ESCAPE` form can't just be pointed at this table. Build
+    `pattern` with `app.utils.search_text.glob_pattern()`."""
+    return fts_table.c.search_text.op("GLOB")(pattern)
+
+
+def _populate_search_text(source_attr: str, compute: Any) -> Any:
+    def handler(mapper: Any, connection: Any, target: Any) -> None:
+        setattr(target, "search_text", compute(getattr(target, source_attr)))
+
+    return handler
+
+
+def _refresh_search_text_on_change(source_attr: str, compute: Any) -> Any:
+    def handler(mapper: Any, connection: Any, target: Any) -> None:
+        # A plain field bump (e.g. `replies_count`) shouldn't re-parse HTML
+        # on every write; only recompute when the indexed source actually
+        # changed.
+        if inspect(target).attrs[source_attr].history.has_changes():
+            setattr(target, "search_text", compute(getattr(target, source_attr)))
+
+    return handler
+
+
+event.listen(
+    Actor,
+    "before_insert",
+    _populate_search_text("ap_actor", search_text.actor_search_text),
+)
+event.listen(
+    Actor,
+    "before_update",
+    _refresh_search_text_on_change("ap_actor", search_text.actor_search_text),
+)
+for _box_model in (InboxObject, OutboxObject):
+    event.listen(
+        _box_model,
+        "before_insert",
+        _populate_search_text("ap_object", search_text.object_search_text),
+    )
+    event.listen(
+        _box_model,
+        "before_update",
+        _refresh_search_text_on_change("ap_object", search_text.object_search_text),
+    )
+del _box_model
 
 
 class Follower(Base):
