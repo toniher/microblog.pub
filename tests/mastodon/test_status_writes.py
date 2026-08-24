@@ -867,6 +867,311 @@ async def test_statuses_update_replaces_media_ids(
     assert response.json()["media_attachments"] == []
 
 
+@pytest.mark.asyncio
+async def test_statuses_update_with_reported_media_id_preserves_attachment(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    media_token = await _make_access_token(async_db_session, "write:media")
+    media_response = client.post(
+        "/api/v2/media",
+        headers={"Authorization": f"Bearer {media_token}"},
+        files={"file": ("photo.png", _png_bytes(), "image/png")},
+    )
+    media_id = media_response.json()["id"]
+
+    token = await _make_access_token(async_db_session, "write:statuses")
+    create_response = client.post(
+        "/api/v1/statuses",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"status": "With media", "media_ids[]": [media_id]},
+    )
+    status_id = create_response.json()["id"]
+    attachment_id = create_response.json()["media_attachments"][0]["id"]
+
+    # The id reported for an already-attached attachment is the underlying
+    # Upload's own id, not a `{status_id}-{index}` id scoped to this status
+    # -- so it round-trips through `media_ids` on an edit the same way
+    # upstream Mastodon's ids do.
+    assert attachment_id == media_id
+
+    response = client.put(
+        f"/api/v1/statuses/{status_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"status": "Edited", "media_ids[]": [attachment_id]},
+    )
+
+    assert response.status_code == 200
+    assert len(response.json()["media_attachments"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_statuses_update_accepts_legacy_media_id(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    media_token = await _make_access_token(async_db_session, "write:media")
+    media_response = client.post(
+        "/api/v2/media",
+        headers={"Authorization": f"Bearer {media_token}"},
+        files={"file": ("photo.png", _png_bytes(), "image/png")},
+    )
+    media_id = media_response.json()["id"]
+
+    token = await _make_access_token(async_db_session, "write:statuses")
+    create_response = client.post(
+        "/api/v1/statuses",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"status": "With media", "media_ids[]": [media_id]},
+    )
+    status_id = create_response.json()["id"]
+
+    # A client that cached the status before this server started reporting
+    # real Upload ids may still send the old `{status_id}-{index}` id back.
+    response = client.put(
+        f"/api/v1/statuses/{status_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"status": "Edited via legacy id", "media_ids[]": [f"{status_id}-0"]},
+    )
+
+    assert response.status_code == 200
+    assert len(response.json()["media_attachments"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_statuses_update_media_attributes_sets_description_form_body(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    media_token = await _make_access_token(async_db_session, "write:media")
+    media_response = client.post(
+        "/api/v2/media",
+        headers={"Authorization": f"Bearer {media_token}"},
+        files={"file": ("photo.png", _png_bytes(), "image/png")},
+    )
+    media_id = media_response.json()["id"]
+
+    token = await _make_access_token(async_db_session, "write:statuses")
+    create_response = client.post(
+        "/api/v1/statuses",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"status": "With media", "media_ids[]": [media_id]},
+    )
+    status_id = create_response.json()["id"]
+
+    response = client.put(
+        f"/api/v1/statuses/{status_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        data={
+            "status": "Adding a legend",
+            "media_ids[]": [media_id],
+            "media_attributes[0][id]": media_id,
+            "media_attributes[0][description]": "a cat",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["media_attachments"][0]["description"] == "a cat"
+
+
+@pytest.mark.asyncio
+async def test_statuses_update_media_attributes_sets_description_json_body(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    media_token = await _make_access_token(async_db_session, "write:media")
+    media_response = client.post(
+        "/api/v2/media",
+        headers={"Authorization": f"Bearer {media_token}"},
+        files={"file": ("photo.png", _png_bytes(), "image/png")},
+    )
+    media_id = media_response.json()["id"]
+
+    token = await _make_access_token(async_db_session, "write:statuses")
+    create_response = client.post(
+        "/api/v1/statuses",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"status": "With media", "media_ids[]": [media_id]},
+    )
+    status_id = create_response.json()["id"]
+
+    response = client.put(
+        f"/api/v1/statuses/{status_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "status": "Adding a legend",
+            "media_ids": [media_id],
+            "media_attributes": [{"id": media_id, "description": "a dog"}],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["media_attachments"][0]["description"] == "a dog"
+
+
+@pytest.mark.asyncio
+async def test_statuses_update_media_attributes_without_media_ids(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    media_token = await _make_access_token(async_db_session, "write:media")
+    media_response = client.post(
+        "/api/v2/media",
+        headers={"Authorization": f"Bearer {media_token}"},
+        files={"file": ("photo.png", _png_bytes(), "image/png")},
+    )
+    media_id = media_response.json()["id"]
+
+    token = await _make_access_token(async_db_session, "write:statuses")
+    create_response = client.post(
+        "/api/v1/statuses",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"status": "With media", "media_ids[]": [media_id]},
+    )
+    status_id = create_response.json()["id"]
+
+    # `media_attributes` alone (no `media_ids`) must still apply the new
+    # description without dropping the existing attachment.
+    response = client.put(
+        f"/api/v1/statuses/{status_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "status": "Just adding a legend",
+            "media_attributes": [{"id": media_id, "description": "a fox"}],
+        },
+    )
+
+    assert response.status_code == 200
+    attachments = response.json()["media_attachments"]
+    assert len(attachments) == 1
+    assert attachments[0]["description"] == "a fox"
+
+
+@pytest.mark.asyncio
+async def test_statuses_update_media_attributes_federates_description(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    media_token = await _make_access_token(async_db_session, "write:media")
+    media_response = client.post(
+        "/api/v2/media",
+        headers={"Authorization": f"Bearer {media_token}"},
+        files={"file": ("photo.png", _png_bytes(), "image/png")},
+    )
+    media_id = media_response.json()["id"]
+
+    token = await _make_access_token(async_db_session, "write:statuses")
+    create_response = client.post(
+        "/api/v1/statuses",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"status": "With media", "media_ids[]": [media_id]},
+    )
+    status_id = create_response.json()["id"]
+    ap_id = create_response.json()["uri"]
+
+    response = client.put(
+        f"/api/v1/statuses/{status_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "status": "Adding a legend",
+            "media_ids": [media_id],
+            "media_attributes": [{"id": media_id, "description": "a cat"}],
+        },
+    )
+    assert response.status_code == 200
+
+    outbox_object = await boxes.get_outbox_object_by_ap_id(async_db_session, ap_id)
+    assert outbox_object is not None
+    assert outbox_object.ap_object["attachment"][0]["name"] == "a cat"
+
+
+@pytest.mark.asyncio
+async def test_statuses_update_media_attributes_sets_focus(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    media_token = await _make_access_token(async_db_session, "write:media")
+    media_response = client.post(
+        "/api/v2/media",
+        headers={"Authorization": f"Bearer {media_token}"},
+        files={"file": ("photo.png", _png_bytes(), "image/png")},
+    )
+    media_id = media_response.json()["id"]
+
+    token = await _make_access_token(async_db_session, "write:statuses")
+    create_response = client.post(
+        "/api/v1/statuses",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"status": "With media", "media_ids[]": [media_id]},
+    )
+    status_id = create_response.json()["id"]
+
+    response = client.put(
+        f"/api/v1/statuses/{status_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "status": "Adding a focal point",
+            "media_ids": [media_id],
+            "media_attributes": [{"id": media_id, "focus": "-0.5,0.7"}],
+        },
+    )
+
+    assert response.status_code == 200
+    attachment = response.json()["media_attachments"][0]
+    assert attachment["meta"]["focus"] == {"x": -0.5, "y": 0.7}
+
+
+@pytest.mark.asyncio
+async def test_statuses_update_media_attributes_invalid_focus_is_422(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    media_token = await _make_access_token(async_db_session, "write:media")
+    media_response = client.post(
+        "/api/v2/media",
+        headers={"Authorization": f"Bearer {media_token}"},
+        files={"file": ("photo.png", _png_bytes(), "image/png")},
+    )
+    media_id = media_response.json()["id"]
+
+    token = await _make_access_token(async_db_session, "write:statuses")
+    create_response = client.post(
+        "/api/v1/statuses",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"status": "With media", "media_ids[]": [media_id]},
+    )
+    status_id = create_response.json()["id"]
+
+    response = client.put(
+        f"/api/v1/statuses/{status_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "status": "Bad focal point",
+            "media_ids": [media_id],
+            "media_attributes": [{"id": media_id, "focus": "not-a-number"}],
+        },
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_media_attachment_description_null_when_no_alt(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    media_token = await _make_access_token(async_db_session, "write:media")
+    media_response = client.post(
+        "/api/v2/media",
+        headers={"Authorization": f"Bearer {media_token}"},
+        files={"file": ("photo.png", _png_bytes(), "image/png")},
+    )
+    media_id = media_response.json()["id"]
+
+    token = await _make_access_token(async_db_session, "write:statuses")
+    create_response = client.post(
+        "/api/v1/statuses",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"status": "With media, no alt", "media_ids[]": [media_id]},
+    )
+
+    assert create_response.status_code == 200
+    attachment = create_response.json()["media_attachments"][0]
+    # Must not fall back to the synthetic content-hash filename.
+    assert attachment["description"] is None
+
+
 def test_statuses_update_requires_auth(client: TestClient) -> None:
     response = client.put("/api/v1/statuses/1", data={"status": "no token"})
     assert response.status_code == 401

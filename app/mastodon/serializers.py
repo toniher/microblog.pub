@@ -16,6 +16,7 @@ import mimetypes
 from collections.abc import Iterable
 from datetime import datetime
 from datetime import timezone
+from typing import Any
 from urllib.parse import urlparse
 
 from sqlalchemy import event
@@ -41,6 +42,10 @@ from app.database import AsyncSession
 from app.mastodon import ids
 from app.media import proxied_media_url
 from app.utils.datetime import parse_isoformat
+
+# Sentinel distinguishing "no override" from "override to None" in
+# serialize_media_attachment's `description` param.
+_UNSET = object()
 
 # --- Notifications -------------------------------------------------------------
 #
@@ -526,8 +531,19 @@ def _media_meta(
 
 
 def serialize_media_attachment(
-    attachment: Attachment, index: int, status_id: str
+    attachment: Attachment,
+    index: int,
+    status_id: str,
+    media_id: str | None = None,
+    description: Any = _UNSET,
 ) -> dict:
+    """`media_id`/`description` override the id/description this attachment
+    reports. Local (`OutboxObject`) attachments pass the underlying Upload's
+    id and the per-attachment alt text, so `media_ids` round-trips on an edit
+    and a missing alt doesn't fall back to the synthetic filename. Remote and
+    revision-snapshot attachments have no `Upload` row behind them and keep
+    the id/description derived from the AP object itself.
+    """
     url = attachment.proxied_url or attachment.url
     duration = attachment.duration_seconds
     media_type = _mastodon_media_type(
@@ -547,8 +563,9 @@ def serialize_media_attachment(
 
     return {
         # Not independently addressable in this backend (no separate media
-        # lookup for already-attached media) — scoped to the parent status.
-        "id": f"{status_id}-{index}",
+        # lookup for already-attached media) — scoped to the parent status,
+        # unless the caller supplied the underlying Upload's own id.
+        "id": media_id if media_id is not None else f"{status_id}-{index}",
         "type": media_type,
         "url": url,
         "preview_url": preview_url,
@@ -560,9 +577,36 @@ def serialize_media_attachment(
             has_thumbnail,
             focus=attachment.focus,
         ),
-        "description": attachment.name,
+        "description": attachment.name if description is _UNSET else description,
         "blurhash": attachment.blurhash,
     }
+
+
+def _serialize_status_media_attachments(
+    obj: AnyboxObject, status_id: str
+) -> list[dict]:
+    if isinstance(obj, activitypub.models.OutboxObject):
+        # Pair each Attachment view 1:1 with the OutboxObjectAttachment row it
+        # was built from (activitypub/models.py's `attachments` property
+        # iterates `outbox_object_attachments` in the same order) so the
+        # reported id is the underlying Upload's own id, and the description
+        # is the per-attachment alt rather than a synthetic filename.
+        return [
+            serialize_media_attachment(
+                attachment,
+                index,
+                status_id,
+                media_id=ids.encode_upload_id(row.upload),
+                description=row.alt,
+            )
+            for index, (attachment, row) in enumerate(
+                zip(obj.attachments, obj.outbox_object_attachments)
+            )
+        ]
+    return [
+        serialize_media_attachment(attachment, index, status_id)
+        for index, attachment in enumerate(obj.attachments)
+    ]
 
 
 def _object_language(obj: AnyboxObject) -> str | None:
@@ -832,10 +876,7 @@ async def serialize_status(
         ),
         "sensitive": bool(obj.sensitive),
         "spoiler_text": _as_str(obj.summary),
-        "media_attachments": [
-            serialize_media_attachment(attachment, index, status_id)
-            for index, attachment in enumerate(obj.attachments)
-        ],
+        "media_attachments": _serialize_status_media_attachments(obj, status_id),
         "mentions": await _serialize_mentions(db_session, obj),
         "tags": _serialize_hashtags(obj),
         "emojis": [],

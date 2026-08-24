@@ -36,7 +36,13 @@ forgotten on the device.
 - **Statuses** — read, create, edit, delete; replies, content warnings,
   sensitive/media attachments, polls (including voting), and per-post language.
   Editing keeps full history (`/api/v1/statuses/:id/history`), so clients can
-  show what a post looked like before each edit.
+  show what a post looked like before each edit. An attachment's id in
+  `media_attachments` is its underlying media id, so `media_ids` on an edit
+  round-trips the same ids `GET`/`POST` handed the client (older cached ids in
+  the `{status_id}-{index}` form are still accepted). `media_attributes[][id]`/
+  `[description]`/`[focus]` on an edit updates an attachment's alt text/focal
+  point in place, in either JSON or form bodies, and works even without
+  `media_ids` in the same request.
 - **Polls** — create one on a status (`poll[options][]`, `expires_in`,
   `multiple`), read it (`/api/v1/polls/:id`) and vote
   (`/api/v1/polls/:id/votes`), in either form-encoded or JSON bodies. The limits

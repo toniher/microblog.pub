@@ -2168,6 +2168,35 @@ def _form_list(form: Any, key: str) -> list[Any]:
     return [value for _, value in sorted(indexed)]
 
 
+def _form_media_attributes(form: Any) -> list[dict[str, str]]:
+    """`media_attributes[N][field]` (indexed objects, what clients normally
+    send) or `media_attributes[][field]` (parallel arrays), parsed into a
+    list of `{id, description, focus}` dicts, one per entry.
+    """
+    by_index: dict[int, dict[str, str]] = {}
+    for form_key in form.keys():
+        if match := re.fullmatch(r"media_attributes\[(\d+)\]\[(\w+)\]", form_key):
+            index, field = int(match.group(1)), match.group(2)
+            by_index.setdefault(index, {})[field] = form[form_key]
+    if by_index:
+        return [by_index[i] for i in sorted(by_index)]
+
+    ids_ = form.getlist("media_attributes[][id]")
+    if not ids_:
+        return []
+    descriptions = form.getlist("media_attributes[][description]")
+    focuses = form.getlist("media_attributes[][focus]")
+    entries = []
+    for i, media_id in enumerate(ids_):
+        entry = {"id": media_id}
+        if i < len(descriptions):
+            entry["description"] = descriptions[i]
+        if i < len(focuses):
+            entry["focus"] = focuses[i]
+        entries.append(entry)
+    return entries
+
+
 class _StatusParams:
     """Normalizes the POST /api/v1/statuses body across content types.
 
@@ -2257,6 +2286,22 @@ class _StatusParams:
             if value is None and self._query is not None:
                 value = self._query.get("poll[expires_in]")
         return int(str(value)) if value else None
+
+    def get_media_attributes(self) -> dict[str, dict[str, str]]:
+        """Per-attachment edits (`media_attributes[][id]`/`[description]`/
+        `[focus]`), keyed by the id each entry describes. Clients reuse
+        whichever id spelling `media_ids` uses for that same attachment, so
+        the keys here are matched against `media_ids` as opaque strings
+        rather than decoded independently.
+        """
+        if self._json is not None:
+            raw = self._json.get("media_attributes") or []
+            entries = [entry for entry in raw if isinstance(entry, dict)]
+        else:
+            entries = _form_media_attributes(self._form)
+        return {
+            str(entry["id"]): entry for entry in entries if entry.get("id") is not None
+        }
 
 
 async def _body_params(request: Request) -> _StatusParams:
@@ -2488,6 +2533,38 @@ async def statuses_create(
     )
 
 
+async def _resolve_edit_media(
+    db_session: AsyncSession,
+    obj: activitypub.models.OutboxObject,
+    status_id: str,
+    media_id: str,
+) -> tuple[activitypub.models.Upload, str, str | None] | None:
+    """Resolve one `media_ids` entry of an edit to `(upload, filename,
+    current_alt)`.
+
+    Accepts a bare Upload id — a freshly-uploaded, not-yet-attached file, the
+    same as `POST /api/v1/statuses` — or the legacy `{status_id}-{index}` id
+    that a client may still have cached from before attachments reported
+    their real Upload id (see `serializers.serialize_media_attachment`).
+    """
+    prefix = f"{status_id}-"
+    if media_id.startswith(prefix):
+        try:
+            index = int(media_id[len(prefix) :])
+        except ValueError:
+            return None
+        rows = obj.outbox_object_attachments
+        if not (0 <= index < len(rows)):
+            return None
+        row = rows[index]
+        return row.upload, str(row.filename), row.alt
+
+    upload = await ids.get_upload_by_mastodon_id(db_session, media_id)
+    if upload is None:
+        return None
+    return upload, serializers.synthetic_filename(upload), upload.description
+
+
 @router.put("/api/v1/statuses/{status_id}", response_model=None)
 async def statuses_update(
     status_id: str,
@@ -2513,22 +2590,51 @@ async def statuses_update(
     content_warning_value = params.get("spoiler_text")
     content_warning = str(content_warning_value) if content_warning_value else None
     sensitive = params.get_bool("sensitive")
+    media_attributes = params.get_media_attributes()
 
-    # `uploads` is only passed to send_update() when `media_ids` was actually
-    # in the request body — its absence must mean "leave attachments alone",
-    # which is send_update()'s default (_UNSET), not "clear them" (None/[]).
-    send_update_kwargs: dict[str, Any] = {}
+    # `uploads` is only passed to send_update() when the request actually
+    # touches attachments: `media_ids` was in the body, or `media_attributes`
+    # alone was sent to edit alt text/focus on the existing set without
+    # changing which files are attached. Otherwise attachments must be left
+    # alone, which is send_update()'s default (_UNSET), not "clear them"
+    # (None/[]).
     if params.has("media_ids"):
+        media_ids = [str(media_id) for media_id in params.get_list("media_ids")]
+    elif media_attributes:
+        media_ids = [
+            ids.encode_upload_id(row.upload) for row in obj.outbox_object_attachments
+        ]
+    else:
+        media_ids = None
+
+    send_update_kwargs: dict[str, Any] = {}
+    if media_ids is not None:
         uploads = []
-        for media_id in params.get_list("media_ids"):
-            upload = await ids.get_upload_by_mastodon_id(db_session, str(media_id))
-            if upload is None:
+        for media_id in media_ids:
+            resolved = await _resolve_edit_media(db_session, obj, status_id, media_id)
+            if resolved is None:
                 raise MastodonError(
                     422, "validation_failed", f"unknown media id {media_id}"
                 )
-            uploads.append(
-                (upload, serializers.synthetic_filename(upload), upload.description)
-            )
+            upload, filename, alt = resolved
+
+            attributes = media_attributes.get(media_id)
+            if attributes is not None:
+                if "description" in attributes:
+                    alt = str(attributes["description"]) or None
+                if "focus" in attributes:
+                    focus = attributes["focus"]
+                    if focus:
+                        try:
+                            upload.focus_x, upload.focus_y = _parse_focus(str(focus))
+                        except ValueError as exc:
+                            raise MastodonError(
+                                422, "validation_failed", str(exc)
+                            ) from exc
+                    else:
+                        upload.focus_x = upload.focus_y = None
+
+            uploads.append((upload, filename, alt))
         send_update_kwargs["uploads"] = uploads
 
     await send_update(
