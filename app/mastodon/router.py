@@ -933,6 +933,15 @@ async def accounts_featured_tags(
     )
 
 
+@router.get("/api/v1/accounts/{account_id}/endorsements", response_model=None)
+async def accounts_endorsements(
+    account_id: str,
+) -> JSONResponse:
+    # Endorsements (accounts featured on a profile) are not supported —
+    # always return an empty list rather than 404ing.
+    return JSONResponse(content=[], status_code=200)
+
+
 # --- Statuses ----------------------------------------------------------------
 
 
