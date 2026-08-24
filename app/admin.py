@@ -51,6 +51,7 @@ from app.uploads import UploadTooLargeError
 from app.uploads import save_upload
 from app.utils import pagination
 from app.utils.emoji import EMOJIS_BY_NAME
+from app.utils.url import InvalidURLError
 
 
 async def user_session_or_redirect(
@@ -116,6 +117,12 @@ async def get_lookup(
             error = ap.FetchErrorTypeEnum.NOT_FOUND
         except ap.ObjectUnavailableError:
             error = ap.FetchErrorTypeEnum.UNAUHTORIZED
+        except (InvalidURLError, ap.NotAnObjectError):
+            # Not a bug -- the query just isn't a URL or a resolvable
+            # @user@domain handle, so it never reaches the network. No
+            # `logger.exception` here, unlike the other branches: this is
+            # expected user input, not a failure worth a traceback.
+            error = ap.FetchErrorTypeEnum.INVALID_INPUT
         except Exception:
             logger.exception(f"Failed to lookup {query}")
             error = ap.FetchErrorTypeEnum.INTERNAL_ERROR

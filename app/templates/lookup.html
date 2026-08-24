@@ -30,6 +30,8 @@
         <p>{{ _("Missing permissions to fetch the remote object.") }}</p>
         {% elif error.value == "TIMEOUT" %}
         <p>{{ _("Lookup timed out, please try refreshing the page.") }}</p>
+        {% elif error.value == "INVALID_INPUT" %}
+        <p>{{ _("This is not a URL or a fediverse handle (@user@domain.tld).") }}</p>
         {% else %}
         <p>{{ _("Unexpected error, please check the logs and report an issue if needed.") }}</p>
         {% endif %}

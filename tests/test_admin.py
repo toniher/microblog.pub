@@ -80,6 +80,19 @@ def test_public_works_authenticated(client: TestClient) -> None:
     assert resp.status_code == 200
 
 
+def test_admin_lookup_rejects_non_url_query(client: TestClient) -> None:
+    """A bare word (not a URL, not an `@user@domain.tld` handle) is invalid
+    input, not a lookup failure -- `check_url` rejects it before any network
+    call is made, and this used to surface as an opaque "Internal Error"."""
+    response = client.get(
+        "/admin/lookup",
+        params={"query": "micro"},
+        cookies=generate_admin_session_cookies(),
+    )
+    assert response.status_code == 200
+    assert "This is not a URL or a fediverse handle" in response.text
+
+
 def test_admin_new_post_rejects_oversized_upload(
     client: TestClient, monkeypatch
 ) -> None:
