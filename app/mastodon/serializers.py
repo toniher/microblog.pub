@@ -347,7 +347,7 @@ async def serialize_featured_tags(db_session: AsyncSession) -> list[dict]:
                 "id": str(index),
                 "name": tag,
                 "url": f"{config.BASE_URL}/t/{tag}",
-                "statuses_count": statuses_count or 0,
+                "statuses_count": str(statuses_count or 0),
                 "last_status_at": (
                     last_status_at.date().isoformat() if last_status_at else None
                 ),

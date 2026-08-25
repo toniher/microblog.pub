@@ -86,7 +86,7 @@ async def test_featured_tags_reports_counts(
     assert len(data) == 1
     assert data[0]["name"] == "microblogging"
     assert data[0]["url"] == f"{config.BASE_URL}/t/microblogging"
-    assert data[0]["statuses_count"] == 2
+    assert data[0]["statuses_count"] == "2"
     assert data[0]["last_status_at"] is not None
 
 
