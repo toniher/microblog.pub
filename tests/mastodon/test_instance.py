@@ -61,6 +61,44 @@ def test_instance_v2_shape(client: TestClient) -> None:
     )
 
 
+def test_version_advertises_mastodon_compat_not_our_own_version() -> None:
+    """The leading number in `version` is what clients gate features on.
+
+    It used to be `config.VERSION` — microblog.pub's own number — which read
+    as "Mastodon 2.x" and made clients hide working features (status editing
+    needs 3.5, bookmarks 3.1, markers 3.0). It would also have drifted on its
+    own once this project reached 3.x. Both instance endpoints must report the
+    API compatibility level, with our real version in the suffix.
+    """
+    from app import config
+    from app.mastodon.router import _MASTODON_COMPAT_VERSION
+    from app.mastodon.router import _VERSION_STRING
+
+    mastodon_major, mastodon_minor = (
+        int(part) for part in _MASTODON_COMPAT_VERSION.split(".")[:2]
+    )
+    # Above every feature gate the surface actually implements.
+    assert (mastodon_major, mastodon_minor) >= (4, 3)
+    assert _VERSION_STRING.startswith(_MASTODON_COMPAT_VERSION)
+    assert f"microblogpub {config.VERSION}" in _VERSION_STRING
+    # The whole point: our version must not be the number clients parse.
+    assert not _VERSION_STRING.startswith(config.VERSION)
+
+
+def test_both_instance_endpoints_report_the_same_version(client: TestClient) -> None:
+    from app.mastodon.router import _VERSION_STRING
+
+    assert client.get("/api/v1/instance").json()["version"] == _VERSION_STRING
+    assert client.get("/api/v2/instance").json()["version"] == _VERSION_STRING
+
+
+def test_instance_omits_api_versions(client: TestClient) -> None:
+    """`api_versions` is an opaque fast-moving counter (4.7.0 reports 11) with
+    no published version-to-value mapping, so any value we picked would be a
+    guess clients act on. Omitting it makes them parse `version` instead."""
+    assert "api_versions" not in client.get("/api/v2/instance").json()
+
+
 def test_instance_rules_is_empty(client: TestClient) -> None:
     response = client.get("/api/v1/instance/rules")
 

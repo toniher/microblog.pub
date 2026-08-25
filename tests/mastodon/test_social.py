@@ -897,11 +897,17 @@ async def test_search_hashtags_stub(
 
     assert response.status_code == 200
     data = response.json()
+    # Shape comes from the shared `_serialize_tag`, so it also carries the
+    # `id` and `following` keys the documented Tag entity has — the search
+    # result and `GET /api/v1/tags/{id}` must agree (pinned in
+    # tests/mastodon/test_degradations.py).
     assert data["hashtags"] == [
         {
+            "id": "microblogging",
             "name": "microblogging",
             "url": response.json()["hashtags"][0]["url"],
             "history": [],
+            "following": False,
         }
     ]
 

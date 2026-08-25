@@ -151,6 +151,32 @@ _INSTANCE_CONFIGURATION = {
 # since it's a cosmetic field only shown on some clients' "about" screens.
 _SOURCE_URL = "https://github.com/toniher/microblog.pub"
 
+# The Mastodon version this API surface is compatible with, reported in the
+# leading slot of `version` on /api/v1/instance and /api/v2/instance. Clients
+# parse that number to decide which features to *offer*, so it must describe
+# the API, not this software: interpolating microblog.pub's own version here
+# (which is what used to happen) silently told clients we were Mastodon 2.x
+# and made them hide features that work fine — editing a status needs 3.5,
+# bookmarks 3.1, markers 3.0, /api/v2/instance 4.0. It would also have drifted
+# on its own the moment microblog.pub reached 3.x.
+#
+# 4.3.0 is the highest version whose gated features are all either implemented
+# or degrade gracefully here. Raising it is a deliberate act: check what the
+# new gate makes clients *expect*. Two known consequences of 4.3 itself:
+# clients prefer `GET /api/v2/notifications` (not implemented — the 404 is
+# what makes them fall back to v1, so do not stub it empty), and every
+# Notification must carry `group_key` (it does, see serializers.py).
+#
+# Deliberately *not* advertising `api_versions` (Instance, 4.3.0+): it's an
+# opaque fast-moving counter — mastodon.social on 4.7.0 reports 11 — with no
+# published mapping from version to value, so any number here would be a
+# guess that clients act on. Omitting it makes them fall back to parsing
+# `version`, which the constant above now states correctly.
+_MASTODON_COMPAT_VERSION = "4.3.0"
+_VERSION_STRING = (
+    f"{_MASTODON_COMPAT_VERSION} (compatible; microblogpub {config.VERSION})"
+)
+
 
 @router.get("/api/v1/instance", response_model=None)
 async def instance_v1(
@@ -165,7 +191,7 @@ async def instance_v1(
             "short_description": config.CONFIG.summary,
             "description": config.CONFIG.summary,
             "email": config.CONFIG.contact_email or "",
-            "version": f"{config.VERSION} (compatible; microblogpub {config.VERSION})",
+            "version": _VERSION_STRING,
             "urls": (
                 {"streaming_api": streaming_url}
                 if (streaming_url := streaming.streaming_base_url())
@@ -203,7 +229,7 @@ async def instance_v2(
         content={
             "domain": config.DOMAIN,
             "title": config.CONFIG.name,
-            "version": f"{config.VERSION} (compatible; microblogpub {config.VERSION})",
+            "version": _VERSION_STRING,
             "source_url": _SOURCE_URL,
             "description": config.CONFIG.summary,
             "usage": {"users": {"active_month": 1}},
@@ -940,6 +966,18 @@ async def accounts_endorsements(
 ) -> JSONResponse:
     # Endorsements (accounts featured on a profile) are not supported —
     # always return an empty list rather than 404ing.
+    return JSONResponse(content=[], status_code=200)
+
+
+@router.get("/api/v1/accounts/{account_id}/lists", response_model=None)
+async def accounts_lists(
+    account_id: str,
+    token_info: AccessTokenInfo = Depends(require_scope("read:lists")),
+) -> JSONResponse:
+    # Which of the owner's lists this account is in. Lists are an empty stub
+    # (`lists_index`), so this is empty for the same reason — but it has to
+    # *exist*: clients call it when opening a profile, and a 404 there is an
+    # error dialog rather than an absent section.
     return JSONResponse(content=[], status_code=200)
 
 
@@ -1977,6 +2015,68 @@ async def suggestions_v2_index(
     token_info: AccessTokenInfo = Depends(require_scope("read")),
 ) -> JSONResponse:
     return JSONResponse(content=[], status_code=200)
+
+
+@router.get("/api/v1/endorsements", response_model=None)
+async def endorsements_index(
+    token_info: AccessTokenInfo = Depends(require_scope("read:accounts")),
+) -> JSONResponse:
+    # The index counterpart of `accounts_endorsements`. Endorsements are
+    # multi-user social signalling with no meaning for one actor, but the
+    # per-account route existing while this one 404s is the worst of both:
+    # clients open the profile fine, then error on the featured-accounts
+    # section.
+    return JSONResponse(content=[], status_code=200)
+
+
+@router.get("/api/v1/followed_tags", response_model=None)
+async def followed_tags_index(
+    token_info: AccessTokenInfo = Depends(require_scope("read:follows")),
+) -> JSONResponse:
+    # Following a hashtag isn't implemented (single-tag timelines are, see
+    # `timelines_tag`). Empty rather than 404 so the client's followed-tags
+    # screen shows an empty state instead of failing to open.
+    return JSONResponse(content=[], status_code=200)
+
+
+def _serialize_tag(tag: str) -> dict:
+    """Mastodon's `Tag` entity for an already-normalized hashtag.
+
+    There's no tag table to hold a numeric id, and nothing dereferences one,
+    so the normalized name doubles as the (String-typed) id. `history` is
+    always empty — no per-day usage is tracked. `following` is honestly
+    `false`: see `followed_tags_index`. `featuring` is omitted rather than
+    hardcoded, since it's 4.4 and we advertise 4.3.
+    """
+    return {
+        "id": tag,
+        "name": tag,
+        "url": f"{config.BASE_URL}/t/{tag}",
+        "history": [],
+        "following": False,
+    }
+
+
+@router.get("/api/v1/tags/{tag_id}", response_model=None)
+async def tags_show(
+    tag_id: str,
+) -> JSONResponse:
+    # Clients fetch this when opening a hashtag, to render the header and
+    # decide whether to show a follow button. Upstream Mastodon materializes
+    # tags on demand and never 404s here, so neither do we — the tag having
+    # no local posts is a matter for the timeline query, not this lookup.
+    #
+    # `tags/{id}/follow` and `/unfollow` stay unimplemented on purpose: with
+    # no storage behind them they could only report success while persisting
+    # nothing, which is the one thing this API surface doesn't do (see
+    # features.md §4). `following: false` tells the client the truth instead.
+    # `.strip()` on top of `normalize_tag` matches how `search` normalizes its
+    # hashtag query, so the two Tag-emitting paths agree on the name as well
+    # as the shape (pinned by a test).
+    tag = timelines.normalize_tag(tag_id).strip()
+    if not tag:
+        raise MastodonError(404, "not_found", "not a valid hashtag")
+    return JSONResponse(content=_serialize_tag(tag), status_code=200)
 
 
 # /api/v1/blocks and /api/v1/mutes are real, non-stub lists (both are
@@ -3654,10 +3754,10 @@ async def search(
         tag = query.lstrip("#").strip().lower()
         if tag:
             # No per-day usage history is tracked; this just confirms the
-            # query looks like a taggable hashtag.
-            hashtags = [
-                {"name": tag, "url": f"{config.BASE_URL}/t/{tag}", "history": []}
-            ]
+            # query looks like a taggable hashtag. Shares `_serialize_tag`
+            # with `tags_show` so the entity shape can't drift between the
+            # two places a Tag is emitted.
+            hashtags = [_serialize_tag(tag)]
 
     need_accounts = search_type in (None, "accounts") and not accounts
     need_statuses = search_type in (None, "statuses") and not statuses

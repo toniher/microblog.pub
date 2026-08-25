@@ -91,6 +91,14 @@ async def test_notifications_list_maps_types_and_filters_unmapped(
     like_entity = next(n for n in data if n["id"] == str(like_notif.id))
     assert like_entity["status"]["id"] == ids.encode_outbox_id(outbox_object)
 
+    # `group_key` is non-optional from Mastodon 4.3, which is the level
+    # `_MASTODON_COMPAT_VERSION` advertises — a strict client decoder fails
+    # the whole screen on a missing key, not just the one row. Grouped
+    # notifications aren't implemented, and `ungrouped-{id}` is the documented
+    # shape for that, so each notification is its own group.
+    assert all(n["group_key"] == f"ungrouped-{n['id']}" for n in data)
+    assert len({n["group_key"] for n in data}) == len(data)
+
 
 @pytest.mark.asyncio
 async def test_notifications_list_maps_status_update_and_poll_types(

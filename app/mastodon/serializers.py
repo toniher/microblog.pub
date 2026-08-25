@@ -108,6 +108,13 @@ async def serialize_notification(
     result = {
         "id": str(notification.id),
         "type": mastodon_type,
+        # Non-optional since Mastodon 4.3, which is the compatibility level
+        # `_MASTODON_COMPAT_VERSION` advertises — a strict client decoder
+        # (the official app's) fails the whole notifications screen on a
+        # missing key, not just this row. Grouped notifications aren't
+        # implemented, and `ungrouped-{id}` is the documented shape for
+        # exactly that case, so every notification is its own group.
+        "group_key": f"ungrouped-{notification.id}",
         "created_at": format_datetime(created_at),
         "account": account,
     }
