@@ -99,6 +99,11 @@ async def serialize_notification(
     if mastodon_type is None:
         return None
 
+    # Local import: `notification_groups` reuses this module's
+    # NOTIFICATION_TYPE_MAP/NOTIFICATION_OPTIONS, so importing it at module
+    # level here would be circular.
+    from app.mastodon import notification_groups
+
     created_at = notification.created_at or datetime.min.replace(tzinfo=timezone.utc)
     account = (
         await serialize_account(db_session, notification.actor)
@@ -111,10 +116,12 @@ async def serialize_notification(
         # Non-optional since Mastodon 4.3, which is the compatibility level
         # `_MASTODON_COMPAT_VERSION` advertises — a strict client decoder
         # (the official app's) fails the whole notifications screen on a
-        # missing key, not just this row. Grouped notifications aren't
-        # implemented, and `ungrouped-{id}` is the documented shape for
-        # exactly that case, so every notification is its own group.
-        "group_key": f"ungrouped-{notification.id}",
+        # missing key, not just this row. Real grouping (`favourite`/
+        # `follow`/`reblog`), `ungrouped-{id}` for everything else — see
+        # `app.mastodon.notification_groups.group_key_for`, shared with the
+        # `/api/v2/notifications*` endpoints so a notification never carries
+        # two different keys depending on which surface asked.
+        "group_key": notification_groups.group_key_for(notification),
         "created_at": format_datetime(created_at),
         "account": account,
     }

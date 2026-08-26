@@ -93,10 +93,13 @@ async def test_notifications_list_maps_types_and_filters_unmapped(
 
     # `group_key` is non-optional from Mastodon 4.3, which is the level
     # `_MASTODON_COMPAT_VERSION` advertises — a strict client decoder fails
-    # the whole screen on a missing key, not just the one row. Grouped
-    # notifications aren't implemented, and `ungrouped-{id}` is the documented
-    # shape for that, so each notification is its own group.
-    assert all(n["group_key"] == f"ungrouped-{n['id']}" for n in data)
+    # the whole screen on a missing key, not just the one row. `follow` and
+    # `favourite` are both real grouping types (app.mastodon.notification_groups);
+    # each notification here is the only one of its kind, so both still come
+    # back as singleton groups, just keyed by type/target rather than by id.
+    follow_entity = next(n for n in data if n["id"] == str(follow_notif.id))
+    assert follow_entity["group_key"] == f"follow-{follow_notif.created_at:%Y%m%d}"
+    assert like_entity["group_key"] == f"favourite-{outbox_object.id}"
     assert len({n["group_key"] for n in data}) == len(data)
 
 

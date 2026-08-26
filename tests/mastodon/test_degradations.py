@@ -21,12 +21,7 @@ _SCOPE_GATED_ENDPOINTS = [
     "/api/v1/accounts/0/lists",
 ]
 
-# `GET /api/v2/notifications` is deliberately NOT stubbed: grouped
-# notifications aren't implemented, and the 404 is exactly what makes a
-# 4.3-aware client fall back to `/api/v1/notifications`. Stubbing it empty
-# would show the user an empty notifications screen instead.
 _DELIBERATELY_ABSENT = [
-    "/api/v2/notifications",
     # No storage behind them, so they could only report success while
     # persisting nothing — see `tags_show`.
     "/api/v1/tags/hashtag/follow",
@@ -90,9 +85,8 @@ async def test_deliberately_absent_endpoints_stay_absent(
 ) -> None:
     """Guards the reasoning above: these must NOT be turned into empty stubs.
 
-    A future "close the remaining 404s" pass would otherwise silently break
-    grouped-notification fallback and start reporting fake success on tag
-    follows.
+    A future "close the remaining 404s" pass would otherwise silently start
+    reporting fake success on tag follows.
     """
     token = await _make_access_token(async_db_session, "read write follow")
     response = client.get(path, headers={"Authorization": f"Bearer {token}"})

@@ -66,6 +66,7 @@ from app.indieauth import AccessTokenInfo
 from app.indieauth import check_access_token
 from app.lookup import lookup
 from app.mastodon import ids
+from app.mastodon import notification_groups
 from app.mastodon import pagination
 from app.mastodon import serializers
 from app.mastodon import streaming
@@ -161,10 +162,10 @@ _SOURCE_URL = "https://github.com/toniher/microblog.pub"
 #
 # 4.3.0 is the highest version whose gated features are all either implemented
 # or degrade gracefully here. Raising it is a deliberate act: check what the
-# new gate makes clients *expect*. Two known consequences of 4.3 itself:
-# clients prefer `GET /api/v2/notifications` (not implemented — the 404 is
-# what makes them fall back to v1, so do not stub it empty), and every
-# Notification must carry `group_key` (it does, see serializers.py).
+# new gate makes clients *expect*. Two known consequences of 4.3 itself, both
+# now real rather than degradations: clients prefer `GET /api/v2/notifications`
+# (see the "Grouped notifications" section below), and every Notification
+# carries a real `group_key` (`app.mastodon.notification_groups`).
 #
 # Deliberately *not* advertising `api_versions` (Instance, 4.3.0+): it's an
 # opaque fast-moving counter — mastodon.social on 4.7.0 reports 11 — with no
@@ -1450,6 +1451,33 @@ def _allowed_notification_types(request: Request) -> list[models.NotificationTyp
     return allowed_internal_types
 
 
+def _notification_filters(
+    request: Request, allowed_internal_types: list[models.NotificationType]
+) -> list[Any]:
+    """The `where` clause every notification-reading endpoint shares (v1 and
+    all of v2): type filtering, the two mute filters, and `account_id` --
+    specced on both v1 and v2 but, until now, wired into neither. Factored
+    out beside `_allowed_notification_types` so the two surfaces can't drift.
+    """
+    where: list[Any] = [
+        models.Notification.notification_type.in_(allowed_internal_types),
+        models.notification_not_muted(),
+        models.notification_not_in_muted_conversation(),
+    ]
+    if account_id := request.query_params.get("account_id"):
+        decoded = ids.decode_account_id(account_id)
+        if decoded is not None:
+            where.append(models.Notification.actor_id == decoded)
+    return where
+
+
+def _requested_grouped_types(request: Request) -> frozenset[str]:
+    raw = set(request.query_params.getlist("grouped_types[]"))
+    if not raw:
+        return notification_groups.GROUPABLE_TYPES
+    return notification_groups.GROUPABLE_TYPES & raw
+
+
 @router.get("/api/v1/notifications", response_model=None)
 async def notifications_list(
     request: Request,
@@ -1461,11 +1489,7 @@ async def notifications_list(
 
     query = (
         select(models.Notification)
-        .where(
-            models.Notification.notification_type.in_(allowed_internal_types),
-            models.notification_not_muted(),
-            models.notification_not_in_muted_conversation(),
-        )
+        .where(*_notification_filters(request, allowed_internal_types))
         .options(*serializers.NOTIFICATION_OPTIONS)
         .order_by(models.Notification.id.desc())
         .limit(params.limit)
@@ -1550,6 +1574,275 @@ async def notifications_policy_put(
     # No filtering is implemented, so there is nothing to persist — echo the
     # fixed accept-all policy back.
     return JSONResponse(content=_notification_policy_content(), status_code=200)
+
+
+# --- Grouped notifications (4.3) ------------------------------------------
+#
+# The moment `GET /api/v2/notifications` returns 200, a 4.3-aware client
+# commits to this surface for the whole notifications screen -- including
+# dismissal (`group_key`, not a notification id) and badge counts -- and
+# stops calling v1. All five endpoints therefore ship together; see
+# `compatibility.md` §5/§6 for the fuller reasoning. Must be registered
+# after `/api/v2/notifications/policy` above and, critically,
+# `unread_count` before `{group_key}`: Starlette matches GET routes in
+# registration order, so `{group_key}` would otherwise swallow
+# "unread_count" as a key, the same trap documented above for v1.
+
+
+async def _serialize_notification_group(
+    group: notification_groups.NotificationGroup, *, include_page_fields: bool
+) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "group_key": group.key,
+        "notifications_count": group.notifications_count,
+        "type": group.mastodon_type,
+        # The spec's attribute table types this as a String -- even though
+        # Mastodon's own response *example* on the same page renders an
+        # unquoted integer. String matches every neighbouring id field this
+        # entity emits (status_id, sample_account_ids, page_min_id/
+        # page_max_id), so that's the side taken here; see `test_conformance.py`.
+        "most_recent_notification_id": str(group.most_recent_notification_id),
+        "sample_account_ids": [str(i) for i in group.sample_account_ids],
+    }
+    target = group.target
+    result["status_id"] = (
+        (
+            ids.encode_outbox_id(target)
+            if isinstance(target, activitypub.models.OutboxObject)
+            else ids.encode_inbox_id(target)
+        )
+        if target is not None
+        else None
+    )
+    # `page_min_id`/`page_max_id`/`latest_page_notification_at` are
+    # pagination-only per the spec -- omitted (not null) on a single-group
+    # lookup.
+    if include_page_fields:
+        result["page_min_id"] = str(group.page_min_id)
+        result["page_max_id"] = str(group.page_max_id)
+        result["latest_page_notification_at"] = serializers.format_datetime(
+            group.latest_page_notification_at
+        )
+    return result
+
+
+async def _serialize_grouped_notifications(
+    db_session: AsyncSession,
+    groups: list[notification_groups.NotificationGroup],
+    *,
+    include_page_fields: bool,
+) -> dict[str, Any]:
+    """`{accounts, statuses, notification_groups}`: the deduped union of
+    every group's `sample_account_ids`/`status_id`, via `serialize_account`/
+    `serialize_status` like everywhere else in this file.
+
+    `expand_accounts` is accepted nowhere and ignored everywhere: this
+    always returns full accounts, never populates the spec's optional
+    `partial_accounts`. The fuller response is a valid superset of the
+    bandwidth-optimised one the parameter asks for, just not the optimal
+    answer -- see `compatibility.md`.
+    """
+    account_ids: list[int] = []
+    seen_accounts: set[int] = set()
+    for group in groups:
+        for account_id in group.sample_account_ids:
+            if account_id not in seen_accounts:
+                seen_accounts.add(account_id)
+                account_ids.append(account_id)
+
+    accounts = []
+    if account_ids:
+        actors_by_id = {
+            actor.id: actor
+            for actor in (
+                await db_session.scalars(
+                    select(activitypub.models.Actor).where(
+                        activitypub.models.Actor.id.in_(account_ids)
+                    )
+                )
+            ).unique()
+        }
+        for account_id in account_ids:
+            if (actor := actors_by_id.get(account_id)) is not None:
+                accounts.append(await serializers.serialize_account(db_session, actor))
+
+    statuses = []
+    seen_status_ids: set[str] = set()
+    notification_groups_payload = []
+    for group in groups:
+        payload = await _serialize_notification_group(
+            group, include_page_fields=include_page_fields
+        )
+        notification_groups_payload.append(payload)
+        target = group.target
+        status_id = payload["status_id"]
+        if target is not None and status_id not in seen_status_ids:
+            seen_status_ids.add(status_id)
+            statuses.append(await serializers.serialize_status(db_session, target))
+
+    return {
+        "accounts": accounts,
+        "statuses": statuses,
+        "notification_groups": notification_groups_payload,
+    }
+
+
+@router.get("/api/v2/notifications", response_model=None)
+async def notifications_v2_list(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:notifications")),
+) -> JSONResponse:
+    params = pagination.parse_pagination(request, default_limit=40, max_limit=80)
+    allowed_internal_types = _allowed_notification_types(request)
+    where = _notification_filters(request, allowed_internal_types)
+    grouped_types = _requested_grouped_types(request)
+
+    groups = await notification_groups.fetch_notification_group_page(
+        db_session,
+        where=where,
+        grouped_types=grouped_types,
+        limit=params.limit,
+        max_id=params.max_id,
+        cursor=params.min_id or params.since_id,
+    )
+
+    content = await _serialize_grouped_notifications(
+        db_session, groups, include_page_fields=True
+    )
+
+    # Mirrors v1 (and the HTML notifications page): viewing marks the page
+    # read. Done *after* serializing, exactly like v1 -- the commit below
+    # fires `serializers._invalidate_request_cache`, so flipping the flag
+    # first would throw away the per-request memo mid-page.
+    notification_ids = [
+        notification.id for group in groups for notification in group.notifications
+    ]
+    if notification_ids:
+        await db_session.execute(
+            update(models.Notification)
+            .where(
+                models.Notification.id.in_(notification_ids),
+                models.Notification.is_new.is_(True),
+            )
+            .values(is_new=False)
+        )
+        await db_session.commit()
+
+    response = JSONResponse(content=content, status_code=200)
+    if groups:
+        # `build_link_header` only reads item_ids[0]/item_ids[-1]: passing
+        # [first group's page_max_id, last group's page_min_id] yields the
+        # spec's example verbatim -- `next` on the last group's
+        # `page_min_id`, `prev` on the first group's `page_max_id`.
+        link_header = pagination.build_link_header(
+            request, [str(groups[0].page_max_id), str(groups[-1].page_min_id)]
+        )
+        if link_header:
+            response.headers["Link"] = link_header
+    return response
+
+
+@router.get("/api/v2/notifications/unread_count", response_model=None)
+async def notifications_v2_unread_count(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:notifications")),
+) -> JSONResponse:
+    allowed_internal_types = _allowed_notification_types(request)
+    # v1's equivalent deliberately bypasses `parse_pagination` for the same
+    # reason: these bounds are the spec's, not `pagination.MAX_LIMIT`.
+    limit = min(int(request.query_params.get("limit", 100) or 100), 1000)
+    where = _notification_filters(request, allowed_internal_types) + [
+        models.Notification.is_new.is_(True)
+    ]
+    grouped_types = _requested_grouped_types(request)
+
+    # Counts *groups*, keyed off `is_new` -- the same watermark v1 uses, not
+    # the markers table, so the two counts stay consistent with each other.
+    groups = await notification_groups.fetch_notification_group_page(
+        db_session,
+        where=where,
+        grouped_types=grouped_types,
+        limit=limit,
+        max_id=None,
+        cursor=None,
+    )
+    return JSONResponse(content={"count": len(groups)}, status_code=200)
+
+
+@router.get("/api/v2/notifications/{group_key}", response_model=None)
+async def notifications_v2_show(
+    group_key: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:notifications")),
+) -> JSONResponse:
+    allowed_internal_types = _allowed_notification_types(request)
+    where = _notification_filters(request, allowed_internal_types)
+    grouped_types = _requested_grouped_types(request)
+
+    group = await notification_groups.fetch_notification_group(
+        db_session, group_key=group_key, where=where, grouped_types=grouped_types
+    )
+    if group is None:
+        raise MastodonError(404, "not_found", "notification group not found")
+
+    content = await _serialize_grouped_notifications(
+        db_session, [group], include_page_fields=False
+    )
+    return JSONResponse(content=content, status_code=200)
+
+
+@router.post("/api/v2/notifications/{group_key}/dismiss", response_model=None)
+async def notifications_v2_dismiss(
+    group_key: str,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:notifications")),
+) -> JSONResponse:
+    key_where = notification_groups.group_key_where_clause(group_key)
+    if key_where is not None:
+        await db_session.execute(delete(models.Notification).where(key_where))
+        await db_session.commit()
+    return JSONResponse(content={}, status_code=200)
+
+
+@router.get("/api/v2/notifications/{group_key}/accounts", response_model=None)
+async def notifications_v2_group_accounts(
+    group_key: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    # The spec's own table lists `write:notifications` for this endpoint,
+    # near-certainly a doc slip for a GET -- requiring a write scope to read
+    # account data would be wrong, so `read` is used, matching every other
+    # GET in this file.
+    token_info: AccessTokenInfo = Depends(require_scope("read:notifications")),
+) -> JSONResponse:
+    allowed_internal_types = _allowed_notification_types(request)
+    where = _notification_filters(request, allowed_internal_types)
+
+    actor_ids = await notification_groups.fetch_group_account_ids(
+        db_session, group_key=group_key, where=where
+    )
+    if actor_ids is None:
+        raise MastodonError(404, "not_found", "notification group not found")
+
+    actors_by_id = {
+        actor.id: actor
+        for actor in (
+            await db_session.scalars(
+                select(activitypub.models.Actor).where(
+                    activitypub.models.Actor.id.in_(actor_ids)
+                )
+            )
+        ).unique()
+    }
+    accounts = [
+        await serializers.serialize_account(db_session, actor)
+        for actor_id in actor_ids
+        if (actor := actors_by_id.get(actor_id)) is not None
+    ]
+    return JSONResponse(content=accounts, status_code=200)
 
 
 @router.get("/api/v1/notifications/requests/merged", response_model=None)

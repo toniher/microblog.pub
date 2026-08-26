@@ -259,6 +259,10 @@ async def test_notification_emits_on_user_and_notification_streams(
     payload = json.loads(events[0].payload)
     assert payload["id"] == str(notif.id)
     assert payload["type"] == "follow"
+    # Real grouping (app.mastodon.notification_groups), not the old
+    # ungrouped-{id} shape -- streaming reuses serialize_notification
+    # verbatim, so this should just follow automatically.
+    assert payload["group_key"] == f"follow-{notif.created_at:%Y%m%d}"
 
 
 @pytest.mark.asyncio

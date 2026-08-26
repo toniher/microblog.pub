@@ -78,6 +78,19 @@ _STATUS_SPEC = {
     "language": (str, True),
 }
 
+# `most_recent_notification_id` is documented as a String in the spec's
+# attribute table, even though Mastodon's own response *example* on the same
+# page renders an unquoted integer -- String is the side taken in
+# `app.mastodon.router._serialize_notification_group`, matching every
+# neighbouring id field this entity emits.
+_NOTIFICATION_GROUP_SPEC = {
+    "group_key": (str, False),
+    "notifications_count": (int, False),
+    "type": (str, False),
+    "most_recent_notification_id": (str, False),
+    "sample_account_ids": (list, False),
+}
+
 
 def _check_entity(entity: dict, spec: dict, label: str) -> list[str]:
     errors = []
@@ -280,3 +293,36 @@ async def test_notifications_account_media_fields_are_never_empty(
 
     errors = _validate_account(data[0]["account"], "notification[0].account")
     assert not errors, "conformance violations:\n" + "\n".join(errors)
+
+
+@pytest.mark.asyncio
+async def test_notification_group_entity_conforms_to_spec(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    follower = setup_remote_actor_as_follower(ra)
+    assert follower.actor is not None
+
+    async_db_session.add(
+        models.Notification(
+            notification_type=models.NotificationType.NEW_FOLLOWER,
+            actor_id=follower.actor.id,
+        )
+    )
+    await async_db_session.commit()
+
+    token = await _make_access_token(async_db_session, "read:notifications")
+    response = client.get(
+        "/api/v2/notifications", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["notification_groups"]) == 1
+
+    group = data["notification_groups"][0]
+    errors = _check_entity(group, _NOTIFICATION_GROUP_SPEC, "group")
+    assert not errors, "conformance violations:\n" + "\n".join(errors)
+    assert isinstance(group["most_recent_notification_id"], str)
+    int(group["most_recent_notification_id"])  # must still parse as an id

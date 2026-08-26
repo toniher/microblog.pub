@@ -91,6 +91,13 @@ forgotten on the device.
   extra process is needed, the existing `outgoing_worker` runs it as part of its
   poll, and the notification row itself is the watermark, so an ended poll is
   never notified twice.
+- **Grouped notifications** (Mastodon 4.3+, `/api/v2/notifications*`) — the
+  "12 people favourited your post" screen. Favourites and reblogs group per
+  post, follows group per UTC calendar day; everything else (mentions, status,
+  update, poll, move, follow requests) stays one notification per group, same
+  as v1. `GET /{group_key}`, `POST /{group_key}/dismiss`,
+  `GET /{group_key}/accounts` and a groups-aware `GET /unread_count` round out
+  the surface; `grouped_types[]` narrows which types group, matching the spec.
 - **Read-position sync** — `/api/v1/markers` is genuinely persisted (home and
   notifications timelines), so "resume where I left off" survives across
   devices and reinstalls.
