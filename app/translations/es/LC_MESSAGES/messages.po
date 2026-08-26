@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-21 23:55+0200\n"
+"POT-Creation-Date: 2026-08-26 09:32+0200\n"
 "PO-Revision-Date: 2026-07-17 22:20+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: es\n"
@@ -18,24 +18,24 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: app/admin.py:1523 app/admin.py:1542 app/admin.py:1668
+#: app/admin.py:1542 app/admin.py:1561 app/admin.py:1687
 msgid "Error: object must have a content"
 msgstr "Error: el contenido es obligatorio"
 
-#: app/admin.py:1530
+#: app/admin.py:1549
 msgid "Error: invalid language code"
 msgstr "Error: código de idioma no válido"
 
-#: app/admin.py:1557
+#: app/admin.py:1576
 msgid "Error: file is too large"
 msgstr ""
 
-#: app/admin.py:1565
+#: app/admin.py:1584
 #, fuzzy
 msgid "Error: unable to process upload"
 msgstr "Error: no se pudo procesar la subida"
 
-#: app/admin.py:1581
+#: app/admin.py:1600
 msgid "Error: Unable to process upload"
 msgstr "Error: no se pudo procesar la subida"
 
@@ -468,6 +468,10 @@ msgid "Lookup timed out, please try refreshing the page."
 msgstr "La búsqueda ha agotado el tiempo de espera; intenta actualizar la página."
 
 #: app/templates/lookup.html:34
+msgid "This is not a URL or a fediverse handle (@user@domain.tld)."
+msgstr ""
+
+#: app/templates/lookup.html:36
 msgid "Unexpected error, please check the logs and report an issue if needed."
 msgstr ""
 "Error inesperado; revisa los registros e informa del problema si es "
@@ -763,22 +767,22 @@ msgstr "quitar me gusta"
 msgid "unshare"
 msgstr "dejar de compartir"
 
-#: app/templates/utils.html:392
+#: app/templates/utils.html:397
 msgid "Likes"
 msgstr "Me gusta"
 
-#: app/templates/utils.html:401 app/templates/utils.html:418
+#: app/templates/utils.html:406 app/templates/utils.html:423
 #, python-format
 msgid "and %(count)s more."
 msgid_plural "and %(count)s more."
 msgstr[0] "y %(count)s más."
 msgstr[1] "y %(count)s más."
 
-#: app/templates/utils.html:409
+#: app/templates/utils.html:414
 msgid "Shares"
 msgstr "Compartidos"
 
-#: app/templates/utils.html:426
+#: app/templates/utils.html:431
 msgid "Webmentions"
 msgstr "Webmentions"
 
@@ -885,75 +889,79 @@ msgid "reject quote"
 msgstr "rechazar cita"
 
 #: app/templates/components/admin_buttons.html:125
+msgid "revoke quote"
+msgstr "revocar cita"
+
+#: app/templates/components/admin_buttons.html:134
 msgid "like"
 msgstr "me gusta"
 
-#: app/templates/components/admin_buttons.html:134
+#: app/templates/components/admin_buttons.html:143
 msgid "bookmark"
 msgstr "añadir a marcadores"
 
-#: app/templates/components/admin_buttons.html:143
+#: app/templates/components/admin_buttons.html:152
 msgid "unbookmark"
 msgstr "quitar de marcadores"
 
-#: app/templates/components/admin_buttons.html:152
+#: app/templates/components/admin_buttons.html:161
 msgid "pin"
 msgstr "fijar"
 
-#: app/templates/components/admin_buttons.html:161
+#: app/templates/components/admin_buttons.html:170
 msgid "unpin"
 msgstr "dejar de fijar"
 
-#: app/templates/components/admin_buttons.html:168
+#: app/templates/components/admin_buttons.html:177
 msgid "edit"
 msgstr "editar"
 
-#: app/templates/components/admin_buttons.html:173
+#: app/templates/components/admin_buttons.html:182
 msgid "history"
 msgstr "historial"
 
-#: app/templates/components/admin_buttons.html:181
+#: app/templates/components/admin_buttons.html:190
 msgid "delete"
 msgstr "eliminar"
 
-#: app/templates/components/admin_buttons.html:190
 #: app/templates/components/admin_buttons.html:199
+#: app/templates/components/admin_buttons.html:208
 msgid "local delete"
 msgstr "eliminar localmente"
 
-#: app/templates/components/admin_buttons.html:208
+#: app/templates/components/admin_buttons.html:217
 msgid "share"
 msgstr "compartir"
 
-#: app/templates/components/admin_buttons.html:217
+#: app/templates/components/admin_buttons.html:226
 msgid "undo"
 msgstr "deshacer"
 
-#: app/templates/components/admin_buttons.html:224
+#: app/templates/components/admin_buttons.html:233
 msgid "reply"
 msgstr "responder"
 
-#: app/templates/components/admin_buttons.html:231
+#: app/templates/components/admin_buttons.html:240
 msgid "quote"
 msgstr "citar"
 
-#: app/templates/components/admin_buttons.html:239
+#: app/templates/components/admin_buttons.html:248
 msgid "direct message"
 msgstr "mensaje directo"
 
-#: app/templates/components/admin_buttons.html:246
+#: app/templates/components/admin_buttons.html:255
 msgid "mention"
 msgstr "mencionar"
 
-#: app/templates/components/admin_buttons.html:253
+#: app/templates/components/admin_buttons.html:262
 msgid "profile"
 msgstr "perfil"
 
-#: app/templates/components/admin_buttons.html:261
+#: app/templates/components/admin_buttons.html:270
 msgid "expand"
 msgstr "ampliar"
 
-#: app/templates/components/admin_buttons.html:270
+#: app/templates/components/admin_buttons.html:279
 msgid "fetch replies"
 msgstr "obtener respuestas"
 

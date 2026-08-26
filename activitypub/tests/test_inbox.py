@@ -1315,3 +1315,225 @@ def test_inbox_delete_of_a_verified_quote_updates_quotes_count(
     # Then the counter is recomputed rather than left drifting
     db.refresh(quoted_object)
     assert quoted_object.quotes_count == 0
+
+
+def test_inbox_delete_of_stamp_revokes_our_accepted_quote(
+    db: Session,
+    client: TestClient,
+    respx_mock: respx.MockRouter,
+) -> None:
+    # Given one of our quotes of a remote post, already authorized
+    ra = factories.RemoteActorFactory(
+        base_url="https://example.com", username="toto", public_key="pk"
+    )
+    quote_outbox_object, _, _ = _setup_pending_quote(ra)
+    stamp_ap_id = ra.ap_id + "/quote_auth/" + uuid4().hex
+    quote_outbox_object.quote_state = "accepted"
+    quote_outbox_object.quote_authorization_ap_id = stamp_ap_id
+    db.commit()
+
+    # When the quoted post's author revokes the stamp
+    delete_activity = factories.build_delete_activity(
+        from_remote_actor=ra,
+        deleted_object_ap_id=stamp_ap_id,
+    )
+    with mock_httpsig_checker(ra):
+        response = client.post(
+            "/inbox",
+            headers={"Content-Type": ap.AS_CTX},
+            json=delete_activity,
+        )
+    assert response.status_code == 202
+
+    run_process_next_incoming_activity()
+
+    # Then the quote is revoked, not silently kept "accepted"
+    db.refresh(quote_outbox_object)
+    assert quote_outbox_object.quote_state == "revoked"
+    assert quote_outbox_object.quote_authorization_ap_id == stamp_ap_id
+
+
+def test_inbox_delete_of_stamp_from_non_quoted_author_is_ignored(
+    db: Session,
+    client: TestClient,
+    respx_mock: respx.MockRouter,
+) -> None:
+    # Given one of our quotes of a remote post, already authorized
+    ra = factories.RemoteActorFactory(
+        base_url="https://example.com", username="toto", public_key="pk"
+    )
+    quote_outbox_object, _, _ = _setup_pending_quote(ra)
+    stamp_ap_id = ra.ap_id + "/quote_auth/" + uuid4().hex
+    quote_outbox_object.quote_state = "accepted"
+    quote_outbox_object.quote_authorization_ap_id = stamp_ap_id
+    db.commit()
+
+    # When someone who is *not* the quoted post's author tries to revoke it
+    impostor = setup_remote_actor(respx_mock, base_url="https://impostor.example")
+    delete_activity = factories.build_delete_activity(
+        from_remote_actor=impostor,
+        deleted_object_ap_id=stamp_ap_id,
+    )
+    with mock_httpsig_checker(impostor):
+        response = client.post(
+            "/inbox",
+            headers={"Content-Type": ap.AS_CTX},
+            json=delete_activity,
+        )
+    assert response.status_code == 202
+
+    run_process_next_incoming_activity()
+
+    # Then it's ignored: still accepted
+    db.refresh(quote_outbox_object)
+    assert quote_outbox_object.quote_state == "accepted"
+    assert quote_outbox_object.quote_authorization_ap_id == stamp_ap_id
+
+
+def test_inbox_delete_of_stamp_revokes_a_verified_remote_to_remote_quote(
+    db: Session,
+    client: TestClient,
+    respx_mock: respx.MockRouter,
+) -> None:
+    # Given two remote actors: one owns the quoted post, the other quotes it.
+    # Neither post is ours -- the verification (and its revocation) doesn't
+    # depend on the quoted object being one of our own.
+    quoted_actor = factories.RemoteActorFactory(
+        base_url="https://quoted.example", username="alice", public_key="pk1"
+    )
+    quoted_actor_in_db = factories.ActorFactory.from_remote_actor(quoted_actor)
+    quoting_actor = factories.RemoteActorFactory(
+        base_url="https://quoting.example", username="bob", public_key="pk2"
+    )
+    factories.ActorFactory.from_remote_actor(quoting_actor)
+
+    quoted_note = RemoteObject(
+        factories.build_note_object(
+            from_remote_actor=quoted_actor,
+            outbox_public_id="quoted",
+            content="Original post",
+        ),
+        quoted_actor,
+    )
+    factories.InboxObjectFactory.from_remote_object(quoted_note, quoted_actor_in_db)
+    db.commit()
+
+    quoting_ap_id = quoting_actor.ap_id + "/note/quoting"
+    stamp_ap_id = quoted_actor.ap_id + "/quote_auth/" + uuid4().hex
+    stamp = factories.build_quote_authorization(
+        from_remote_actor=quoted_actor,
+        quoting_object_ap_id=quoting_ap_id,
+        quoted_object_ap_id=quoted_note.ap_id,
+    )
+    stamp["id"] = stamp_ap_id
+    respx_mock.get(stamp_ap_id).mock(return_value=httpx.Response(200, json=stamp))
+
+    create_activity = factories.build_create_activity(
+        factories.build_note_object(
+            from_remote_actor=quoting_actor,
+            outbox_public_id="quoting",
+            content="RE: ...",
+            quote=quoted_note.ap_id,
+            quote_authorization=stamp_ap_id,
+        )
+    )
+    with mock_httpsig_checker(quoting_actor):
+        response = client.post(
+            "/inbox",
+            headers={"Content-Type": ap.AS_CTX},
+            json=RemoteObject(create_activity, quoting_actor).ap_object,
+        )
+    assert response.status_code == 202
+    run_process_next_incoming_activity()
+
+    quoting_note = db.execute(
+        select(activitypub.models.InboxObject).where(
+            activitypub.models.InboxObject.ap_id == quoting_ap_id
+        )
+    ).scalar_one()
+    assert quoting_note.quote_is_verified is True
+
+    # When the quoted actor revokes the stamp
+    delete_activity = factories.build_delete_activity(
+        from_remote_actor=quoted_actor,
+        deleted_object_ap_id=stamp_ap_id,
+    )
+    with mock_httpsig_checker(quoted_actor):
+        response = client.post(
+            "/inbox",
+            headers={"Content-Type": ap.AS_CTX},
+            json=delete_activity,
+        )
+    assert response.status_code == 202
+    run_process_next_incoming_activity()
+
+    db.refresh(quoting_note)
+    assert quoting_note.quote_is_verified is False
+
+
+def test_inbox_delete_of_local_stamp_from_a_remote_actor_is_ignored(
+    db: Session,
+    client: TestClient,
+    respx_mock: respx.MockRouter,
+) -> None:
+    # Given a remote quote of one of our posts, verified via a stamp we
+    # minted (and therefore serve locally)
+    ra = setup_remote_actor(respx_mock)
+    quoted_object = setup_outbox_note()
+    quoting_ap_id = ra.ap_id + "/note/quoting"
+
+    stamp = factories.OutboxObjectFactory.from_remote_object(
+        uuid4().hex,
+        RemoteObject(
+            factories.build_quote_authorization(
+                from_remote_actor=LOCAL_ACTOR,
+                quoting_object_ap_id=quoting_ap_id,
+                quoted_object_ap_id=quoted_object.ap_id,
+            ),
+            LOCAL_ACTOR,
+        ),
+    )
+    db.commit()
+
+    create_activity = factories.build_create_activity(
+        factories.build_note_object(
+            from_remote_actor=ra,
+            outbox_public_id="quoting",
+            content="RE: ...",
+            quote=quoted_object.ap_id,
+            quote_authorization=stamp.ap_id,
+        )
+    )
+    with mock_httpsig_checker(ra):
+        client.post(
+            "/inbox",
+            headers={"Content-Type": ap.AS_CTX},
+            json=RemoteObject(create_activity, ra).ap_object,
+        )
+    run_process_next_incoming_activity()
+
+    quoting_note = db.execute(
+        select(activitypub.models.InboxObject).where(
+            activitypub.models.InboxObject.ap_id == quoting_ap_id
+        )
+    ).scalar_one()
+    assert quoting_note.quote_is_verified is True
+
+    # When a remote actor -- even the quoting post's own author -- sends a
+    # Delete naming our *local* stamp: only the owner can revoke a stamp
+    # minted here, via `boxes.send_quote_revoke`, never a remote Delete.
+    delete_activity = factories.build_delete_activity(
+        from_remote_actor=ra,
+        deleted_object_ap_id=stamp.ap_id,
+    )
+    with mock_httpsig_checker(ra):
+        response = client.post(
+            "/inbox",
+            headers={"Content-Type": ap.AS_CTX},
+            json=delete_activity,
+        )
+    assert response.status_code == 202
+    run_process_next_incoming_activity()
+
+    db.refresh(quoting_note)
+    assert quoting_note.quote_is_verified is True

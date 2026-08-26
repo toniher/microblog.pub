@@ -369,6 +369,11 @@
                 <li>
                     {{ admin_buttons.admin_fetch_replies_button(request, csrf_token, object.ap_id, object.permalink_id) }}
                 </li>
+                {% if object.is_quote_revocable %}
+                <li>
+                    {{ admin_buttons.admin_revoke_quote_button(request, csrf_token, object.ap_id, object.permalink_id) }}
+                </li>
+                {% endif %}
             {% endif %}
         {% endif %}
         {% if object.is_from_inbox or object.is_from_outbox %}

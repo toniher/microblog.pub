@@ -211,6 +211,44 @@ async def test_statuses_create_with_quote(
 
 
 @pytest.mark.asyncio
+async def test_statuses_quote_state_revoked(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    token = await _make_access_token(async_db_session, "write:statuses")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    _, quoted = await boxes.send_create(
+        async_db_session,
+        ObjectType.NOTE.value,
+        "Original",
+        uploads=[],
+        in_reply_to=None,
+        visibility=ap.VisibilityEnum.PUBLIC,
+    )
+    _, quoting = await boxes.send_create(
+        async_db_session,
+        ObjectType.NOTE.value,
+        "Check this out",
+        uploads=[],
+        in_reply_to=None,
+        visibility=ap.VisibilityEnum.PUBLIC,
+        quote_of=quoted.ap_id,
+    )
+    quoting_id = ids.encode_outbox_id(quoting)
+
+    # A revoked quote reports "revoked" with no `quoted_status`, and needs no
+    # serializer change to do it: `OutboxObject.quote_state` passes straight
+    # through `_serialize_quote`.
+    quoting.quote_state = "revoked"
+    await async_db_session.commit()
+
+    response = client.get(f"/api/v1/statuses/{quoting_id}", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["quote"] == {"state": "revoked", "quoted_status": None}
+
+
+@pytest.mark.asyncio
 async def test_statuses_create_with_unknown_quote_id(
     client: TestClient, async_db_session: AsyncSession
 ) -> None:

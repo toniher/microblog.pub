@@ -164,8 +164,18 @@ quote_policy = "public"
 
 Quoting someone else's post from here always sends that server a request first
 (except quoting your own post, which needs no request); the status stays pending
-until they respond. See the [federation guide](../federation.md) for the protocol
-details.
+until they respond. The handshake is [FEP-044f][fep-044f] — a `QuoteRequest` the
+other server answers with an `Accept` (carrying an authorization stamp) or a
+`Reject`. That stamp matters beyond the pending state: Mastodon 4.5 and later
+refuse to display a quote that doesn't carry one.
+
+A stamp you've granted for one of your own posts can be revoked from `/admin` — a
+**revoke quote** button next to the quoting post and next to its notification. That
+sends the quoting server a `Delete` of the stamp and stops the quote rendering here
+immediately, but reaching everyone who already saw the quote depends on that server
+forwarding the revocation to its own audience, as the FEP describes.
+
+[fep-044f]: https://codeberg.org/fediverse/fep/src/branch/main/fep/044f/fep-044f.md
 
 ### Default language
 

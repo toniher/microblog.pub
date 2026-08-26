@@ -169,3 +169,160 @@ async def test_send_create__quote_of_remote_post_sends_quote_request(
     ).scalar_one()
     assert outgoing.outbox_object_id == quote_request.id
     assert outgoing.recipient == remote_actor.inbox_url
+
+
+@pytest.mark.asyncio
+async def test_send_quote_revoke(async_db_session: AsyncSession) -> None:
+    # Given one of our posts, quoted by a remote actor with a stamp we minted
+    _, quoted_object = await boxes.send_create(
+        async_db_session,
+        ObjectType.NOTE.value,
+        "Original post",
+        uploads=[],
+        in_reply_to=None,
+        visibility=ap.VisibilityEnum.PUBLIC,
+    )
+
+    remote_actor = activitypub.models.Actor(
+        ap_id="https://example.com/users/alice",
+        ap_actor={
+            "id": "https://example.com/users/alice",
+            "type": "Person",
+            "inbox": "https://example.com/users/alice/inbox",
+            "preferredUsername": "alice",
+        },
+        ap_type="Person",
+    )
+    async_db_session.add(remote_actor)
+    await async_db_session.flush()
+
+    quoting_ap_id = "https://example.com/users/alice/notes/2"
+    stamp_object = await boxes._mint_quote_authorization(
+        async_db_session,
+        quoting_object_ap_id=quoting_ap_id,
+        quoted_object_ap_id=quoted_object.ap_id,
+    )
+
+    quoting_note = activitypub.models.InboxObject(
+        server="example.com",
+        actor_id=remote_actor.id,
+        ap_actor_id=remote_actor.ap_id,
+        ap_type="Note",
+        ap_id=quoting_ap_id,
+        ap_context=None,
+        ap_published_at=now(),
+        ap_object={
+            "id": quoting_ap_id,
+            "type": "Note",
+            "attributedTo": remote_actor.ap_id,
+            "content": "RE: ...",
+            "to": [ap.AS_PUBLIC],
+            "quote": quoted_object.ap_id,
+            "quoteAuthorization": stamp_object.ap_id,
+        },
+        visibility=ap.VisibilityEnum.PUBLIC,
+        is_hidden_from_stream=False,
+        quote_ap_id=quoted_object.ap_id,
+        quote_authorization_ap_id=stamp_object.ap_id,
+        quote_is_verified=True,
+    )
+    async_db_session.add(quoting_note)
+    await async_db_session.flush()
+
+    quoted_object.quotes_count = await boxes._get_quotes_count(
+        async_db_session, quoted_object.ap_id
+    )
+    await async_db_session.commit()
+    assert quoted_object.quotes_count == 1
+
+    # When the owner revokes it
+    await boxes.send_quote_revoke(async_db_session, quoting_note.ap_id)
+
+    # Then the stamp is torn down
+    await async_db_session.refresh(stamp_object)
+    assert stamp_object.is_deleted is True
+
+    # And the Delete is publicly addressed (so it gets LD-signed and the
+    # quoting server can forward it) and delivered to the quoter alone
+    delete_object = (
+        await async_db_session.execute(
+            select(activitypub.models.OutboxObject).where(
+                activitypub.models.OutboxObject.ap_type == "Delete",
+                activitypub.models.OutboxObject.relates_to_outbox_object_id
+                == stamp_object.id,
+            )
+        )
+    ).scalar_one()
+    assert delete_object.ap_object["object"] == {
+        "type": "Tombstone",
+        "id": stamp_object.ap_id,
+    }
+    assert delete_object.ap_object["to"] == [ap.AS_PUBLIC]
+    assert delete_object.ap_object["cc"] == [remote_actor.ap_id]
+    assert delete_object.visibility == ap.VisibilityEnum.PUBLIC
+
+    outgoing = (
+        (
+            await async_db_session.execute(
+                select(activitypub.models.OutgoingActivity).where(
+                    activitypub.models.OutgoingActivity.outbox_object_id
+                    == delete_object.id
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(outgoing) == 1
+    assert outgoing[0].recipient == remote_actor.inbox_url
+
+    # And the local state reflects the revocation
+    await async_db_session.refresh(quoting_note)
+    assert quoting_note.quote_is_verified is False
+
+    await async_db_session.refresh(quoted_object)
+    assert quoted_object.quotes_count == 0
+
+
+@pytest.mark.asyncio
+async def test_send_quote_revoke_requires_a_local_verified_stamp(
+    async_db_session: AsyncSession,
+) -> None:
+    remote_actor = activitypub.models.Actor(
+        ap_id="https://example.com/users/alice",
+        ap_actor={
+            "id": "https://example.com/users/alice",
+            "type": "Person",
+            "inbox": "https://example.com/users/alice/inbox",
+            "preferredUsername": "alice",
+        },
+        ap_type="Person",
+    )
+    async_db_session.add(remote_actor)
+    await async_db_session.flush()
+
+    # A quote we never verified (no local stamp minted for it)
+    quoting_note = activitypub.models.InboxObject(
+        server="example.com",
+        actor_id=remote_actor.id,
+        ap_actor_id=remote_actor.ap_id,
+        ap_type="Note",
+        ap_id="https://example.com/users/alice/notes/3",
+        ap_context=None,
+        ap_published_at=now(),
+        ap_object={
+            "id": "https://example.com/users/alice/notes/3",
+            "type": "Note",
+            "attributedTo": remote_actor.ap_id,
+            "content": "RE: ...",
+            "to": [ap.AS_PUBLIC],
+        },
+        visibility=ap.VisibilityEnum.PUBLIC,
+        is_hidden_from_stream=False,
+        quote_is_verified=False,
+    )
+    async_db_session.add(quoting_note)
+    await async_db_session.commit()
+
+    with pytest.raises(ValueError):
+        await boxes.send_quote_revoke(async_db_session, quoting_note.ap_id)

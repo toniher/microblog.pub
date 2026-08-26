@@ -2067,8 +2067,9 @@ async def tags_show(
     #
     # `tags/{id}/follow` and `/unfollow` stay unimplemented on purpose: with
     # no storage behind them they could only report success while persisting
-    # nothing, which is the one thing this API surface doesn't do (see
-    # features.md §4). `following: false` tells the client the truth instead.
+    # nothing, which is the one thing this API surface doesn't do — no endpoint
+    # here reports success while discarding the write. `following: false` tells
+    # the client the truth instead, and the 404 on the write beats a lie.
     # `.strip()` on top of `normalize_tag` matches how `search` normalizes its
     # hashtag query, so the two Tag-emitting paths agree on the name as well
     # as the shape (pinned by a test).

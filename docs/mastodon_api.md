@@ -61,7 +61,7 @@ forgotten on the device.
   favourited/reblogged this" endpoints.
 - **Quote posts** — `quote_id` on `POST /api/v1/statuses`, and a `quote` key next
   to `reblog` in the status entity: `{state, quoted_status}`, with `state` one of
-  `pending`, `accepted`, `rejected`, `deleted` or `unauthorized`, and
+  `pending`, `accepted`, `rejected`, `revoked`, `deleted` or `unauthorized`, and
   `quoted_status` populated only once `accepted`. Quoting your own post is
   auto-authorized; quoting anyone else's sends a federated `QuoteRequest` (FEP-044f)
   and the status starts out `pending` until the remote server responds. The
@@ -69,7 +69,12 @@ forgotten on the device.
   `public`) controls whether an incoming `QuoteRequest` for one of your own posts
   is auto-accepted, requires being a follower, needs manual approval (a
   notification with accept/reject buttons, like a follow request), or is always
-  declined. **Not supported**: revoking a quote authorization once granted.
+  declined. A stamp you've granted can be revoked from `/admin`, which sends a
+  `Delete` federating the revocation; the quote then reports `revoked` here (or,
+  for a quote of a remote post, `unauthorized` — the inbox side has no dedicated
+  revoked state). **Not supported**: the client-API
+  `POST /api/v1/statuses/:id/quotes/:quoting_status_id/revoke` endpoint (Mastodon
+  4.5.0), since no client acts on it while this instance advertises 4.3.0.
 - **Link previews** — posts containing a link carry a Mastodon `card`, built from
   the OpenGraph metadata this instance already scrapes for its own web UI, so
   clients render the same preview box. The thumbnail goes through the media

@@ -505,6 +505,23 @@ def test_quote_authorization_stamp__not_in_public_outbox(
     assert "http://localhost:8000/o/stamp-1" not in ap_ids
 
 
+def test_quote_authorization_stamp__404s_once_revoked(
+    db: Session, client: TestClient
+) -> None:
+    # A revoked stamp's own permalink 404ing is what makes a remote server's
+    # opportunistic re-verification (FEP-044f) discover the revocation even
+    # when the `Delete` was never forwarded to it.
+    stamp = _create_quote_authorization_stamp()
+    stamp.is_deleted = True
+    db.commit()
+
+    response = client.get(
+        f"/o/{stamp.public_id}", headers={"Accept": ap.AP_CONTENT_TYPE}
+    )
+
+    assert response.status_code == 404
+
+
 def test_object_collections__ap_404_for_unknown_object(
     db: Session, client: TestClient, respx_mock: respx.MockRouter
 ) -> None:

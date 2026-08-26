@@ -1,5 +1,6 @@
 from datetime import timedelta
 from typing import Iterator
+from uuid import uuid4
 
 import respx
 import starlette
@@ -221,6 +222,62 @@ def test_admin_mute_and_unmute_actions(
     assert response.status_code == 302
     db.refresh(actor)
     assert actor.is_muted is False
+
+
+def test_admin_revoke_quote_action(
+    db: Session, client: TestClient, respx_mock: respx.MockRouter
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    actor = factories.ActorFactory.from_remote_actor(ra)
+    quoted_object = setup_outbox_note()
+
+    stamp = factories.OutboxObjectFactory.from_remote_object(
+        uuid4().hex,
+        RemoteObject(
+            factories.build_quote_authorization(
+                from_remote_actor=LOCAL_ACTOR,
+                quoting_object_ap_id=ra.ap_id + "/note/quoting",
+                quoted_object_ap_id=quoted_object.ap_id,
+            ),
+            LOCAL_ACTOR,
+        ),
+    )
+
+    quoting_note = factories.InboxObjectFactory.from_remote_object(
+        RemoteObject(
+            factories.build_note_object(
+                from_remote_actor=ra,
+                outbox_public_id="quoting",
+                content="RE: ...",
+                quote=quoted_object.ap_id,
+                quote_authorization=stamp.ap_id,
+            ),
+            ra,
+        ),
+        actor,
+    )
+    quoting_note.quote_ap_id = quoted_object.ap_id
+    quoting_note.quote_authorization_ap_id = stamp.ap_id
+    quoting_note.quote_is_verified = True
+    db.commit()
+
+    response = client.post(
+        "/admin/actions/revoke_quote",
+        data={
+            "ap_object_id": quoting_note.ap_id,
+            "redirect_url": "http://testserver/admin/notifications",
+            "csrf_token": generate_csrf_token(),
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    db.refresh(quoting_note)
+    assert quoting_note.quote_is_verified is False
+
+    db.refresh(stamp)
+    assert stamp.is_deleted is True
 
 
 def test_admin_stream_hides_muted_actor(

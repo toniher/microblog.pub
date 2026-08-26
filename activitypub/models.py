@@ -329,6 +329,16 @@ class InboxObject(Base, BaseObject):
     def is_from_inbox(self) -> bool:
         return True
 
+    @property
+    def is_quote_revocable(self) -> bool:
+        """Whether the owner minted the quote's authorization stamp and can
+        revoke it via `boxes.send_quote_revoke`."""
+        return bool(
+            self.quote_is_verified
+            and self.quote_authorization_ap_id
+            and self.quote_authorization_ap_id.startswith(BASE_URL)
+        )
+
 
 # Max number of posts that can be pinned at once (matches Mastodon's default)
 MAX_PINNED_OBJECTS = 5

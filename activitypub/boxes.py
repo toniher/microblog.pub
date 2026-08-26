@@ -1644,6 +1644,10 @@ async def _handle_delete_activity(
             pass
 
     if ap_object_to_delete is None or not ap_object_to_delete.is_from_db:
+        if await _handle_quote_authorization_delete(
+            db_session, from_actor, delete_activity
+        ):
+            return
         logger.info(
             "Received Delete for an unknown object "
             f"{delete_activity.activity_object_ap_id}"
@@ -2288,6 +2292,85 @@ async def _send_reject(
         db_session.add(notif)
 
 
+async def _handle_quote_authorization_delete(
+    db_session: AsyncSession,
+    from_actor: activitypub.models.Actor,
+    delete_activity: activitypub.models.InboxObject,
+) -> bool:
+    """FEP-044f quote revocation: a `Delete` naming a `QuoteAuthorization`
+    stamp. Never stored in our inbox/outbox by id (the stamp is verified
+    by-value and discarded), so it always falls through the normal Delete
+    resolution -- this is that fallback. Returns True when the Delete was
+    consumed as a revocation, so the caller doesn't log it as unknown.
+    """
+    stamp_ap_id = delete_activity.activity_object_ap_id
+    if not stamp_ap_id or stamp_ap_id.startswith(BASE_URL):
+        # A remote can only revoke a stamp *it* minted; a local stamp is only
+        # ever revoked by the owner, via `send_quote_revoke`.
+        return False
+
+    # Case 1: one of our own posts quotes theirs, and they're revoking the
+    # grant. The sender must be the quoted post's own author -- resolved
+    # independently, exactly as `_handle_quote_request_accept_or_reject`
+    # does -- otherwise any third party could revoke someone else's stamp.
+    our_quote = await db_session.scalar(
+        select(activitypub.models.OutboxObject).where(
+            activitypub.models.OutboxObject.quote_authorization_ap_id == stamp_ap_id,
+            activitypub.models.OutboxObject.quote_state == "accepted",
+            activitypub.models.OutboxObject.is_deleted.is_(False),
+        )
+    )
+    if our_quote is not None and our_quote.quote_ap_id:
+        quoted_object = await get_anybox_object_by_ap_id(
+            db_session, our_quote.quote_ap_id
+        )
+        quoted_actor_ap_id = quoted_object.ap_actor_id if quoted_object else None
+        if quoted_actor_ap_id and from_actor.ap_id == quoted_actor_ap_id:
+            our_quote.quote_state = "revoked"
+            logger.info(
+                f"Quote authorization {stamp_ap_id} for {our_quote.ap_id} "
+                "was revoked"
+            )
+            return True
+        logger.warning(
+            f"Ignoring Delete of {stamp_ap_id} from {from_actor.ap_id}, "
+            f"which is not the quoted post's author ({quoted_actor_ap_id})"
+        )
+        return True
+
+    # Case 2: a remote post quotes another remote post, and the quoted
+    # actor is revoking the stamp we verified when we received the quote.
+    # Not counted in `_get_quotes_count`: `_verify_quote_authorization`
+    # requires the stamp's host to match the quoted author's, and a stamp
+    # for one of *our* posts can therefore only ever be local (excluded
+    # above) -- so no `quotes_count` recompute belongs on this branch.
+    their_quote = await db_session.scalar(
+        select(activitypub.models.InboxObject).where(
+            activitypub.models.InboxObject.quote_authorization_ap_id == stamp_ap_id,
+            activitypub.models.InboxObject.quote_is_verified.is_(True),
+        )
+    )
+    if their_quote is not None and their_quote.quote_ap_id:
+        quoted_object = await get_anybox_object_by_ap_id(
+            db_session, their_quote.quote_ap_id
+        )
+        quoted_actor_ap_id = quoted_object.ap_actor_id if quoted_object else None
+        if quoted_actor_ap_id and from_actor.ap_id == quoted_actor_ap_id:
+            their_quote.quote_is_verified = False
+            logger.info(
+                f"Quote authorization {stamp_ap_id} for {their_quote.ap_id} "
+                "was revoked"
+            )
+            return True
+        logger.warning(
+            f"Ignoring Delete of {stamp_ap_id} from {from_actor.ap_id}, "
+            f"which is not the quoted post's author ({quoted_actor_ap_id})"
+        )
+        return True
+
+    return False
+
+
 async def _verify_quote_authorization(
     db_session: AsyncSession,
     quote_authorization_ap_id: str,
@@ -2546,6 +2629,77 @@ async def send_quote_reject(db_session: AsyncSession, notification_id: int) -> N
         db_session, quote_request_activity.actor, quote_request_activity
     )
     notif.is_rejected = True
+
+    await db_session.commit()
+
+
+async def send_quote_revoke(db_session: AsyncSession, ap_object_id: str) -> None:
+    """Revoke a `QuoteAuthorization` stamp this instance minted, identified
+    by the ap_id of the quoting post (an inbox object) it authorized.
+    """
+    inbox_object = await get_inbox_object_by_ap_id(db_session, ap_object_id)
+    if not inbox_object:
+        raise ValueError(f"{ap_object_id} not found in the inbox")
+
+    stamp_ap_id = inbox_object.quote_authorization_ap_id
+    if (
+        not inbox_object.quote_is_verified
+        or not stamp_ap_id
+        or not stamp_ap_id.startswith(BASE_URL)
+    ):
+        raise ValueError(f"{ap_object_id} has no local quote authorization to revoke")
+
+    stamp_object = await get_outbox_object_by_ap_id(db_session, stamp_ap_id)
+    if (
+        not stamp_object
+        or stamp_object.ap_type != "QuoteAuthorization"
+        or stamp_object.is_deleted
+    ):
+        raise ValueError(f"{stamp_ap_id} not found in the outbox")
+
+    delete_id = allocate_outbox_id()
+    # Explicit public addressing, unlike `send_delete`: the stamp itself
+    # carries no `to`/`cc`, and `_build_delivery_request` only LD-signs a
+    # Delete at PUBLIC visibility. Without that, the quoting server would
+    # receive an unsigned Delete it cannot forward to the quote's own
+    # audience -- which is exactly what FEP-044f relies on for a revocation
+    # to reach beyond a single hop. `Delete` sits outside both the homepage
+    # and public-outbox type allowlists, so this doesn't expose the stamp
+    # anywhere new.
+    delete = {
+        "@context": ap.AS_EXTENDED_CTX,
+        "id": outbox_object_id(delete_id),
+        "type": "Delete",
+        "actor": ID,
+        "to": [ap.AS_PUBLIC],
+        "cc": [inbox_object.actor.ap_id],
+        "object": {"type": "Tombstone", "id": stamp_object.ap_id},
+    }
+    outbox_object = await save_outbox_object(
+        db_session,
+        delete_id,
+        delete,
+        relates_to_outbox_object_id=stamp_object.id,
+    )
+    if not outbox_object.id:
+        raise ValueError("Should never happen")
+
+    stamp_object.is_deleted = True
+    inbox_object.quote_is_verified = False
+    await db_session.flush()
+
+    if inbox_object.quote_ap_id:
+        quoted_object = await get_outbox_object_by_ap_id(
+            db_session, inbox_object.quote_ap_id
+        )
+        if quoted_object:
+            quoted_object.quotes_count = await _get_quotes_count(
+                db_session, inbox_object.quote_ap_id
+            )
+
+    await new_outgoing_activity(
+        db_session, inbox_object.actor.inbox_url, outbox_object.id
+    )
 
     await db_session.commit()
 
