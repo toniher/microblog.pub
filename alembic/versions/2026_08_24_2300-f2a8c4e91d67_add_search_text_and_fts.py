@@ -13,7 +13,7 @@ folding gap; doing it at *write* time rather than query time (a `casefold()`
 UDF + `GLOB`) is also the faster of the two -- measured over 50k inbox rows
 with a rare-match query: 99ms today, 263ms for the UDF approach (still a
 scan), 1ms for a normalized column plus an FTS5 trigram index. One mechanism
-closes both gaps; see PLAN-search.md for the full comparison.
+closes both gaps.
 
 `search_text` (defined on `Actor`/`InboxObject`/`OutboxObject` in
 `activitypub/models.py`, alongside the mapper events that keep it in sync on

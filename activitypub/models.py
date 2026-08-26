@@ -449,7 +449,7 @@ class OutboxObject(Base, BaseObject):
     # FEP-044f quote posts: set on the *quoting* outbox row (the post we quote,
     # the stamp we received back, and where the request stands). Also reused
     # for the stamp itself when this row is an outbound `QuoteAuthorization`
-    # (an OutboxObject with ap_type="QuoteAuthorization", see PLAN-quote.md).
+    # (an OutboxObject with ap_type="QuoteAuthorization").
     quote_ap_id = Column(String, nullable=True)
     quote_authorization_ap_id = Column(String, nullable=True)
     quote_state = Column(String, nullable=True)

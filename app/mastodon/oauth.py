@@ -3,8 +3,7 @@
 Adapts the existing IndieAuth OAuth2 server (`app/indieauth.py`) in place
 rather than forking a parallel stack: `/oauth/authorize` aliases the
 existing `GET /auth` consent flow, and `/oauth/token` shares the
-`issue_access_token` grant core with the legacy `/token` endpoint. See
-PLAN-0.md ("OAuth deltas") for the rationale.
+`issue_access_token` grant core with the legacy `/token` endpoint.
 """
 
 import secrets

@@ -301,9 +301,9 @@ _QUOTE_FETCH_TIMEOUT_SECONDS = 5.0
 
 def _quote_wire_fields(quoted_ap_id: str) -> dict[str, Any]:
     """The wire-format keys advertising a quote: FEP-044f's `quote` plus the
-    legacy aliases (Fedibird/Mastodon/Misskey) -- see PLAN-quote.md's wire
-    format section. Emitting all of them means a quote still shows up (as a
-    quote, not just the `RE:` link) on servers that only understand one.
+    legacy aliases (Fedibird/Mastodon/Misskey). Emitting all of them means a
+    quote still shows up (as a quote, not just the `RE:` link) on servers
+    that only understand one.
     """
     return {
         "quote": quoted_ap_id,
@@ -344,9 +344,8 @@ def _quote_reply_link_html(quoted_url: str) -> str:
 
 def _quote_interaction_policy(visibility: ap.VisibilityEnum) -> ap.RawObject:
     """Advertise who's auto-approved to quote a post, from `quote_policy`
-    (see PLAN-quote.md's inbound policy section, which this must stay
-    consistent with -- `_handle_quote_request_activity` is what actually
-    enforces it for requests *we* receive).
+    (`_handle_quote_request_activity` is what actually enforces it for
+    requests *we* receive, and this must stay consistent with it).
 
     `automaticApproval` only ever names the local followers collection, the
     public collection, or (for "manual"/"nobody", where nobody but the
@@ -423,8 +422,8 @@ async def _mint_quote_authorization(
     relates_to_inbox_object_id: int | None = None,
 ) -> activitypub.models.OutboxObject:
     """Mint a `QuoteAuthorization` (FEP-044f's "stamp"). Reuses OutboxObject
-    rather than a dedicated table -- see PLAN-quote.md's data model notes --
-    which makes it servable at its own `/o/{public_id}` for free.
+    rather than a dedicated table, which makes it servable at its own
+    `/o/{public_id}` for free.
 
     The spec forbids embedding the quoting/quoted objects in the stamp
     (information leakage), so both stay bare AP ids.
@@ -1505,9 +1504,8 @@ async def get_quoted_object_for_display(
 ) -> AnyboxObject | None:
     """The quoted object, only when the quote is authorized.
 
-    See PLAN-quote.md's rendering section: an unverified, pending or
-    rejected quote shows nothing beyond the `RE:` link already in the
-    content, so there's nothing to fetch for those.
+    An unverified, pending or rejected quote shows nothing beyond the `RE:`
+    link already in the content, so there's nothing to fetch for those.
     """
     if not obj.quote_ap_id:
         return None
@@ -2297,11 +2295,10 @@ async def _verify_quote_authorization(
     quoted_object_ap_id: str,
     quoted_actor_ap_id: str,
 ) -> bool:
-    """FEP-044f stamp verification (see PLAN-quote.md's wire format section):
-    dereference it -- or read it straight from our own outbox when we're the
-    one who minted it -- and check every field matches what it's being
-    presented for, plus that its own host matches the quoted author's: a
-    stamp minted by anyone else is worthless.
+    """FEP-044f stamp verification: dereference it -- or read it straight
+    from our own outbox when we're the one who minted it -- and check every
+    field matches what it's being presented for, plus that its own host
+    matches the quoted author's: a stamp minted by anyone else is worthless.
     """
     if quote_authorization_ap_id.startswith(BASE_URL):
         stamp_object = await get_outbox_object_by_ap_id(

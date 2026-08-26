@@ -271,7 +271,7 @@ def test_search_text_glob_uses_the_trigram_index(db: Session, fts_table) -> None
     """The FTS5 trigram tokenizer backing `*_search` only serves a `LIKE`/
     `GLOB` query when the planner marks it `L0`/`G0` -- a stray `ESCAPE`
     clause (the form the old substring search used) silently drops it back to
-    a full scan (see `app/utils/search_text.py`, `PLAN-search.md`). This
+    a full scan (see `app/utils/search_text.py`). This
     guards `matches_search()` staying a plain `GLOB` with no `ESCAPE`, so a
     regression back to that form is caught here rather than just making
     search slow again.

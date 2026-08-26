@@ -1,10 +1,10 @@
 """Derives the normalized, indexable text search reads and writes.
 
-See `PLAN-search.md` for why this exists: SQLite's `LIKE`/`lower()` only fold
-ASCII case, so normalizing here at write time -- rather than folding at query
-time -- is both what makes `josé` match `JOSÉ` and what lets the FTS5 trigram
-index in `activitypub/models.py` serve the query (see `glob_pattern`'s
-docstring for the constraint that keeps that index live).
+SQLite's `LIKE`/`lower()` only fold ASCII case, so normalizing here at write
+time -- rather than folding at query time -- is both what makes `josé` match
+`JOSÉ` and what lets the FTS5 trigram index in `activitypub/models.py` serve
+the query (see `glob_pattern`'s docstring for the constraint that keeps that
+index live).
 """
 
 import unicodedata

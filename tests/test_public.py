@@ -484,8 +484,8 @@ def test_quote_authorization_stamp__ap(db: Session, client: TestClient) -> None:
 
 
 def test_quote_authorization_stamp__html_404s(db: Session, client: TestClient) -> None:
-    # No HTML rendering exists for a stamp -- see PLAN-quote.md -- so a
-    # browser hitting its permalink gets a 404 rather than a blank page.
+    # No HTML rendering exists for a stamp, so a browser hitting its
+    # permalink gets a 404 rather than a blank page.
     stamp = _create_quote_authorization_stamp()
 
     response = client.get(f"/o/{stamp.public_id}")

@@ -4,10 +4,10 @@ Cross-process delivery is a single in-process poll task, not a broker: uvicorn
 runs as one process/one event loop (`numprocs=1`, no `--workers`), so the only
 requirement is something inside the web process that learns about rows the
 other three processes (incoming/outgoing/push workers) committed. SQLite is
-WAL, so a poll never blocks a writer — see PLAN-push.md for the full design
-rationale, including why `delete`/`status.update` need a bounded tracked-row
-re-poll rather than a plain `updated_at` watch (neither `InboxObject` nor
-`OutboxObject` auto-maintains `updated_at` on every write).
+WAL, so a poll never blocks a writer. `delete`/`status.update` additionally
+need a bounded tracked-row re-poll rather than a plain `updated_at` watch
+(neither `InboxObject` nor `OutboxObject` auto-maintains `updated_at` on
+every write).
 
 This module owns the whole feature: the event bus (`Hub`/`Subscriber`), the
 poll loop (`EventPump`), and the WebSocket/health routes. It imports

@@ -83,6 +83,11 @@ templates, Alembic migrations, background workers for federation traffic.
   `mypy` (with `sqlalchemy.ext.mypy.plugin` + `pydantic.mypy`).
 - pydantic **v2** idioms (`model_validate`, `model_dump`, `ConfigDict`).
 - SQLAlchemy queries use the 1.4 async style (`select()` + `session.scalar/execute`).
+- **Never reference `PLAN*.md` files** from comments, docstrings, migrations or
+  tracked docs. Those are local, untracked working documents that never ship with
+  the repo, so a `see PLAN-quote.md` pointer is dangling for every reader. Inline
+  the rationale where it's needed, or point at a tracked file (`docs/`, another
+  module) instead.
 
 ## Common commands
 

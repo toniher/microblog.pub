@@ -1,11 +1,10 @@
 """Mastodon client REST API — /api/v1 and /api/v2 endpoints.
 
-Grown incrementally across build phases; see PLAN-0.md for the full map.
-This module currently covers Phase 0's instance/meta surface, Phase 1a's
-accounts/relationships surface, Phase 1b's timelines/statuses surface,
-Phase 1c's notifications + read-degradation surface, Phase 2a's media
-upload surface, Phase 2b's status-write surface, and Phase 3's social
-graph + search surface.
+Grown incrementally across build phases. This module currently covers
+Phase 0's instance/meta surface, Phase 1a's accounts/relationships surface,
+Phase 1b's timelines/statuses surface, Phase 1c's notifications +
+read-degradation surface, Phase 2a's media upload surface, Phase 2b's
+status-write surface, and Phase 3's social graph + search surface.
 """
 
 import asyncio
@@ -1248,10 +1247,10 @@ async def timelines_home(
     )
 
     # Mixed inbox+outbox timeline: ids aren't comparable across the two
-    # tables, so the cursor is the boundary object's ap_published_at instead
-    # (see PLAN-0.md's pagination design). Fetching `limit` from EACH side
-    # before merging guarantees the merged top-`limit` is correct even if
-    # every recent post came from just one side.
+    # tables, so the cursor is the boundary object's ap_published_at instead.
+    # Fetching `limit` from EACH side before merging guarantees the merged
+    # top-`limit` is correct even if every recent post came from just one
+    # side.
     inbox_items = await timelines.fetch_inbox_timeline_page(
         db_session, before=before, after=after, limit=params.limit
     )
@@ -1281,7 +1280,7 @@ async def timelines_public(
         # needed.
         # NOTE: unlike timelines.fetch_outbox_timeline_page, this doesn't
         # filter is_hidden_from_homepage — a pre-existing inconsistency with
-        # the non-local branch below, left as-is (see PLAN-push.md Step 1).
+        # the non-local branch below, left as-is.
         query = (
             select(activitypub.models.OutboxObject)
             .where(

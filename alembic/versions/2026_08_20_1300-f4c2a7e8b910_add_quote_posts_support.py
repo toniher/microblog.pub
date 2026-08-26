@@ -2,7 +2,7 @@
 
 Adds the columns backing `activitypub.ap_object.Object.quote_ap_id` /
 `quote_authorization_ap_id` on `inbox` and `outbox`, plus `outbox.quote_state`
-and `outbox.quotes_count`. See PLAN-quote.md for the full design.
+and `outbox.quotes_count`.
 
 Autogenerate is not used here -- `Base.metadata` is empty at autogenerate
 time in this project's `alembic/env.py`, so it would emit `drop_table` for

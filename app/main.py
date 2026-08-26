@@ -1006,8 +1006,8 @@ async def outbox_by_public_id(
             await boxes.fetch_ap_object_with_collections(db_session, maybe_object)
         )
 
-    # A QuoteAuthorization "stamp" (see PLAN-quote.md) has no HTML rendering
-    # -- `utils.display_object`'s type guard doesn't know it -- so a browser
+    # A QuoteAuthorization "stamp" has no HTML rendering --
+    # `utils.display_object`'s type guard doesn't know it -- so a browser
     # hitting its permalink gets a 404 rather than a blank page.
     if maybe_object.ap_type == "QuoteAuthorization":
         raise HTTPException(status_code=404)
