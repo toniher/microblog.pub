@@ -54,6 +54,10 @@
     </p>
     {% endif %}
 
+    <p>
+        <input type="text" class="width-95" name="alias" placeholder="{{ _("URL alias") }}">
+    </p>
+
     {% for emoji in emojis %}
     <span class="ji">{{ emoji | emojify(True) | safe }}</span>
     {% endfor %}

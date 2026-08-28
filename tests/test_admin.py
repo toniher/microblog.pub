@@ -12,6 +12,7 @@ from activitypub import activitypub as ap
 from activitypub.actor import LOCAL_ACTOR
 from activitypub.ap_object import RemoteObject
 from activitypub.tests import factories
+from app import config
 from app import models
 from app.config import generate_csrf_token
 from app.main import app
@@ -388,6 +389,229 @@ def test_admin_edit_history(db: Session, client: TestClient) -> None:
     assert response.status_code == 200
     assert "hello world" in response.text
     assert "hello world, edited" in response.text
+
+
+def _create_note_via_admin(
+    client: TestClient, content: str = "hello world", alias: str | None = None
+) -> str:
+    data = {
+        "content": content,
+        "redirect_url": "http://testserver/",
+        "visibility": ap.VisibilityEnum.PUBLIC.name,
+        "csrf_token": generate_csrf_token(),
+    }
+    if alias is not None:
+        data["alias"] = alias
+    response = client.post(
+        "/admin/actions/new",
+        data=data,
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    location = response.headers["location"]
+    return location.rsplit("/", 1)[-1]
+
+
+def test_admin_edit_text__alias_only_change_is_local_only(
+    db: Session, client: TestClient
+) -> None:
+    public_id = _create_note_via_admin(client, content="hello world")
+    outbox_object = db.query(activitypub.models.OutboxObject).one()
+    assert outbox_object.public_id == public_id
+    assert outbox_object.revisions is None
+
+    response = client.post(
+        f"/admin/actions/edit_text/{public_id}",
+        data={
+            "content": "hello world",
+            "alias": "hello-world",
+            "csrf_token": generate_csrf_token(),
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers["location"] == (
+        f"http://localhost:8000/{config.ALIAS_URL_PREFIX}/hello-world"
+    )
+
+    db.refresh(outbox_object)
+    assert outbox_object.alias == "hello-world"
+    assert outbox_object.ap_object["url"] == (
+        f"http://localhost:8000/{config.ALIAS_URL_PREFIX}/hello-world"
+    )
+    # Local-only: no Update federated, no revision recorded, nothing queued.
+    assert outbox_object.revisions is None
+    assert db.query(activitypub.models.OutgoingActivity).count() == 0
+
+
+def test_admin_edit_text__content_and_alias_change_federates_update(
+    db: Session, client: TestClient
+) -> None:
+    public_id = _create_note_via_admin(client, content="hello world")
+    outbox_object = db.query(activitypub.models.OutboxObject).one()
+    old_url = outbox_object.url
+
+    response = client.post(
+        f"/admin/actions/edit_text/{public_id}",
+        data={
+            "content": "hello world, edited",
+            "alias": "hello-world",
+            "csrf_token": generate_csrf_token(),
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+
+    db.refresh(outbox_object)
+    assert outbox_object.alias == "hello-world"
+    assert outbox_object.ap_object["url"] == (
+        f"http://localhost:8000/{config.ALIAS_URL_PREFIX}/hello-world"
+    )
+    # An Update was federated: a revision was recorded, and it snapshots the
+    # *old* URL (before the alias took effect).
+    assert outbox_object.revisions and len(outbox_object.revisions) == 1
+    assert outbox_object.revisions[0]["ap_object"]["url"] == old_url
+
+
+def test_admin_edit_text__clearing_alias_restores_permalink(
+    db: Session, client: TestClient
+) -> None:
+    public_id = _create_note_via_admin(
+        client, content="hello world", alias="hello-world"
+    )
+    outbox_object = db.query(activitypub.models.OutboxObject).one()
+    assert outbox_object.alias == "hello-world"
+
+    response = client.post(
+        f"/admin/actions/edit_text/{public_id}",
+        data={
+            "content": "hello world",
+            "alias": "",
+            "csrf_token": generate_csrf_token(),
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers["location"] == f"http://localhost:8000/o/{public_id}"
+
+    db.refresh(outbox_object)
+    assert outbox_object.alias is None
+    assert outbox_object.ap_object["url"] == f"http://localhost:8000/o/{public_id}"
+
+
+def test_admin_edit_text__rejects_duplicate_alias_but_allows_resubmitting_own(
+    db: Session, client: TestClient
+) -> None:
+    _create_note_via_admin(client, content="first", alias="one")
+    second_public_id = _create_note_via_admin(client, content="second", alias="two")
+
+    # Trying to steal another post's alias is rejected.
+    response = client.post(
+        f"/admin/actions/edit_text/{second_public_id}",
+        data={
+            "content": "second",
+            "alias": "one",
+            "csrf_token": generate_csrf_token(),
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 422
+
+    # Re-submitting the post's own unchanged alias is not a conflict.
+    response = client.post(
+        f"/admin/actions/edit_text/{second_public_id}",
+        data={
+            "content": "second",
+            "alias": "two",
+            "csrf_token": generate_csrf_token(),
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+
+def test_admin_edit_text__alias_is_slugified(db: Session, client: TestClient) -> None:
+    public_id = _create_note_via_admin(client, content="hello world")
+
+    response = client.post(
+        f"/admin/actions/edit_text/{public_id}",
+        data={
+            "content": "hello world",
+            "alias": "Hello World!",
+            "csrf_token": generate_csrf_token(),
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    outbox_object = db.query(activitypub.models.OutboxObject).one()
+    assert outbox_object.alias == "hello-world"
+
+
+def test_admin_edit_text__alias_only_change_preserves_question_poll_answers(
+    db: Session, client: TestClient
+) -> None:
+    response = client.post(
+        "/admin/actions/new",
+        data={
+            "redirect_url": "http://testserver/",
+            "content": "what do you think",
+            "visibility": ap.VisibilityEnum.PUBLIC.name,
+            "csrf_token": generate_csrf_token(),
+            "poll_type": "oneOf",
+            "poll_duration": "5",
+            "poll_answer_1": "A",
+            "poll_answer_2": "B",
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    outbox_object = db.query(activitypub.models.OutboxObject).one()
+    assert outbox_object.ap_type == "Question"
+    assert len(outbox_object.poll_items) == 2
+
+    response = client.post(
+        f"/admin/actions/edit_text/{outbox_object.public_id}",
+        data={
+            "content": "what do you think",
+            "alias": "poll-1",
+            "csrf_token": generate_csrf_token(),
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    db.refresh(outbox_object)
+    assert outbox_object.alias == "poll-1"
+    # Alias-only edits skip `send_update`, which would otherwise rebuild the
+    # note from scratch and silently drop the poll answers.
+    assert len(outbox_object.poll_items) == 2
+    assert {pi["name"] for pi in outbox_object.poll_items} == {"A", "B"}
+
+
+def test_admin_actions_new__alias_sets_ap_url_from_the_start(
+    db: Session, client: TestClient
+) -> None:
+    _create_note_via_admin(client, content="hello world", alias="hello-world")
+
+    outbox_object = db.query(activitypub.models.OutboxObject).one()
+    assert outbox_object.alias == "hello-world"
+    assert outbox_object.ap_object["url"] == (
+        f"http://localhost:8000/{config.ALIAS_URL_PREFIX}/hello-world"
+    )
 
 
 def test_admin_notifications__renders_an_inbound_report(

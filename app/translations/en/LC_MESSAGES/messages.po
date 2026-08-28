@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-26 09:32+0200\n"
+"POT-Creation-Date: 2026-08-28 23:40+0200\n"
 "PO-Revision-Date: 2026-07-17 21:46+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -18,31 +18,44 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: app/admin.py:1542 app/admin.py:1561 app/admin.py:1687
+#: app/admin.py:122
+msgid "Error: invalid URL alias"
+msgstr ""
+
+#: app/admin.py:126
+msgid "Error: URL alias is too long"
+msgstr ""
+
+#: app/admin.py:146
+#, python-format
+msgid "Error: URL alias %(alias)s is already used"
+msgstr ""
+
+#: app/admin.py:1595 app/admin.py:1616 app/admin.py:1744
 msgid "Error: object must have a content"
 msgstr ""
 
-#: app/admin.py:1549
+#: app/admin.py:1604
 msgid "Error: invalid language code"
 msgstr ""
 
-#: app/admin.py:1576
+#: app/admin.py:1631
 msgid "Error: file is too large"
 msgstr ""
 
-#: app/admin.py:1584
+#: app/admin.py:1639
 msgid "Error: unable to process upload"
 msgstr ""
 
-#: app/admin.py:1600
+#: app/admin.py:1655
 msgid "Error: Unable to process upload"
 msgstr ""
 
-#: app/config.py:422
+#: app/config.py:467
 msgid "please try again"
 msgstr ""
 
-#: app/config.py:432
+#: app/config.py:477
 #, python-format
 msgid "The security token has expired, %(please_try_again)s"
 msgstr ""
@@ -121,7 +134,15 @@ msgstr ""
 msgid "Title"
 msgstr ""
 
-#: app/templates/admin_edit_text.html:44
+#: app/templates/admin_edit_text.html:25 app/templates/admin_new.html:58
+msgid "URL alias"
+msgstr ""
+
+#: app/templates/admin_edit_text.html:26
+msgid "Leave empty to remove the alias."
+msgstr ""
+
+#: app/templates/admin_edit_text.html:50
 msgid "Submit"
 msgstr ""
 
@@ -189,61 +210,61 @@ msgstr ""
 msgid "Question"
 msgstr ""
 
-#: app/templates/admin_new.html:64 app/templates/admin_new_post.html:69
+#: app/templates/admin_new.html:68 app/templates/admin_new_post.html:69
 msgid "Hey!"
 msgstr ""
 
-#: app/templates/admin_new.html:69 app/templates/admin_new_post.html:76
+#: app/templates/admin_new.html:73 app/templates/admin_new_post.html:76
 msgid "single choice"
 msgstr ""
 
-#: app/templates/admin_new.html:70 app/templates/admin_new_post.html:77
+#: app/templates/admin_new.html:74 app/templates/admin_new_post.html:77
 msgid "multiple choices"
 msgstr ""
 
-#: app/templates/admin_new.html:75 app/templates/admin_new_post.html:82
+#: app/templates/admin_new.html:79 app/templates/admin_new_post.html:82
 msgid "ends in 5 minutes"
 msgstr ""
 
-#: app/templates/admin_new.html:76 app/templates/admin_new_post.html:83
+#: app/templates/admin_new.html:80 app/templates/admin_new_post.html:83
 msgid "ends in 30 minutes"
 msgstr ""
 
-#: app/templates/admin_new.html:77 app/templates/admin_new_post.html:84
+#: app/templates/admin_new.html:81 app/templates/admin_new_post.html:84
 msgid "ends in 1 hour"
 msgstr ""
 
-#: app/templates/admin_new.html:78 app/templates/admin_new_post.html:85
+#: app/templates/admin_new.html:82 app/templates/admin_new_post.html:85
 msgid "ends in 6 hours"
 msgstr ""
 
-#: app/templates/admin_new.html:79 app/templates/admin_new_post.html:86
+#: app/templates/admin_new.html:83 app/templates/admin_new_post.html:86
 msgid "ends in 1 day"
 msgstr ""
 
-#: app/templates/admin_new.html:84 app/templates/admin_new_post.html:91
+#: app/templates/admin_new.html:88 app/templates/admin_new_post.html:91
 #, python-format
 msgid "Option %(n)s, leave empty to disable"
 msgstr ""
 
-#: app/templates/admin_new.html:90 app/templates/admin_new_post.html:97
+#: app/templates/admin_new.html:94 app/templates/admin_new_post.html:97
 msgid "content warning (will mark the post as sensitive)"
 msgstr ""
 
-#: app/templates/admin_new.html:93 app/templates/admin_new_post.html:100
+#: app/templates/admin_new.html:97 app/templates/admin_new_post.html:100
 #, python-format
 msgid "language code (optional, e.g. %(lang)s)"
 msgstr ""
 
-#: app/templates/admin_new.html:93 app/templates/admin_new_post.html:100
+#: app/templates/admin_new.html:97 app/templates/admin_new_post.html:100
 msgid "BCP 47 language code, e.g. en or pt-BR"
 msgstr ""
 
-#: app/templates/admin_new.html:96 app/templates/admin_new_post.html:103
+#: app/templates/admin_new.html:100 app/templates/admin_new_post.html:103
 msgid "Mark attachment(s) as sensitive"
 msgstr ""
 
-#: app/templates/admin_new.html:105 app/templates/admin_new_post.html:112
+#: app/templates/admin_new.html:109 app/templates/admin_new_post.html:112
 msgid "Publish"
 msgstr ""
 

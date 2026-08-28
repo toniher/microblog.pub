@@ -66,6 +66,7 @@ from app import micropub
 from app import models
 from app import templates
 from app import webmentions
+from app.config import ALIAS_URL_PREFIX
 from app.config import BASE_URL
 from app.config import DEBUG
 from app.config import DOMAIN
@@ -1012,43 +1013,19 @@ async def outbox_by_public_id(
     if maybe_object.ap_type == "QuoteAuthorization":
         raise HTTPException(status_code=404)
 
+    # Only redirect when a canonical URL other than this one exists -- a
+    # plain note's `url` *is* `/o/{public_id}`, so an unconditional redirect
+    # here would loop.
+    if maybe_object.alias:
+        return RedirectResponse(maybe_object.url, status_code=301)  # type: ignore
+
     if maybe_object.ap_type == "Article":
         return RedirectResponse(
             f"{BASE_URL}/articles/{public_id[:7]}/{maybe_object.slug}",
             status_code=301,
         )
 
-    replies_tree = await boxes.get_replies_tree(
-        db_session,
-        maybe_object,
-        is_current_user_admin=is_current_user_admin(request),
-    )
-
-    webmentions = await _fetch_webmentions(db_session, maybe_object)
-    likes = await _fetch_likes(db_session, maybe_object)
-    shares = await _fetch_shares(db_session, maybe_object)
-    quoted_object = await boxes.get_quoted_object_for_display(db_session, maybe_object)
-    return await templates.render_template(
-        db_session,
-        request,
-        "object.html",
-        {
-            "replies_tree": _merge_replies(replies_tree, webmentions),
-            "outbox_object": maybe_object,
-            "quoted_object": quoted_object,
-            "likes": _merge_faces_from_inbox_object_and_webmentions(
-                likes,
-                webmentions,
-                models.WebmentionType.LIKE,
-            ),
-            "shares": _merge_faces_from_inbox_object_and_webmentions(
-                shares,
-                webmentions,
-                models.WebmentionType.REPOST,
-            ),
-            "webmentions": _filter_webmentions(webmentions),
-        },
-    )
+    return await _render_outbox_object_page(request, db_session, maybe_object)
 
 
 def _filter_webmentions(
@@ -1110,6 +1087,68 @@ def _merge_replies(
     return reply_tree_node
 
 
+async def _render_outbox_object_page(
+    request: Request,
+    db_session: AsyncSession,
+    obj: activitypub.models.OutboxObject,
+) -> templates.TemplateResponse:
+    replies_tree = await boxes.get_replies_tree(
+        db_session,
+        obj,
+        is_current_user_admin=is_current_user_admin(request),
+    )
+
+    webmentions = await _fetch_webmentions(db_session, obj)
+    likes = await _fetch_likes(db_session, obj)
+    shares = await _fetch_shares(db_session, obj)
+    quoted_object = await boxes.get_quoted_object_for_display(db_session, obj)
+    return await templates.render_template(
+        db_session,
+        request,
+        "object.html",
+        {
+            "replies_tree": _merge_replies(replies_tree, webmentions),
+            "outbox_object": obj,
+            "quoted_object": quoted_object,
+            "likes": _merge_faces_from_inbox_object_and_webmentions(
+                likes,
+                webmentions,
+                models.WebmentionType.LIKE,
+            ),
+            "shares": _merge_faces_from_inbox_object_and_webmentions(
+                shares,
+                webmentions,
+                models.WebmentionType.REPOST,
+            ),
+            "webmentions": _filter_webmentions(webmentions),
+        },
+    )
+
+
+@app.get(f"/{ALIAS_URL_PREFIX}/{{alias}}", response_model=None)
+async def outbox_by_alias(
+    alias: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    httpsig_info: httpsig.HTTPSigInfo = Depends(httpsig.httpsig_checker),
+) -> ActivityPubResponse | templates.TemplateResponse:
+    maybe_object = await boxes.get_outbox_object_by_alias(db_session, alias)
+    if not maybe_object:
+        raise HTTPException(status_code=404)
+
+    await _check_outbox_object_acl(request, db_session, maybe_object, httpsig_info)
+
+    if is_activitypub_requested(request):
+        return ActivityPubResponse(
+            await boxes.fetch_ap_object_with_collections(db_session, maybe_object)
+        )
+
+    if maybe_object.ap_type == "QuoteAuthorization":
+        raise HTTPException(status_code=404)
+
+    return await _render_outbox_object_page(request, db_session, maybe_object)
+
+
 @app.get("/articles/{short_id}/{slug}", response_model=None)
 async def article_by_slug(
     short_id: str,
@@ -1131,37 +1170,11 @@ async def article_by_slug(
             await boxes.fetch_ap_object_with_collections(db_session, maybe_object)
         )
 
-    replies_tree = await boxes.get_replies_tree(
-        db_session,
-        maybe_object,
-        is_current_user_admin=is_current_user_admin(request),
-    )
+    # An aliased Article's legacy /articles/... URL redirects to the alias.
+    if maybe_object.alias:
+        return RedirectResponse(maybe_object.url, status_code=301)  # type: ignore
 
-    likes = await _fetch_likes(db_session, maybe_object)
-    shares = await _fetch_shares(db_session, maybe_object)
-    webmentions = await _fetch_webmentions(db_session, maybe_object)
-    quoted_object = await boxes.get_quoted_object_for_display(db_session, maybe_object)
-    return await templates.render_template(
-        db_session,
-        request,
-        "object.html",
-        {
-            "replies_tree": _merge_replies(replies_tree, webmentions),
-            "outbox_object": maybe_object,
-            "quoted_object": quoted_object,
-            "likes": _merge_faces_from_inbox_object_and_webmentions(
-                likes,
-                webmentions,
-                models.WebmentionType.LIKE,
-            ),
-            "shares": _merge_faces_from_inbox_object_and_webmentions(
-                shares,
-                webmentions,
-                models.WebmentionType.REPOST,
-            ),
-            "webmentions": _filter_webmentions(webmentions),
-        },
-    )
+    return await _render_outbox_object_page(request, db_session, maybe_object)
 
 
 @app.get("/o/{public_id}/activity", response_model=None)

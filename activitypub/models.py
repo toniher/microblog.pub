@@ -33,6 +33,7 @@ from activitypub.actor import Actor as BaseActor
 from activitypub.ap_object import Attachment
 from activitypub.ap_object import Object as BaseObject
 from activitypub.ap_object import format_xsd_duration
+from app.config import ALIAS_URL_PREFIX
 from app.config import BASE_URL
 from app.database import Base
 from app.utils import search_text
@@ -375,6 +376,12 @@ class OutboxObject(Base, BaseObject):
 
     public_id = Column(String, nullable=False, index=True)
     slug = Column(String, nullable=True, index=True)
+    # Human-readable alias overriding the permalink, see the `url` property
+    # below. One unique index serves both the uniqueness and the lookup --
+    # a separate non-unique index alongside a UNIQUE constraint would build a
+    # second B-tree over the same column for no read benefit. SQLite allows
+    # unlimited NULLs under it, so unaliased rows are unaffected.
+    alias = Column(String, nullable=True, index=True, unique=True)
 
     ap_type = Column(String, nullable=False, index=True)
     ap_id: Mapped[str] = Column(String, nullable=False, unique=True, index=True)
@@ -544,10 +551,19 @@ class OutboxObject(Base, BaseObject):
 
     @property
     def url(self) -> str | None:
+        if self.alias:
+            return f"{BASE_URL}/{ALIAS_URL_PREFIX}/{self.alias}"
         # XXX: rewrite old URL here for compat
         if self.ap_type == "Article" and self.slug and self.public_id:
             return f"{BASE_URL}/articles/{self.public_id[:7]}/{self.slug}"
-        return super().url
+        # Not `super().url`: that falls back to `ap_object["url"]` verbatim,
+        # which for a local object only ever legitimately diverges from
+        # `ap_id` in the two cases already handled above. Reading it here too
+        # would mean trusting whatever was last written there -- including a
+        # stale alias URL still sitting in storage while `set_outbox_object_alias`
+        # is in the middle of recomputing it (the property is evaluated from
+        # the very dict it's about to replace).
+        return self.ap_id
 
 
 # --- Full-text search ------------------------------------------------------

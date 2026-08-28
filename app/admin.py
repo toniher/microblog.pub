@@ -51,6 +51,7 @@ from app.uploads import UploadTooLargeError
 from app.uploads import save_upload
 from app.utils import pagination
 from app.utils.emoji import EMOJIS_BY_NAME
+from app.utils.text import slugify
 from app.utils.url import InvalidURLError
 
 
@@ -96,6 +97,57 @@ router = APIRouter(
     dependencies=[Depends(user_session_or_redirect)],
 )
 unauthenticated_router = APIRouter()
+
+_MAX_ALIAS_LENGTH = 200
+
+
+async def _normalize_alias(
+    db_session: AsyncSession,
+    raw: str | None,
+    *,
+    exclude_id: int | None = None,
+) -> str | None:
+    """Slugify a raw admin-submitted alias, or return None for an empty one.
+
+    Raises a 422 for a value that slugifies to nothing, is too long, or
+    clashes with another outbox object's alias (soft-deleted posts included --
+    their alias stays reserved).
+    """
+    if not raw or not raw.strip():
+        return None
+
+    alias = slugify(raw)
+    if not alias:
+        raise HTTPException(
+            status_code=422, detail=gettext_default("Error: invalid URL alias")
+        )
+    if len(alias) > _MAX_ALIAS_LENGTH:
+        raise HTTPException(
+            status_code=422, detail=gettext_default("Error: URL alias is too long")
+        )
+
+    # The UNIQUE constraint on `alias` isn't conditioned on `is_deleted`, so a
+    # soft-deleted post still reserves its alias -- checked here too, so that
+    # case surfaces as this friendly 422 rather than a raw IntegrityError.
+    conflict_where = [
+        activitypub.models.OutboxObject.alias == alias,
+    ]
+    if exclude_id is not None:
+        conflict_where.append(activitypub.models.OutboxObject.id != exclude_id)
+
+    existing = (
+        await db_session.execute(
+            select(activitypub.models.OutboxObject).where(*conflict_where)
+        )
+    ).scalar_one_or_none()
+    if existing:
+        raise HTTPException(
+            status_code=422,
+            detail=gettext_default("Error: URL alias %(alias)s is already used")
+            % {"alias": alias},
+        )
+
+    return alias
 
 
 @router.get("/lookup", response_model=None)
@@ -1534,6 +1586,7 @@ async def admin_actions_new(
     poll_type: str | None = Form(None),
     name: str | None = Form(None),
     language: str | None = Form(None),
+    alias: str | None = Form(None),
     csrf_check: None = Depends(verify_csrf_token),
     db_session: AsyncSession = Depends(get_db_session),
 ) -> RedirectResponse:
@@ -1541,6 +1594,8 @@ async def admin_actions_new(
         raise HTTPException(
             status_code=422, detail=gettext_default("Error: object must have a content")
         )
+
+    new_alias = await _normalize_alias(db_session, alias)
 
     # Optional Mastodon-style post language (BCP 47); empty means unset (None).
     language = (language or "").strip() or None
@@ -1633,6 +1688,7 @@ async def admin_actions_new(
         name=name,
         language=language,
         quote_of=quote_of or None,
+        alias=new_alias,
     )
     return RedirectResponse(
         request.url_for("outbox_by_public_id", public_id=public_id),
@@ -1679,6 +1735,7 @@ async def admin_actions_edit_text(
     public_id: str,
     content: str | None = Form(None),
     name: str | None = Form(None),
+    alias: str | None = Form(None),
     csrf_check: None = Depends(verify_csrf_token),
     db_session: AsyncSession = Depends(get_db_session),
 ) -> RedirectResponse:
@@ -1702,17 +1759,30 @@ async def admin_actions_edit_text(
     if not maybe_object:
         raise HTTPException(status_code=404)
 
-    public_id = await boxes.send_update(
-        db_session,
-        ap_id=maybe_object.ap_id,
-        source=content,
-        name=name,
+    new_alias = await _normalize_alias(db_session, alias, exclude_id=maybe_object.id)
+    alias_changed = new_alias != maybe_object.alias
+    content_changed = (
+        content != maybe_object.source or (name or None) != maybe_object.name
     )
 
-    return RedirectResponse(
-        request.url_for("outbox_by_public_id", public_id=public_id),
-        status_code=302,
-    )
+    if content_changed:
+        # Set the alias first: send_update rebuilds the note with
+        # `"url": outbox_object.url`, so the property picks the new alias up.
+        # Don't rewrite ap_object here -- send_update snapshots the current
+        # one into `revisions`, and we want that snapshot to hold the *old*
+        # url.
+        if alias_changed:
+            maybe_object.alias = new_alias
+        await boxes.send_update(
+            db_session,
+            ap_id=maybe_object.ap_id,
+            source=content,
+            name=name,
+        )
+    elif alias_changed:
+        await boxes.set_outbox_object_alias(db_session, maybe_object, new_alias)
+
+    return RedirectResponse(maybe_object.url, status_code=302)  # type: ignore
 
 
 @router.get("/edit_history/{public_id}", response_model=None)

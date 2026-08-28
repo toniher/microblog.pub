@@ -160,6 +160,50 @@ class Config(pydantic.BaseModel):
         pattern="^(public|followers|manual|nobody)$",
     )
 
+    # Top-level path segment under which post URL aliases are served, e.g.
+    # "post" -> https://example.com/post/my-first-note. Instances used mainly
+    # for long-form writing may prefer "blog". Treat this as set-once: it's
+    # read at import time, so changing it after posts have been aliased and
+    # federated invalidates the `url` already sent to remote servers (local
+    # rendering and `/o/{public_id}` keep working either way).
+    alias_url_prefix: str = pydantic.Field(
+        default="post", pattern="^[a-z0-9][a-z0-9_-]*$"
+    )
+
+    @pydantic.field_validator("alias_url_prefix")
+    @classmethod
+    def _validate_alias_url_prefix(cls, v: str) -> str:
+        reserved = {
+            "o",
+            "t",
+            "e",
+            "articles",
+            "admin",
+            "inbox",
+            "outbox",
+            "followers",
+            "following",
+            "featured",
+            "featured_tags",
+            "img",
+            "proxy",
+            "attachments",
+            "static",
+            "nodeinfo",
+            "remote_follow",
+            "remote_interaction",
+            "feed.json",
+            "feed.rss",
+            "feed.atom",
+            "robots.txt",
+            ".well-known",
+        }
+        if v in reserved:
+            raise ValueError(
+                f"alias_url_prefix {v!r} collides with an existing top-level route"
+            )
+        return v
+
     # Hashtags pinned to the profile (Mastodon's "featured tags"), shown as-is
     # without the leading "#".
     featured_tags: list[str] = []
@@ -280,6 +324,7 @@ FEATURED_TAGS = CONFIG.featured_tags
 DISCOVERABLE = CONFIG.discoverable
 INDEXABLE = CONFIG.indexable
 QUOTE_POLICY = CONFIG.quote_policy
+ALIAS_URL_PREFIX = CONFIG.alias_url_prefix
 PRIVACY_REPLACE = None
 if CONFIG.privacy_replace:
     PRIVACY_REPLACE = {pr.domain: pr.replace_by for pr in CONFIG.privacy_replace}

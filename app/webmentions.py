@@ -16,10 +16,12 @@ import activitypub.models
 from activitypub.boxes import _get_outbox_announces_count
 from activitypub.boxes import _get_outbox_likes_count
 from activitypub.boxes import _get_outbox_replies_count
+from activitypub.boxes import get_outbox_object_by_alias
 from activitypub.boxes import get_outbox_object_by_ap_id
 from activitypub.boxes import get_outbox_object_by_slug_and_short_id
 from activitypub.boxes import is_notification_enabled
 from app import models
+from app.config import ALIAS_URL_PREFIX
 from app.database import AsyncSession
 from app.database import get_db_session
 from app.utils import microformats
@@ -87,6 +89,12 @@ async def webmention_endpoint(
             )
         except Exception:
             logger.exception(f"Failed to match {target}")
+
+    _alias_path_prefix = f"/{ALIAS_URL_PREFIX}/"
+    if not mentioned_object and parsed_target_url.path.startswith(_alias_path_prefix):
+        mentioned_object = await get_outbox_object_by_alias(
+            db_session, parsed_target_url.path.removeprefix(_alias_path_prefix)
+        )
 
     if not mentioned_object:
         logger.info(f"Invalid target {target=}")

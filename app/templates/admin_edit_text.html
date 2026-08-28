@@ -20,6 +20,12 @@
     </p>
     {% endif %}
 
+    <p>
+        <input type="text" class="width-95" name="alias"
+               placeholder="{{ _("URL alias") }}" value="{{ outbox_object.alias or "" }}">
+        <span class="muted">{{ _("Leave empty to remove the alias.") }}</span>
+    </p>
+
     {% if False %}
     {% for emoji in emojis %}
     <span class="ji">{{ emoji | emojify(True) | safe }}</span>

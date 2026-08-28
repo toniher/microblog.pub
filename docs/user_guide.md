@@ -177,6 +177,29 @@ forwarding the revocation to its own audience, as the FEP describes.
 
 [fep-044f]: https://codeberg.org/fediverse/fep/src/branch/main/fep/044f/fep-044f.md
 
+### URL aliases
+
+Every post is reachable at an opaque permalink like `/o/ef0166f89a124e7d9d3d6305cfa5597a`.
+From a post's admin **edit** page, you can give it a human-readable alias instead —
+set it and the post becomes canonically reachable at `/post/my-first-note`; the old
+`/o/…` link keeps working, redirecting (301) to the alias. Clearing the alias field
+restores the original URL. This is local-only: changing only the alias does not
+federate an `Update` to followers.
+
+The path prefix (`post` by default) is configurable via the `alias_url_prefix`
+config item in `profile.toml`:
+
+```toml
+alias_url_prefix = "blog"
+```
+
+It must not collide with an existing top-level route (`o`, `articles`, `admin`,
+`static`, `.well-known`, and similar are rejected at startup). Treat it as a
+set-once setting: changing it after posts have already been aliased and federated
+invalidates the `url` already sent to remote servers for those posts (local
+rendering picks up the new prefix immediately, and `/o/{public_id}` — the
+ActivityPub `id`, which never changes — keeps resolving either way).
+
 ### Default language
 
 You can set a default language for your instance with the `language_code` config item in

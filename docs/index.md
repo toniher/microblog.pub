@@ -14,6 +14,7 @@ citizen.
 - Exposes your ActivityPub profile as a minimalist microblog
   - Author notes in Markdown, with code highlighting support
   - Dedicated section for articles/blog posts (enabled when the first article is posted)
+  - Assign a human-readable URL alias to any post from its admin edit page
 - [Mastodon client API](mastodon_api.md) compatibility — log in from apps like
   Tusky or Fedilab to read, post, and interact without touching the web UI
 - Localizable interface — public and admin pages both follow a visitor's browser

@@ -40,6 +40,7 @@ from activitypub.outgoing_activities import new_outgoing_activity
 from app import config
 from app import ldsig
 from app import models
+from app.config import ALIAS_URL_PREFIX
 from app.config import BASE_URL
 from app.config import ID
 from app.config import MANUALLY_APPROVES_FOLLOWERS
@@ -124,6 +125,7 @@ async def save_outbox_object(
     is_transient: bool = False,
     conversation: str | None = None,
     slug: str | None = None,
+    alias: str | None = None,
 ) -> activitypub.models.OutboxObject:
     ro = await RemoteObject.from_raw_object(raw_object)
 
@@ -144,6 +146,7 @@ async def save_outbox_object(
         is_transient=is_transient,
         conversation=conversation,
         slug=slug,
+        alias=alias,
     )
     db_session.add(outbox_object)
     await db_session.flush()
@@ -832,6 +835,7 @@ async def send_create(
     name: str | None = None,
     language: str | None = None,
     quote_of: str | None = None,
+    alias: str | None = None,
 ) -> tuple[str, activitypub.models.OutboxObject]:
     note_id = allocate_outbox_id()
     published = now().replace(microsecond=0).isoformat().replace("+00:00", "Z")
@@ -926,6 +930,9 @@ async def send_create(
         url = f"{BASE_URL}/articles/{note_id[:7]}/{slug}"
         extra_obj_attrs = {"name": name}
 
+    if alias:
+        url = f"{BASE_URL}/{ALIAS_URL_PREFIX}/{alias}"
+
     # Mastodon-style per-post language: expose the natural-language properties
     # as language maps so remote servers know the content language. Absent when
     # no language is set.
@@ -972,6 +979,7 @@ async def send_create(
         source=source,
         conversation=conversation,
         slug=slug,
+        alias=alias,
     )
     if not outbox_object.id:
         raise ValueError("Should never happen")
@@ -1488,6 +1496,45 @@ async def get_outbox_object_by_slug_and_short_id(
         .unique()
         .scalar_one_or_none()
     )
+
+
+async def get_outbox_object_by_alias(
+    db_session: AsyncSession,
+    alias: str,
+) -> activitypub.models.OutboxObject | None:
+    return (
+        (
+            await db_session.execute(
+                select(activitypub.models.OutboxObject)
+                .options(
+                    joinedload(
+                        activitypub.models.OutboxObject.outbox_object_attachments
+                    ).options(
+                        joinedload(activitypub.models.OutboxObjectAttachment.upload)
+                    )
+                )
+                .where(
+                    activitypub.models.OutboxObject.alias == alias,
+                    activitypub.models.OutboxObject.is_deleted.is_(False),
+                )
+            )
+        )
+        .unique()
+        .scalar_one_or_none()
+    )
+
+
+async def set_outbox_object_alias(
+    db_session: AsyncSession,
+    outbox_object: activitypub.models.OutboxObject,
+    alias: str | None,
+) -> None:
+    outbox_object.alias = alias
+    # Reassign rather than mutate: SQLAlchemy compares the JSON column by
+    # identity on flush, so an in-place edit is silently dropped (see the
+    # `revisions` comment in send_update).
+    outbox_object.ap_object = {**outbox_object.ap_object, "url": outbox_object.url}
+    await db_session.commit()
 
 
 async def get_anybox_object_by_ap_id(

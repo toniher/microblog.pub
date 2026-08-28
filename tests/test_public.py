@@ -551,3 +551,117 @@ def test_outbox__ap_advertises_interaction_collections(
         "totalItems": 2,
     }
     assert items[note.ap_id]["likes"]["totalItems"] == 3
+
+
+# --- URL aliases -----------------------------------------------------------
+
+
+def _create_aliased_note(
+    alias: str = "my-first-note",
+    visibility: ap.VisibilityEnum = ap.VisibilityEnum.PUBLIC,
+) -> activitypub.models.OutboxObject:
+    public_id = "note-with-alias"
+    return factories.OutboxObjectFactory(
+        public_id=public_id,
+        ap_type="Note",
+        ap_id=f"http://localhost:8000/o/{public_id}",
+        ap_object={"type": "Note", "content": "hello"},
+        visibility=visibility,
+        alias=alias,
+    )
+
+
+def test_object_by_alias__html(db: Session, client: TestClient) -> None:
+    note = _create_aliased_note()
+
+    response = client.get(f"/{config.ALIAS_URL_PREFIX}/{note.alias}")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "hello" in response.text
+
+
+def test_object_by_alias__ap(db: Session, client: TestClient) -> None:
+    note = _create_aliased_note()
+
+    response = client.get(
+        f"/{config.ALIAS_URL_PREFIX}/{note.alias}",
+        headers={"Accept": ap.AP_CONTENT_TYPE},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == ap.AP_CONTENT_TYPE
+    assert response.json()["content"] == "hello"
+
+
+def test_object_by_alias__404_for_unknown_alias(
+    db: Session, client: TestClient
+) -> None:
+    response = client.get(f"/{config.ALIAS_URL_PREFIX}/nope")
+
+    assert response.status_code == 404
+
+
+def test_object_by_alias__acl_denied_for_anonymous_followers_only(
+    db: Session, client: TestClient
+) -> None:
+    note = _create_aliased_note(visibility=ap.VisibilityEnum.FOLLOWERS_ONLY)
+
+    response = client.get(f"/{config.ALIAS_URL_PREFIX}/{note.alias}")
+
+    assert response.status_code == 404
+
+
+def test_object_by_public_id__redirects_to_alias(
+    db: Session, client: TestClient
+) -> None:
+    note = _create_aliased_note()
+
+    response = client.get(f"/o/{note.public_id}", follow_redirects=False)
+
+    assert response.status_code == 301
+    assert response.headers["location"] == (
+        f"http://localhost:8000/{config.ALIAS_URL_PREFIX}/{note.alias}"
+    )
+
+
+def test_object_by_public_id__no_redirect_when_no_alias(
+    db: Session, client: TestClient
+) -> None:
+    _create_public_note(1)
+
+    response = client.get("/o/note-1", follow_redirects=False)
+
+    assert response.status_code == 200
+
+
+def test_article_by_slug__redirects_to_alias(db: Session, client: TestClient) -> None:
+    public_id = "article-with-alias"
+    article = factories.OutboxObjectFactory(
+        public_id=public_id,
+        ap_type="Article",
+        ap_id=f"http://localhost:8000/o/{public_id}",
+        ap_object={"type": "Article", "name": "Hello", "content": "hello"},
+        visibility=ap.VisibilityEnum.PUBLIC,
+        slug="hello",
+        alias="a-nicer-name",
+    )
+
+    response = client.get(
+        f"/articles/{article.public_id[:7]}/{article.slug}", follow_redirects=False
+    )
+
+    assert response.status_code == 301
+    assert response.headers["location"] == (
+        f"http://localhost:8000/{config.ALIAS_URL_PREFIX}/{article.alias}"
+    )
+
+
+def test_feed_json__uses_alias_url(db: Session, client: TestClient) -> None:
+    note = _create_aliased_note()
+
+    response = client.get("/feed.json")
+
+    assert response.status_code == 200
+    urls = {item["url"] for item in response.json()["items"]}
+    assert f"http://localhost:8000/{config.ALIAS_URL_PREFIX}/{note.alias}" in urls
