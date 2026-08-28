@@ -186,6 +186,14 @@ set it and the post becomes canonically reachable at `/post/my-first-note`; the 
 restores the original URL. This is local-only: changing only the alias does not
 federate an `Update` to followers.
 
+Whatever you type is normalized: lowercased, spaces collapsed into hyphens, and
+anything that isn't a letter, digit, hyphen or underscore is stripped — so
+`My First Note!` becomes `my-first-note`. Prefer hyphens over underscores for
+word separation (`my-first-note`, not `my_first_note`); hyphens are what the
+normalization produces automatically and are the convention used everywhere
+else in the app's own URLs. Aliases are capped at 200 characters and must be
+unique across all posts, including deleted ones.
+
 The path prefix (`post` by default) is configurable via the `alias_url_prefix`
 config item in `profile.toml`:
 
