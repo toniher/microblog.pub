@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-28 23:40+0200\n"
+"POT-Creation-Date: 2026-08-29 17:24+0200\n"
 "PO-Revision-Date: 2026-07-17 21:46+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -18,37 +18,49 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: app/admin.py:122
+#: app/admin.py:123
 msgid "Error: invalid URL alias"
 msgstr ""
 
-#: app/admin.py:126
+#: app/admin.py:127
 msgid "Error: URL alias is too long"
 msgstr ""
 
-#: app/admin.py:146
+#: app/admin.py:147
 #, python-format
 msgid "Error: URL alias %(alias)s is already used"
 msgstr ""
 
-#: app/admin.py:1595 app/admin.py:1616 app/admin.py:1744
+#: app/admin.py:1614 app/admin.py:1634 app/admin.py:1796
 msgid "Error: object must have a content"
 msgstr ""
 
-#: app/admin.py:1604
+#: app/admin.py:1624
 msgid "Error: invalid language code"
 msgstr ""
 
-#: app/admin.py:1631
+#: app/admin.py:1637
+msgid "Error: an article must have a title"
+msgstr ""
+
+#: app/admin.py:1649
 msgid "Error: file is too large"
 msgstr ""
 
-#: app/admin.py:1639
-msgid "Error: unable to process upload"
+#: app/admin.py:1651 app/admin.py:1657
+msgid "files must be re-selected before trying again"
 msgstr ""
 
 #: app/admin.py:1655
+msgid "Error: unable to process upload"
+msgstr ""
+
+#: app/admin.py:1670
 msgid "Error: Unable to process upload"
+msgstr ""
+
+#: app/admin.py:1683
+msgid "Error: a poll must have at least 2 answers"
 msgstr ""
 
 #: app/config.py:467
@@ -124,25 +136,42 @@ msgstr ""
 msgid "Current version"
 msgstr ""
 
-#: app/templates/admin_edit_text.html:6 app/templates/admin_new.html:7
+#: app/templates/admin_edit_text.html:5
 #, python-format
-msgid "%(name)s - New"
+msgid "%(name)s - Edit"
 msgstr ""
 
-#: app/templates/admin_edit_text.html:19 app/templates/admin_new.html:53
-#: app/templates/admin_new_post.html:58
+#: app/templates/admin_edit_text.html:21 app/templates/admin_edit_text.html:22
+#: app/templates/admin_new.html:60
 msgid "Title"
 msgstr ""
 
-#: app/templates/admin_edit_text.html:25 app/templates/admin_new.html:58
+#: app/templates/admin_edit_text.html:27 app/templates/admin_edit_text.html:29
+#: app/templates/admin_new.html:116
 msgid "URL alias"
 msgstr ""
 
-#: app/templates/admin_edit_text.html:26
+#: app/templates/admin_edit_text.html:30
 msgid "Leave empty to remove the alias."
 msgstr ""
 
-#: app/templates/admin_edit_text.html:50
+#: app/templates/admin_edit_text.html:34 app/templates/admin_new.html:66
+msgid "Content"
+msgstr ""
+
+#: app/templates/admin_edit_text.html:49 app/templates/admin_new.html:108
+msgid "Content warning"
+msgstr ""
+
+#: app/templates/admin_edit_text.html:50 app/templates/admin_new.html:109
+msgid "will mark the post as sensitive"
+msgstr ""
+
+#: app/templates/admin_edit_text.html:53 app/templates/admin_new.html:126
+msgid "Mark attachment(s) as sensitive"
+msgstr ""
+
+#: app/templates/admin_edit_text.html:57
 msgid "Submit"
 msgstr ""
 
@@ -187,90 +216,121 @@ msgid ""
 "showing up in the stream, and their notifications are hidden."
 msgstr ""
 
-#: app/templates/admin_new.html:13 app/templates/admin_new_post.html:16
+#: app/templates/admin_new.html:7
+#, python-format
+msgid "%(name)s - New"
+msgstr ""
+
+#: app/templates/admin_new.html:13
 msgid "In reply to:"
 msgstr ""
 
-#: app/templates/admin_new.html:18 app/templates/admin_new_post.html:21
+#: app/templates/admin_new.html:18
 msgid "Quoting:"
 msgstr ""
 
-#: app/templates/admin_new.html:36 app/templates/admin_new_post.html:41
-#: app/templates/components/filters.html:22 app/templates/object.html:18
+#: app/templates/admin_new.html:38 app/templates/components/filters.html:22
+#: app/templates/object.html:18
 msgid "Note"
 msgstr ""
 
-#: app/templates/admin_new.html:36 app/templates/admin_new_post.html:41
-#: app/templates/components/filters.html:22
+#: app/templates/admin_new.html:38 app/templates/components/filters.html:22
 msgid "Article"
 msgstr ""
 
-#: app/templates/admin_new.html:36 app/templates/admin_new_post.html:41
-#: app/templates/components/filters.html:22
+#: app/templates/admin_new.html:38 app/templates/components/filters.html:22
 msgid "Question"
 msgstr ""
 
-#: app/templates/admin_new.html:68 app/templates/admin_new_post.html:69
+#: app/templates/admin_new.html:50
+msgid "Visibility"
+msgstr ""
+
+#: app/templates/admin_new.html:77
 msgid "Hey!"
 msgstr ""
 
-#: app/templates/admin_new.html:73 app/templates/admin_new_post.html:76
+#: app/templates/admin_new.html:78
+msgid "Markdown is supported. #hashtags, @mentions and :custom_emoji: work too."
+msgstr ""
+
+#: app/templates/admin_new.html:83
+msgid "Poll type"
+msgstr ""
+
+#: app/templates/admin_new.html:85
 msgid "single choice"
 msgstr ""
 
-#: app/templates/admin_new.html:74 app/templates/admin_new_post.html:77
+#: app/templates/admin_new.html:86
 msgid "multiple choices"
 msgstr ""
 
-#: app/templates/admin_new.html:79 app/templates/admin_new_post.html:82
+#: app/templates/admin_new.html:90
+msgid "Poll duration"
+msgstr ""
+
+#: app/templates/admin_new.html:92
 msgid "ends in 5 minutes"
 msgstr ""
 
-#: app/templates/admin_new.html:80 app/templates/admin_new_post.html:83
+#: app/templates/admin_new.html:93
 msgid "ends in 30 minutes"
 msgstr ""
 
-#: app/templates/admin_new.html:81 app/templates/admin_new_post.html:84
+#: app/templates/admin_new.html:94
 msgid "ends in 1 hour"
 msgstr ""
 
-#: app/templates/admin_new.html:82 app/templates/admin_new_post.html:85
+#: app/templates/admin_new.html:95
 msgid "ends in 6 hours"
 msgstr ""
 
-#: app/templates/admin_new.html:83 app/templates/admin_new_post.html:86
+#: app/templates/admin_new.html:96
 msgid "ends in 1 day"
 msgstr ""
 
-#: app/templates/admin_new.html:88 app/templates/admin_new_post.html:91
+#: app/templates/admin_new.html:101
 #, python-format
-msgid "Option %(n)s, leave empty to disable"
+msgid "Option %(n)s"
 msgstr ""
 
-#: app/templates/admin_new.html:94 app/templates/admin_new_post.html:97
-msgid "content warning (will mark the post as sensitive)"
+#: app/templates/admin_new.html:102
+msgid "leave empty to disable"
 msgstr ""
 
-#: app/templates/admin_new.html:97 app/templates/admin_new_post.html:100
+#: app/templates/admin_new.html:113
+msgid "More options"
+msgstr ""
+
+#: app/templates/admin_new.html:117
+msgid "optional"
+msgstr ""
+
+#: app/templates/admin_new.html:121
+msgid "Language"
+msgstr ""
+
+#: app/templates/admin_new.html:122
 #, python-format
-msgid "language code (optional, e.g. %(lang)s)"
+msgid "optional, e.g. %(lang)s"
 msgstr ""
 
-#: app/templates/admin_new.html:97 app/templates/admin_new_post.html:100
+#: app/templates/admin_new.html:122
 msgid "BCP 47 language code, e.g. en or pt-BR"
 msgstr ""
 
-#: app/templates/admin_new.html:100 app/templates/admin_new_post.html:103
-msgid "Mark attachment(s) as sensitive"
+#: app/templates/admin_new.html:133
+msgid "Attachments"
 msgstr ""
 
-#: app/templates/admin_new.html:109 app/templates/admin_new_post.html:112
-msgid "Publish"
-msgstr ""
-
-#: app/templates/admin_new_post.html:10
+#: app/templates/admin_new.html:136
 #, python-format
-msgid "%(name)s - New Post"
+msgid "Alt text for %(filename)s"
+msgstr ""
+
+#: app/templates/admin_new.html:138
+msgid "Publish"
 msgstr ""
 
 #: app/templates/admin_outbox.html:10
@@ -983,4 +1043,16 @@ msgstr ""
 #: app/templates/components/filters.html:22
 msgid "Announce"
 msgstr ""
+
+#~ msgid "Option %(n)s, leave empty to disable"
+#~ msgstr ""
+
+#~ msgid "content warning (will mark the post as sensitive)"
+#~ msgstr ""
+
+#~ msgid "language code (optional, e.g. %(lang)s)"
+#~ msgstr ""
+
+#~ msgid "%(name)s - New Post"
+#~ msgstr ""
 

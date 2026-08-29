@@ -95,7 +95,7 @@ def test_admin_lookup_rejects_non_url_query(client: TestClient) -> None:
     assert "This is not a URL or a fediverse handle" in response.text
 
 
-def test_admin_new_post_rejects_oversized_upload(
+def test_admin_actions_new_rejects_oversized_upload(
     client: TestClient, monkeypatch
 ) -> None:
     monkeypatch.setattr("app.uploads.config.MAX_IMAGE_UPLOAD_SIZE", 10)
@@ -113,7 +113,9 @@ def test_admin_new_post_rejects_oversized_upload(
         follow_redirects=False,
     )
     assert response.status_code == 422
-    assert "too large" in response.json()["detail"].lower()
+    assert "too large" in response.text.lower()
+    # The submitted content is preserved in the re-rendered form.
+    assert "hello" in response.text
 
 
 def test_admin_blocks_lists_blocked_actors(
@@ -600,6 +602,126 @@ def test_admin_edit_text__alias_only_change_preserves_question_poll_answers(
     # note from scratch and silently drop the poll answers.
     assert len(outbox_object.poll_items) == 2
     assert {pi["name"] for pi in outbox_object.poll_items} == {"A", "B"}
+
+
+def test_admin_edit_text__updates_content_warning_and_sensitive(
+    db: Session, client: TestClient
+) -> None:
+    public_id = _create_note_via_admin(client, content="hello world")
+    outbox_object = db.query(activitypub.models.OutboxObject).one()
+    assert outbox_object.summary is None
+    assert outbox_object.sensitive is False
+
+    response = client.post(
+        f"/admin/actions/edit_text/{public_id}",
+        data={
+            "content": "hello world",
+            "content_warning": "spoilers",
+            "csrf_token": generate_csrf_token(),
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    db.refresh(outbox_object)
+    assert outbox_object.summary == "spoilers"
+    # A content warning implies sensitive, same rule as the compose form.
+    assert outbox_object.sensitive is True
+    assert outbox_object.revisions and len(outbox_object.revisions) == 1
+
+
+def test_admin_edit_text__clearing_content_warning_federates_update(
+    db: Session, client: TestClient
+) -> None:
+    public_id = _create_note_via_admin(client, content="hello world")
+    outbox_object = db.query(activitypub.models.OutboxObject).one()
+
+    response = client.post(
+        f"/admin/actions/edit_text/{public_id}",
+        data={
+            "content": "hello world",
+            "content_warning": "spoilers",
+            "csrf_token": generate_csrf_token(),
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    db.refresh(outbox_object)
+    assert outbox_object.summary == "spoilers"
+
+    response = client.post(
+        f"/admin/actions/edit_text/{public_id}",
+        data={
+            "content": "hello world",
+            "content_warning": "",
+            "csrf_token": generate_csrf_token(),
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    db.refresh(outbox_object)
+    assert outbox_object.summary is None
+    assert outbox_object.sensitive is False
+    assert outbox_object.revisions and len(outbox_object.revisions) == 2
+
+
+def test_admin_actions_new__invalid_language_rerenders_form_with_content(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/admin/actions/new",
+        data={
+            "content": "a post I don't want to lose",
+            "visibility": ap.VisibilityEnum.PUBLIC.name,
+            "language": "not a code",
+            "csrf_token": generate_csrf_token(),
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 422
+    assert "a post I don&#39;t want to lose" in response.text
+
+
+def test_admin_actions_new__duplicate_alias_rerenders_form_with_content(
+    client: TestClient,
+) -> None:
+    _create_note_via_admin(client, content="first", alias="taken")
+
+    response = client.post(
+        "/admin/actions/new",
+        data={
+            "content": "a second post",
+            "visibility": ap.VisibilityEnum.PUBLIC.name,
+            "alias": "taken",
+            "csrf_token": generate_csrf_token(),
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 422
+    assert "a second post" in response.text
+
+
+def test_admin_actions_new__article_without_title_rerenders_form(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/admin/actions/new",
+        data={
+            "content": "body text",
+            "visibility": ap.VisibilityEnum.PUBLIC.name,
+            "type": "Article",
+            "csrf_token": generate_csrf_token(),
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 422
+    assert "body text" in response.text
 
 
 def test_admin_actions_new__alias_sets_ap_url_from_the_start(

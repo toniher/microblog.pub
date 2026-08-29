@@ -164,6 +164,46 @@ body.htmx-request::after {
   }
 }
 
+.form-field {
+  display: block;
+  margin-bottom: 15px;
+
+  label {
+    display: block;
+    font-size: 0.9em;
+    color: $muted-color;
+    margin-bottom: 3px;
+  }
+}
+
+.form-field-inline label {
+  color: $muted-color;
+}
+
+.more-options summary {
+  cursor: pointer;
+  color: $muted-color;
+  margin: 10px 0;
+}
+
+.emoji-picker {
+  max-height: 120px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
+
+.ji {
+  background: none;
+  border: 0;
+  padding: 2px;
+  cursor: pointer;
+  border-radius: 4px;
+
+  &:hover, &:focus-visible {
+    outline: 1px solid $secondary-color;
+  }
+}
+
 .show-more-wrapper {
   .p-summary {
     display: inline-block;

@@ -1,50 +1,57 @@
-{%- import "utils.html" as utils with context -%}
 {%- import "components/hidden_inputs.html" as hidden_inputs -%}
 {% extends "layout.html" %}
 
 {% block head %}
-<title>{{ _("%(name)s - New", name=local_actor.display_name) }}</title>
+<title>{{ _("%(name)s - Edit", name=local_actor.display_name) }}</title>
 {% endblock %}
 
 {% block content %}
 
 <div class="box">
 
+{% if error %}
+<p class="error-box">{{ error }}</p>
+{% endif %}
+
 <form class="form admin-new" action="{{ request.url_for("admin_actions_edit_text", public_id=public_id) }}" enctype="multipart/form-data" method="POST">
     {{ hidden_inputs.embed_csrf_token(csrf_token) }}
-    {{ hidden_inputs.embed_redirect_url(request) }}
 
     {% if outbox_object.ap_type == "Article" %}
-    <p>
-        <input type="text" class="width-95" name="name" placeholder="{{ _("Title") }}" value="{{ outbox_object.name }}">
+    <p class="form-field">
+        <label for="name">{{ _("Title") }}</label>
+        <input type="text" class="width-95" id="name" name="name" placeholder="{{ _("Title") }}" value="{{ outbox_object.name }}">
     </p>
     {% endif %}
 
-    <p>
-        <input type="text" class="width-95" name="alias"
+    <p class="form-field">
+        <label for="alias">{{ _("URL alias") }}</label>
+        <input type="text" class="width-95" id="alias" name="alias"
                placeholder="{{ _("URL alias") }}" value="{{ outbox_object.alias or "" }}">
         <span class="muted">{{ _("Leave empty to remove the alias.") }}</span>
     </p>
 
-    {% if False %}
-    {% for emoji in emojis %}
-    <span class="ji">{{ emoji | emojify(True) | safe }}</span>
-    {% endfor %}
-    {% for emoji in custom_emojis %}
-    <span class="ji"><img src="{{ emoji.icon.url }}" alt="{{ emoji.name }}" title="{{ emoji.name }}" class="custom-emoji"></span>
-    {% endfor %}
-    {% endif %}
-
-    <textarea name="content" rows="10" cols="50" autofocus="autofocus" designMode="on" placeholder="">{{ content }}</textarea>
-
-    {% if False %}
-    <p>
-    <input type="text" name="content_warning" placeholder="content warning (will mark the post as sensitive)"{% if content_warning %} value="{{ content_warning }}"{% endif %} class="width-95">
+    <p class="form-field">
+        <label for="content">{{ _("Content") }}</label>
+        {% if emojis or custom_emojis %}
+        <div class="emoji-picker">
+        {% for emoji in emojis %}
+        <button type="button" class="ji">{{ emoji | emojify(True) | safe }}</button>
+        {% endfor %}
+        {% for emoji in custom_emojis %}
+        <button type="button" class="ji"><img src="{{ emoji.icon.url }}" alt="{{ emoji.name }}" title="{{ emoji.name }}" class="custom-emoji" loading="lazy"></button>
+        {% endfor %}
+        </div>
+        {% endif %}
+        <textarea id="content" name="content" rows="10" cols="50" autofocus="autofocus">{{ content }}</textarea>
     </p>
-    <p>
-        <input type="checkbox" name="is_sensitive" id="is_sensitive"> <label for="is_sensitive">Mark attachment(s) as sensitive</label>
+
+    <p class="form-field">
+        <label for="content_warning">{{ _("Content warning") }}</label>
+        <input type="text" id="content_warning" name="content_warning" placeholder="{{ _("will mark the post as sensitive") }}"{% if content_warning %} value="{{ content_warning }}"{% endif %} class="width-95">
     </p>
-    {% endif %}
+    <p class="form-field-inline">
+        <input type="checkbox" name="is_sensitive" id="is_sensitive" {% if is_sensitive %}checked{% endif %}> <label for="is_sensitive">{{ _("Mark attachment(s) as sensitive") }}</label>
+    </p>
 
     <p>
         <input type="submit" value="{{ _("Submit") }}">

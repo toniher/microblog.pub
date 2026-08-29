@@ -1,5 +1,6 @@
 import re
 from datetime import datetime
+from typing import Any
 from urllib.parse import quote
 
 import httpx
@@ -99,6 +100,14 @@ router = APIRouter(
 unauthenticated_router = APIRouter()
 
 _MAX_ALIAS_LENGTH = 200
+
+# `_load_emojis()` populates these once at import time (app/config.py) and
+# nothing mutates them afterwards, so the split/sort is done here rather than
+# rebuilt on every compose/edit page render.
+_EMOJI_PICKER_EMOJIS = EMOJIS.split(" ")
+_EMOJI_PICKER_CUSTOM_EMOJIS = sorted(
+    EMOJIS_BY_NAME.values(), key=lambda obj: obj["name"]
+)
 
 
 async def _normalize_alias(
@@ -227,6 +236,55 @@ async def get_lookup(
     )
 
 
+def _new_form_context(
+    *,
+    in_reply_to_object: "boxes.AnyboxObject | None",
+    quoted_object: "boxes.AnyboxObject | None",
+    in_reply_to: str | None,
+    quote_of: str | None,
+    content: str,
+    content_warning: str | None,
+    is_sensitive: bool = False,
+    visibility: str | None,
+    name: str | None = None,
+    language: str | None = None,
+    alias: str | None = None,
+    ap_type: str | None = None,
+    poll_type: str | None = None,
+    poll_duration: str | None = None,
+    poll_answers: list[str] | None = None,
+    error: str | None = None,
+) -> dict[str, Any]:
+    """Build the template context shared by the compose form's GET and POST paths.
+
+    Used both to render the blank form and, on a rejected submission, to
+    re-render it with everything the user typed still in place.
+    """
+    return {
+        "in_reply_to_object": in_reply_to_object,
+        "quoted_object": quoted_object,
+        "in_reply_to": in_reply_to,
+        "quote_of": quote_of,
+        "content": content,
+        "content_warning": content_warning,
+        "is_sensitive": is_sensitive,
+        "visibility_choices": [
+            (v.name, ap.VisibilityEnum.get_display_name(v)) for v in ap.VisibilityEnum
+        ],
+        "visibility": visibility,
+        "name": name,
+        "language": language,
+        "alias": alias,
+        "ap_type": ap_type,
+        "poll_type": poll_type,
+        "poll_duration": poll_duration,
+        "poll_answers": poll_answers or [],
+        "emojis": _EMOJI_PICKER_EMOJIS,
+        "custom_emojis": _EMOJI_PICKER_CUSTOM_EMOJIS,
+        "error": error,
+    }
+
+
 @router.get("/new", response_model=None)
 async def admin_new(
     request: Request,
@@ -288,97 +346,15 @@ async def admin_new(
         db_session,
         request,
         "admin_new.html",
-        {
-            "in_reply_to_object": in_reply_to_object,
-            "quoted_object": quoted_object,
-            "content": content,
-            "content_warning": content_warning,
-            "visibility_choices": [
-                (v.name, ap.VisibilityEnum.get_display_name(v))
-                for v in ap.VisibilityEnum
-            ],
-            "visibility": with_visibility,
-            "emojis": EMOJIS.split(" "),
-            "custom_emojis": sorted(
-                [dat for name, dat in EMOJIS_BY_NAME.items()],
-                key=lambda obj: obj["name"],
-            ),
-        },
-    )
-
-
-@router.get("/new_post", response_model=None)
-async def admin_new_post(
-    request: Request,
-    query: str | None = None,
-    in_reply_to: str | None = None,
-    quote_of: str | None = None,
-    with_content: str | None = None,
-    with_visibility: str | None = None,
-    db_session: AsyncSession = Depends(get_db_session),
-) -> templates.TemplateResponse:
-    content = ""
-    content_warning = None
-    quoted_object = None
-    if quote_of:
-        quoted_object = await boxes.get_anybox_object_by_ap_id(db_session, quote_of)
-        if not quoted_object:
-            logger.info(f"Saving unknown object {quote_of}")
-            raw_object = await ap.fetch(quote_of)
-            await boxes.save_object_to_inbox(db_session, raw_object)
-            await db_session.commit()
-            quoted_object = await boxes.get_anybox_object_by_ap_id(db_session, quote_of)
-        if not quoted_object:
-            raise ValueError(f"Unknown object {quote_of=}")
-
-    in_reply_to_object = None
-    if in_reply_to:
-        in_reply_to_object = await boxes.get_anybox_object_by_ap_id(
-            db_session, in_reply_to
-        )
-        if not in_reply_to_object:
-            logger.info(f"Saving unknown object {in_reply_to}")
-            raw_object = await ap.fetch(in_reply_to)
-            await boxes.save_object_to_inbox(db_session, raw_object)
-            await db_session.commit()
-            in_reply_to_object = await boxes.get_anybox_object_by_ap_id(
-                db_session, in_reply_to
-            )
-
-        # Add mentions to the initial note content
-        if not in_reply_to_object:
-            raise ValueError(f"Unknown object {in_reply_to=}")
-        if in_reply_to_object.actor.ap_id != LOCAL_ACTOR.ap_id:
-            content += f"{in_reply_to_object.actor.handle} "
-        for tag in in_reply_to_object.tags:
-            if tag.get("type") == "Mention" and tag["name"] != LOCAL_ACTOR.handle:
-                try:
-                    mentioned_actor = await fetch_actor(db_session, tag["href"])
-                    content += f"{mentioned_actor.handle} "
-                except Exception:
-                    logger.exception(f"Failed to lookup {mentioned_actor}")
-
-        # Copy the content warning if any
-        if in_reply_to_object.summary:
-            content_warning = in_reply_to_object.summary
-    elif with_content:
-        content += f"{with_content} "
-
-    return await templates.render_template(
-        db_session,
-        request,
-        "admin_new_post.html",
-        {
-            "in_reply_to_object": in_reply_to_object,
-            "quoted_object": quoted_object,
-            "content": content,
-            "content_warning": content_warning,
-            "visibility_choices": [
-                (v.name, ap.VisibilityEnum.get_display_name(v))
-                for v in ap.VisibilityEnum
-            ],
-            "visibility": with_visibility,
-        },
+        _new_form_context(
+            in_reply_to_object=in_reply_to_object,
+            quoted_object=quoted_object,
+            in_reply_to=in_reply_to,
+            quote_of=quote_of,
+            content=content,
+            content_warning=content_warning,
+            visibility=with_visibility,
+        ),
     )
 
 
@@ -1577,32 +1553,88 @@ async def admin_actions_new(
     request: Request,
     files: list[UploadFile] = [],
     content: str | None = Form(None),
-    redirect_url: str = Form(),
     in_reply_to: str | None = Form(None),
     quote_of: str | None = Form(None),
     content_warning: str | None = Form(None),
     is_sensitive: bool = Form(False),
     visibility: str = Form(),
+    post_type: str = Form("Note", alias="type"),
     poll_type: str | None = Form(None),
+    poll_duration: str | None = Form(None),
+    poll_answer_1: str | None = Form(None),
+    poll_answer_2: str | None = Form(None),
+    poll_answer_3: str | None = Form(None),
+    poll_answer_4: str | None = Form(None),
     name: str | None = Form(None),
     language: str | None = Form(None),
     alias: str | None = Form(None),
     csrf_check: None = Depends(verify_csrf_token),
     db_session: AsyncSession = Depends(get_db_session),
-) -> RedirectResponse:
-    if not content and not content_warning:
-        raise HTTPException(
-            status_code=422, detail=gettext_default("Error: object must have a content")
+) -> templates.TemplateResponse | RedirectResponse:
+    poll_answers_submitted = [
+        answer
+        for answer in [poll_answer_1, poll_answer_2, poll_answer_3, poll_answer_4]
+        if answer
+    ]
+
+    # Snapshot what was actually typed: the Mastodon-style CW/content swap
+    # below rewrites both, and a form re-rendered after that point must show
+    # the user their own input, not the swapped version.
+    submitted_content = content
+    submitted_content_warning = content_warning
+    submitted_is_sensitive = is_sensitive
+
+    async def _rerender(error: str) -> templates.TemplateResponse:
+        # The reply-to/quoted previews are resolved here rather than up front:
+        # `get_anybox_object_by_ap_id` is a multi-joinedload query, and the
+        # happy path never renders them, so eager-loading would tax every
+        # successful reply/quote to serve the rare rejected one.
+        in_reply_to_object = None
+        if in_reply_to:
+            in_reply_to_object = await boxes.get_anybox_object_by_ap_id(
+                db_session, in_reply_to
+            )
+        quoted_object = None
+        if quote_of:
+            quoted_object = await boxes.get_anybox_object_by_ap_id(db_session, quote_of)
+
+        return await templates.render_template(
+            db_session,
+            request,
+            "admin_new.html",
+            _new_form_context(
+                in_reply_to_object=in_reply_to_object,
+                quoted_object=quoted_object,
+                in_reply_to=in_reply_to,
+                quote_of=quote_of,
+                content=submitted_content or "",
+                content_warning=submitted_content_warning,
+                is_sensitive=submitted_is_sensitive,
+                visibility=visibility,
+                name=name,
+                language=language,
+                alias=alias,
+                ap_type=post_type,
+                poll_type=poll_type,
+                poll_duration=poll_duration,
+                poll_answers=poll_answers_submitted,
+                error=error,
+            ),
+            status_code=422,
         )
 
-    new_alias = await _normalize_alias(db_session, alias)
+    if not content and not content_warning:
+        return await _rerender(gettext_default("Error: object must have a content"))
+
+    try:
+        new_alias = await _normalize_alias(db_session, alias)
+    except HTTPException as exc:
+        return await _rerender(str(exc.detail))
 
     # Optional Mastodon-style post language (BCP 47); empty means unset (None).
     language = (language or "").strip() or None
     if language and not _LANGUAGE_CODE_RE.match(language):
-        raise HTTPException(
-            status_code=422, detail=gettext_default("Error: invalid language code")
-        )
+        return await _rerender(gettext_default("Error: invalid language code"))
 
     # Do like Mastodon, if there's only a CW with no content and some attachments,
     # swap the CW and the content
@@ -1612,36 +1644,38 @@ async def admin_actions_new(
         content_warning = None
 
     if not content:
-        raise HTTPException(
-            status_code=422, detail=gettext_default("Error: object must have a content")
-        )
+        return await _rerender(gettext_default("Error: object must have a content"))
+
+    if post_type == "Article" and not name:
+        return await _rerender(gettext_default("Error: an article must have a title"))
 
     # XXX: for some reason, no files restuls in an empty single file
     uploads = []
-    raw_form_data = await request.form()
     if len(files) >= 1:
+        raw_form_data = await request.form()
+        # `alt_<n>` is numbered by new.js over the files the *browser* holds, so
+        # count only the entries that carry a filename -- an empty part (see the
+        # XXX above) must not consume an index and shift every alt text by one.
+        alt_index = 0
         for f in files:
             if f.filename is not None and f.filename != "":
                 try:
                     upload = await save_upload(db_session, f)
                 except UploadTooLargeError as exc:
-                    raise HTTPException(
-                        status_code=422,
-                        detail=(
-                            f"{gettext_default('Error: file is too large')} "
-                            f"({exc.limit} bytes max)"
-                        ),
+                    return await _rerender(
+                        f"{gettext_default('Error: file is too large')} "
+                        f"({exc.limit} bytes max) -- "
+                        f"{gettext_default('files must be re-selected before trying again')}"
                     )
                 except IncompatibleMediaError as exc:
-                    raise HTTPException(
-                        status_code=422,
-                        detail=(
-                            f"{gettext_default('Error: unable to process upload')}: "
-                            f"{exc.reason}"
-                        ),
+                    return await _rerender(
+                        f"{gettext_default('Error: unable to process upload')}: "
+                        f"{exc.reason} -- "
+                        f"{gettext_default('files must be re-selected before trying again')}"
                     )
                 if upload is not None:
-                    alt = raw_form_data.get("alt_" + f.filename)
+                    alt = raw_form_data.get(f"alt_{alt_index}")
+                    alt_index += 1
                     uploads.append(
                         (
                             upload,
@@ -1650,9 +1684,8 @@ async def admin_actions_new(
                         )
                     )
                 else:
-                    raise HTTPException(
-                        status_code=422,
-                        detail=gettext_default("Error: Unable to process upload"),
+                    return await _rerender(
+                        gettext_default("Error: Unable to process upload")
                     )
 
     ap_type = "Note"
@@ -1661,15 +1694,14 @@ async def admin_actions_new(
     poll_answers = None
     if poll_type:
         ap_type = "Question"
-        poll_answers = []
-        for i in ["1", "2", "3", "4"]:
-            if answer := raw_form_data.get(f"poll_answer_{i}"):
-                poll_answers.append(str(answer))
+        poll_answers = poll_answers_submitted
 
         if not poll_answers or len(poll_answers) < 2:
-            raise ValueError("Question must have at least 2 answers")
+            return await _rerender(
+                gettext_default("Error: a poll must have at least 2 answers")
+            )
 
-        poll_duration_in_minutes = int(str(raw_form_data["poll_duration"]))
+        poll_duration_in_minutes = int(poll_duration or "1440")
     elif name:
         ap_type = "Article"
 
@@ -1696,12 +1728,9 @@ async def admin_actions_new(
     )
 
 
-@router.get("/edit_text/{public_id}", response_model=None)
-async def admin_edit_text(
-    request: Request,
-    public_id: str,
-    db_session: AsyncSession = Depends(get_db_session),
-) -> templates.TemplateResponse | RedirectResponse:
+async def _get_editable_outbox_object(
+    db_session: AsyncSession, public_id: str
+) -> activitypub.models.OutboxObject:
     maybe_object = (
         (
             await db_session.execute(
@@ -1716,6 +1745,16 @@ async def admin_edit_text(
     )
     if not maybe_object:
         raise HTTPException(status_code=404)
+    return maybe_object
+
+
+@router.get("/edit_text/{public_id}", response_model=None)
+async def admin_edit_text(
+    request: Request,
+    public_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
+) -> templates.TemplateResponse | RedirectResponse:
+    maybe_object = await _get_editable_outbox_object(db_session, public_id)
 
     return await templates.render_template(
         db_session,
@@ -1724,7 +1763,11 @@ async def admin_edit_text(
         {
             "public_id": public_id,
             "content": maybe_object.source,
+            "content_warning": maybe_object.summary,
+            "is_sensitive": maybe_object.sensitive,
             "outbox_object": maybe_object,
+            "emojis": _EMOJI_PICKER_EMOJIS,
+            "custom_emojis": _EMOJI_PICKER_CUSTOM_EMOJIS,
         },
     )
 
@@ -1736,36 +1779,53 @@ async def admin_actions_edit_text(
     content: str | None = Form(None),
     name: str | None = Form(None),
     alias: str | None = Form(None),
+    content_warning: str | None = Form(None),
+    is_sensitive: bool = Form(False),
     csrf_check: None = Depends(verify_csrf_token),
     db_session: AsyncSession = Depends(get_db_session),
-) -> RedirectResponse:
+) -> templates.TemplateResponse | RedirectResponse:
+    maybe_object = await _get_editable_outbox_object(db_session, public_id)
+
+    async def _rerender(error: str) -> templates.TemplateResponse:
+        return await templates.render_template(
+            db_session,
+            request,
+            "admin_edit_text.html",
+            {
+                "public_id": public_id,
+                "content": content,
+                "content_warning": content_warning,
+                "is_sensitive": is_sensitive,
+                "outbox_object": maybe_object,
+                "emojis": _EMOJI_PICKER_EMOJIS,
+                "custom_emojis": _EMOJI_PICKER_CUSTOM_EMOJIS,
+                "error": error,
+            },
+            status_code=422,
+        )
+
     if not content:
-        raise HTTPException(
-            status_code=422, detail=gettext_default("Error: object must have a content")
-        )
+        return await _rerender(gettext_default("Error: object must have a content"))
 
-    maybe_object = (
-        (
-            await db_session.execute(
-                select(activitypub.models.OutboxObject).where(
-                    activitypub.models.OutboxObject.public_id == public_id,
-                    activitypub.models.OutboxObject.is_deleted.is_(False),
-                )
-            )
+    try:
+        new_alias = await _normalize_alias(
+            db_session, alias, exclude_id=maybe_object.id
         )
-        .unique()
-        .scalar_one_or_none()
-    )
-    if not maybe_object:
-        raise HTTPException(status_code=404)
+    except HTTPException as exc:
+        return await _rerender(str(exc.detail))
 
-    new_alias = await _normalize_alias(db_session, alias, exclude_id=maybe_object.id)
+    # A CW always implies sensitive, mirroring the compose form's rule.
+    is_sensitive = True if content_warning else is_sensitive
+
     alias_changed = new_alias != maybe_object.alias
-    content_changed = (
-        content != maybe_object.source or (name or None) != maybe_object.name
+    object_changed = (
+        content != maybe_object.source
+        or (name or None) != maybe_object.name
+        or (content_warning or None) != maybe_object.summary
+        or is_sensitive != maybe_object.sensitive
     )
 
-    if content_changed:
+    if object_changed:
         # Set the alias first: send_update rebuilds the note with
         # `"url": outbox_object.url`, so the property picks the new alias up.
         # Don't rewrite ap_object here -- send_update snapshots the current
@@ -1778,6 +1838,8 @@ async def admin_actions_edit_text(
             ap_id=maybe_object.ap_id,
             source=content,
             name=name,
+            content_warning=content_warning or None,
+            is_sensitive=is_sensitive,
         )
     elif alias_changed:
         await boxes.set_outbox_object_alias(db_session, maybe_object, new_alias)
