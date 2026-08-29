@@ -33,9 +33,15 @@
 </ul>
 </nav>
 {% if False %}
-    {# dynamic `_(ap_type_choice)` lookup above isn't statically extractable; these
-       calls exist only so `pybabel extract` picks up each label. #}
+    {# dynamic `_(...)` lookups (the type labels above, the visibility names
+       below) aren't statically extractable; these calls exist only so
+       `pybabel extract` picks up each label. The visibility strings must stay
+       byte-identical to `VisibilityEnum.get_display_name`. #}
     {{ _("Note") }}{{ _("Article") }}{{ _("Question") }}
+    {{ _("Public - sent to followers and visible on the homepage") }}
+    {{ _("Unlisted - like public, but hidden from the homepage") }}
+    {{ _("Followers only") }}
+    {{ _("Direct - only visible for mentioned actors") }}
 {% endif %}
 
 {% if error %}
@@ -50,7 +56,7 @@
         <label for="visibility">{{ _("Visibility") }}</label>
         <select name="visibility" id="visibility">
             {% for (k, v) in visibility_choices %}
-            <option value="{{ k }}" {% if visibility == k or in_reply_to_object and in_reply_to_object.visibility.name == k %}selected{% endif %}>{{ v }}</option>
+            <option value="{{ k }}" {% if visibility == k or in_reply_to_object and in_reply_to_object.visibility.name == k %}selected{% endif %}>{{ _(v) }}</option>
             {% endfor %}
         </select>
     </p>
@@ -63,14 +69,17 @@
     {% endif %}
 
     <p class="form-field">
-        <label for="content">{{ _("Content") }}</label>
+        <label for="content" class="visually-hidden">{{ _("Content") }}</label>
         {% if emojis or custom_emojis %}
         <div class="emoji-picker">
+        {# Unicode emoji are rendered as plain characters, not via `emojify`:
+           the picker shows exactly what gets inserted, and it keeps working
+           when `inv download-twemoji` hasn't populated app/static/twemoji. #}
         {% for emoji in emojis %}
-        <button type="button" class="ji">{{ emoji | emojify(True) | safe }}</button>
+        <button type="button" class="ji" data-emoji="{{ emoji }}" title="{{ emoji }}">{{ emoji }}</button>
         {% endfor %}
         {% for emoji in custom_emojis %}
-        <button type="button" class="ji"><img src="{{ emoji.icon.url }}" alt="{{ emoji.name }}" title="{{ emoji.name }}" class="custom-emoji" loading="lazy"></button>
+        <button type="button" class="ji" data-emoji="{{ emoji.name }}" title="{{ emoji.name }}"><img src="{{ emoji.icon.url }}" alt="{{ emoji.name }}" class="custom-emoji" loading="lazy"></button>
         {% endfor %}
         </div>
         {% endif %}
@@ -115,6 +124,7 @@
     <p class="form-field">
         <label for="alias">{{ _("URL alias") }}</label>
         <input type="text" class="width-95" id="alias" name="alias" placeholder="{{ _("optional") }}" value="{{ alias or "" }}">
+        <span class="muted">{{ _("A short custom URL for this post, instead of its permalink.") }}</span>
     </p>
 
     <p class="form-field">
@@ -131,7 +141,11 @@
     <input type="hidden" name="quote_of" value="{{ quote_of or "" }}">
     <p class="form-field">
         <label for="files">{{ _("Attachments") }}</label>
-        <input id="files" name="files" type="file" class="width-95" multiple accept="image/*,video/*,audio/*">
+        <input id="files" name="files" type="file" class="width-95" multiple accept="image/*,video/*,audio/*"
+               data-msg-checking="{{ _("%(filename)s: checking playback in this browser…", filename="__FILENAME__") }}"
+               data-msg-plays="{{ _("%(filename)s: %(details)s — plays in this browser", filename="__FILENAME__", details="__DETAILS__") }}"
+               data-msg-unsupported="{{ _("%(filename)s: this browser could not play this file (unsupported codec/container) — it may be rejected on upload. Re-encoding as H.264/AAC in an MP4 is the safest bet.", filename="__FILENAME__") }}"
+               data-msg-nopreview="{{ _("%(filename)s: couldn't generate a local preview in this browser (this check isn't authoritative — it may still upload and play fine; the server has the final say).", filename="__FILENAME__") }}">
     </p>
     <div id="alts" data-alt-placeholder="{{ _("Alt text for %(filename)s", filename="__FILENAME__") }}"></div>
     <p>

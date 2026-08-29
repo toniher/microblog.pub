@@ -12,6 +12,14 @@
         return;
     }
 
+    // User-facing strings are rendered (and translated) by the template and
+    // handed over on the input's data attributes, so this file holds no
+    // English of its own. The defaults only cover a template that predates
+    // them.
+    function msg(name, fallback) {
+        return fileInput.getAttribute("data-msg-" + name) || fallback;
+    }
+
     function formatDuration(seconds) {
         var total = Math.round(seconds);
         var minutes = Math.floor(total / 60);
@@ -38,7 +46,9 @@
         }
 
         var row = document.createElement("p");
-        row.textContent = file.name + ": checking playback in this browser…";
+        row.textContent = msg(
+            "checking", "__FILENAME__: checking playback in this browser…"
+        ).replace("__FILENAME__", file.name);
         container.appendChild(row);
 
         var probe = document.createElement(isVideo ? "video" : "audio");
@@ -61,12 +71,14 @@
         }
 
         probe.addEventListener("loadedmetadata", function () {
-            var details = file.name + ": ";
-            if (isVideo) {
-                details += probe.videoWidth + "x" + probe.videoHeight + ", ";
-            }
-            details += formatDuration(probe.duration) + " — plays in this browser";
-            row.textContent = details;
+            var dimensions = isVideo
+                ? probe.videoWidth + "x" + probe.videoHeight + ", "
+                : "";
+            row.textContent = msg(
+                "plays", "__FILENAME__: __DETAILS__ — plays in this browser"
+            )
+                .replace("__FILENAME__", file.name)
+                .replace("__DETAILS__", dimensions + formatDuration(probe.duration));
             cleanup();
         });
 
@@ -79,17 +91,19 @@
             // the error) is more likely a local blob-loading quirk than a
             // real codec/container problem, so say that instead of guessing.
             if (errorCode === 4 && !canPlayGuess) {
-                row.textContent = (
-                    file.name + ": this browser could not play this file " +
+                row.textContent = msg(
+                    "unsupported",
+                    "__FILENAME__: this browser could not play this file " +
                     "(unsupported codec/container) — it may be rejected on " +
                     "upload. Re-encoding as H.264/AAC in an MP4 is the safest bet."
-                );
+                ).replace("__FILENAME__", file.name);
             } else {
-                row.textContent = (
-                    file.name + ": couldn't generate a local preview in this " +
+                row.textContent = msg(
+                    "nopreview",
+                    "__FILENAME__: couldn't generate a local preview in this " +
                     "browser (this check isn't authoritative — it may still " +
                     "upload and play fine; the server has the final say)."
-                );
+                ).replace("__FILENAME__", file.name);
             }
             cleanup();
         });

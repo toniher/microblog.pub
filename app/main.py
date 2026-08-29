@@ -80,6 +80,8 @@ from app.customization import get_custom_router
 from app.database import AsyncSession
 from app.database import async_session
 from app.database import get_db_session
+from app.i18n import get_translations
+from app.i18n import resolve_locale
 from app.mastodon.errors import MastodonError
 from app.mastodon.errors import mastodon_error_handler
 from app.mastodon.oauth import router as mastodon_oauth_router
@@ -356,10 +358,15 @@ async def custom_http_exception_handler(
         and 400 <= exc.status_code < 600
     ):
         async with async_session() as db_session:
+            # Translated against the visitor's negotiated locale, like the
+            # page it's rendered into -- not `gettext_default`, which is
+            # pinned to the instance locale. `exc.detail` is passed through
+            # untouched: it already arrives translated from its raiser.
+            translations = get_translations(resolve_locale(request))
             title = (
                 {
-                    404: "Oops, nothing to see here",
-                    500: "Oops, something went wrong",
+                    404: translations.gettext("Oops, nothing to see here"),
+                    500: translations.gettext("Oops, something went wrong"),
                 }
             ).get(exc.status_code, exc.detail)
             try:

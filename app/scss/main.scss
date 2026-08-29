@@ -198,10 +198,29 @@ body.htmx-request::after {
   padding: 2px;
   cursor: pointer;
   border-radius: 4px;
+  // Unicode emoji are rendered as text, so this needs a readable size of its
+  // own -- `.form { input, select, textarea }` doesn't cover <button>.
+  font-size: 1.3rem;
+  line-height: 1;
+  vertical-align: middle;
 
   &:hover, &:focus-visible {
     outline: 1px solid $secondary-color;
   }
+}
+
+// Available to assistive tech, but not shown -- for a label whose field is
+// already self-evident on screen (the compose box).
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .show-more-wrapper {

@@ -24,13 +24,15 @@
             ta.selectionStart = ta.selectionEnd = start + textToInsert.length;
         }
     }
-    // Emoji click callback func
+    // Emoji click callback func. The value comes from the button's own
+    // `data-emoji` rather than a nested <img alt>: unicode emoji render as
+    // plain text here (no twemoji asset needed), so there is no image to read.
     var ji = function (ev) {
-        var emojiEl = ev.target.closest("[alt]");
-        if (emojiEl == null) {
+        var value = ev.currentTarget.getAttribute("data-emoji");
+        if (!value) {
             return;
         }
-        insertAtCursor(emojiEl.getAttribute("alt") + " ");
+        insertAtCursor(value + " ");
         ta.focus()
     }
     // Enable the click for each emojis

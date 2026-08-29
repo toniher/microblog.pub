@@ -19,39 +19,47 @@
     {% if outbox_object.ap_type == "Article" %}
     <p class="form-field">
         <label for="name">{{ _("Title") }}</label>
-        <input type="text" class="width-95" id="name" name="name" placeholder="{{ _("Title") }}" value="{{ outbox_object.name }}">
+        <input type="text" class="width-95" id="name" name="name" value="{{ outbox_object.name or "" }}">
     </p>
     {% endif %}
 
     <p class="form-field">
-        <label for="alias">{{ _("URL alias") }}</label>
-        <input type="text" class="width-95" id="alias" name="alias"
-               placeholder="{{ _("URL alias") }}" value="{{ outbox_object.alias or "" }}">
-        <span class="muted">{{ _("Leave empty to remove the alias.") }}</span>
-    </p>
-
-    <p class="form-field">
-        <label for="content">{{ _("Content") }}</label>
+        <label for="content" class="visually-hidden">{{ _("Content") }}</label>
         {% if emojis or custom_emojis %}
         <div class="emoji-picker">
+        {# Unicode emoji are rendered as plain characters, not via `emojify`:
+           the picker shows exactly what gets inserted, and it keeps working
+           when `inv download-twemoji` hasn't populated app/static/twemoji. #}
         {% for emoji in emojis %}
-        <button type="button" class="ji">{{ emoji | emojify(True) | safe }}</button>
+        <button type="button" class="ji" data-emoji="{{ emoji }}" title="{{ emoji }}">{{ emoji }}</button>
         {% endfor %}
         {% for emoji in custom_emojis %}
-        <button type="button" class="ji"><img src="{{ emoji.icon.url }}" alt="{{ emoji.name }}" title="{{ emoji.name }}" class="custom-emoji" loading="lazy"></button>
+        <button type="button" class="ji" data-emoji="{{ emoji.name }}" title="{{ emoji.name }}"><img src="{{ emoji.icon.url }}" alt="{{ emoji.name }}" class="custom-emoji" loading="lazy"></button>
         {% endfor %}
         </div>
         {% endif %}
         <textarea id="content" name="content" rows="10" cols="50" autofocus="autofocus">{{ content }}</textarea>
+        <span class="muted">{{ _("Markdown is supported. #hashtags, @mentions and :custom_emoji: work too.") }}</span>
     </p>
 
     <p class="form-field">
         <label for="content_warning">{{ _("Content warning") }}</label>
         <input type="text" id="content_warning" name="content_warning" placeholder="{{ _("will mark the post as sensitive") }}"{% if content_warning %} value="{{ content_warning }}"{% endif %} class="width-95">
     </p>
+
+    <details class="more-options" {% if outbox_object.alias or is_sensitive or error %}open{% endif %}>
+    <summary>{{ _("More options") }}</summary>
+
+    <p class="form-field">
+        <label for="alias">{{ _("URL alias") }}</label>
+        <input type="text" class="width-95" id="alias" name="alias" placeholder="{{ _("optional") }}" value="{{ outbox_object.alias or "" }}">
+        <span class="muted">{{ _("A short custom URL for this post, instead of its permalink.") }} {{ _("Leave empty to remove the alias.") }}</span>
+    </p>
+
     <p class="form-field-inline">
         <input type="checkbox" name="is_sensitive" id="is_sensitive" {% if is_sensitive %}checked{% endif %}> <label for="is_sensitive">{{ _("Mark attachment(s) as sensitive") }}</label>
     </p>
+    </details>
 
     <p>
         <input type="submit" value="{{ _("Submit") }}">
