@@ -20,18 +20,17 @@ msgstr ""
 "Generated-By: Babel 2.18.0\n"
 
 #: app/admin.py:131
-#, fuzzy
 msgid "Error: invalid URL alias"
-msgstr "Eroare: cod de limbă invalid"
+msgstr "Eroare: alias URL invalid"
 
 #: app/admin.py:135
 msgid "Error: URL alias is too long"
-msgstr ""
+msgstr "Eroare: aliasul URL este prea lung"
 
 #: app/admin.py:155
 #, python-format
 msgid "Error: URL alias %(alias)s is already used"
-msgstr ""
+msgstr "Eroare: aliasul URL %(alias)s este deja folosit"
 
 #: app/admin.py:1627 app/admin.py:1647 app/admin.py:1808
 msgid "Error: object must have a content"
@@ -42,20 +41,18 @@ msgid "Error: invalid language code"
 msgstr "Eroare: cod de limbă invalid"
 
 #: app/admin.py:1650
-#, fuzzy
 msgid "Error: an article must have a title"
-msgstr "Eroare: conținutul este obligatoriu"
+msgstr "Eroare: un articol trebuie să aibă un titlu"
 
 #: app/admin.py:1666
 msgid "Error: file is too large"
-msgstr ""
+msgstr "Eroare: fișierul este prea mare"
 
 #: app/admin.py:1668 app/admin.py:1674
 msgid "files must be re-selected before trying again"
-msgstr ""
+msgstr "fișierele trebuie reselectate înainte de a încerca din nou"
 
 #: app/admin.py:1672
-#, fuzzy
 msgid "Error: unable to process upload"
 msgstr "Eroare: nu s-a putut procesa încărcarea"
 
@@ -64,9 +61,8 @@ msgid "Error: Unable to process upload"
 msgstr "Eroare: nu s-a putut procesa încărcarea"
 
 #: app/admin.py:1701
-#, fuzzy
 msgid "Error: a poll must have at least 2 answers"
-msgstr "Eroare: conținutul este obligatoriu"
+msgstr "Eroare: un sondaj trebuie să aibă cel puțin 2 răspunsuri"
 
 #: app/config.py:467
 msgid "please try again"
@@ -78,38 +74,37 @@ msgid "The security token has expired, %(please_try_again)s"
 msgstr "Jetonul de securitate a expirat, %(please_try_again)s"
 
 #: app/main.py:368
-#, fuzzy
 msgid "Oops, nothing to see here"
-msgstr "Nimic de văzut aici încă!"
+msgstr "Ups, nu este încă nimic de văzut aici"
 
 #: app/main.py:369
 msgid "Oops, something went wrong"
-msgstr ""
+msgstr "Ups, ceva nu a mers bine"
 
 #: app/push_notifications.py:100
-#, fuzzy, python-format
+#, python-format
 msgid "%(name)s mentioned you"
-msgstr "v-a menționat"
+msgstr "%(name)s v-a menționat"
 
 #: app/push_notifications.py:102
-#, fuzzy, python-format
+#, python-format
 msgid "%(name)s favourited your post"
-msgstr "%(name)s - Publicație nouă"
+msgstr "%(name)s a apreciat publicația dumneavoastră"
 
 #: app/push_notifications.py:104
-#, fuzzy, python-format
+#, python-format
 msgid "%(name)s boosted your post"
-msgstr "%(name)s - Publicație nouă"
+msgstr "%(name)s a distribuit publicația dumneavoastră"
 
 #: app/push_notifications.py:106
-#, fuzzy, python-format
+#, python-format
 msgid "%(name)s started following you"
-msgstr "Urmăriri ale lui %(name)s"
+msgstr "%(name)s a început să vă urmărească"
 
 #: app/push_notifications.py:108
 #, python-format
 msgid "%(name)s has requested to follow you"
-msgstr ""
+msgstr "%(name)s a solicitat să vă urmărească"
 
 #: app/templates/admin_blocks.html:6
 msgid "Blocked accounts"
@@ -151,53 +146,53 @@ msgid "Current version"
 msgstr "Versiunea actuală"
 
 #: app/templates/admin_edit_text.html:5
-#, fuzzy, python-format
+#, python-format
 msgid "%(name)s - Edit"
-msgstr "%(name)s - Nou"
+msgstr "%(name)s - Editare"
 
 #: app/templates/admin_edit_text.html:21 app/templates/admin_new.html:66
 msgid "Title"
 msgstr "Titlu"
 
 #: app/templates/admin_edit_text.html:27 app/templates/admin_new.html:72
-#, fuzzy
 msgid "Content"
-msgstr "Sari la conținut"
+msgstr "Conținut"
 
 #: app/templates/admin_edit_text.html:42 app/templates/admin_new.html:87
 msgid "Markdown is supported. #hashtags, @mentions and :custom_emoji: work too."
 msgstr ""
+"Markdown este acceptat. Funcționează și #hashtag-urile, @mențiunile și "
+":emoji-urile_personalizate:."
 
 #: app/templates/admin_edit_text.html:46 app/templates/admin_new.html:117
 msgid "Content warning"
-msgstr ""
+msgstr "Avertisment de conținut"
 
 #: app/templates/admin_edit_text.html:47 app/templates/admin_new.html:118
-#, fuzzy
 msgid "will mark the post as sensitive"
 msgstr "avertisment de conținut (va marca publicația ca sensibilă)"
 
 #: app/templates/admin_edit_text.html:51 app/templates/admin_new.html:122
-#, fuzzy
 msgid "More options"
-msgstr "menționează"
+msgstr "Mai multe opțiuni"
 
 #: app/templates/admin_edit_text.html:54 app/templates/admin_new.html:125
 msgid "URL alias"
-msgstr ""
+msgstr "Alias URL"
 
 #: app/templates/admin_edit_text.html:55 app/templates/admin_new.html:126
-#, fuzzy
 msgid "optional"
-msgstr "Locație"
+msgstr "opțional"
 
 #: app/templates/admin_edit_text.html:56 app/templates/admin_new.html:127
 msgid "A short custom URL for this post, instead of its permalink."
 msgstr ""
+"Un URL personalizat și scurt pentru această publicație, în locul linkului"
+" permanent."
 
 #: app/templates/admin_edit_text.html:56
 msgid "Leave empty to remove the alias."
-msgstr ""
+msgstr "Lăsați gol pentru a elimina aliasul."
 
 #: app/templates/admin_edit_text.html:60 app/templates/admin_new.html:136
 msgid "Mark attachment(s) as sensitive"
@@ -278,24 +273,23 @@ msgstr "Sondaj"
 
 #: app/templates/admin_new.html:41
 msgid "Public - sent to followers and visible on the homepage"
-msgstr ""
+msgstr "Public - trimis către urmăritori și vizibil pe pagina principală"
 
 #: app/templates/admin_new.html:42
 msgid "Unlisted - like public, but hidden from the homepage"
-msgstr ""
+msgstr "Nelistat - ca public, dar ascuns de pe pagina principală"
 
 #: app/templates/admin_new.html:43
-#, fuzzy
 msgid "Followers only"
 msgstr "Urmăritori"
 
 #: app/templates/admin_new.html:44
 msgid "Direct - only visible for mentioned actors"
-msgstr ""
+msgstr "Direct - vizibil doar pentru actorii menționați"
 
 #: app/templates/admin_new.html:56
 msgid "Visibility"
-msgstr ""
+msgstr "Vizibilitate"
 
 #: app/templates/admin_new.html:86
 msgid "Hey!"
@@ -303,7 +297,7 @@ msgstr "Salut!"
 
 #: app/templates/admin_new.html:92
 msgid "Poll type"
-msgstr ""
+msgstr "Tipul sondajului"
 
 #: app/templates/admin_new.html:94
 msgid "single choice"
@@ -315,7 +309,7 @@ msgstr "răspunsuri multiple"
 
 #: app/templates/admin_new.html:99
 msgid "Poll duration"
-msgstr ""
+msgstr "Durata sondajului"
 
 #: app/templates/admin_new.html:101
 msgid "ends in 5 minutes"
@@ -340,21 +334,20 @@ msgstr "se termină într-o zi"
 #: app/templates/admin_new.html:110
 #, python-format
 msgid "Option %(n)s"
-msgstr ""
+msgstr "Opțiunea %(n)s"
 
 #: app/templates/admin_new.html:111
-#, fuzzy
 msgid "leave empty to disable"
-msgstr "Opțiunea %(n)s, lăsați gol pentru a o dezactiva"
+msgstr "lăsați gol pentru a o dezactiva"
 
 #: app/templates/admin_new.html:131
 msgid "Language"
-msgstr ""
+msgstr "Limbă"
 
 #: app/templates/admin_new.html:132
-#, fuzzy, python-format
+#, python-format
 msgid "optional, e.g. %(lang)s"
-msgstr "cod de limbă (opțional, de ex. %(lang)s)"
+msgstr "opțional, de ex. %(lang)s"
 
 #: app/templates/admin_new.html:132
 msgid "BCP 47 language code, e.g. en or pt-BR"
@@ -362,17 +355,17 @@ msgstr "cod de limbă BCP 47, de ex. en sau pt-BR"
 
 #: app/templates/admin_new.html:143
 msgid "Attachments"
-msgstr ""
+msgstr "Atașamente"
 
 #: app/templates/admin_new.html:145
 #, python-format
 msgid "%(filename)s: checking playback in this browser…"
-msgstr ""
+msgstr "%(filename)s: se verifică redarea în acest browser…"
 
 #: app/templates/admin_new.html:146
 #, python-format
 msgid "%(filename)s: %(details)s — plays in this browser"
-msgstr ""
+msgstr "%(filename)s: %(details)s — se redă în acest browser"
 
 #: app/templates/admin_new.html:147
 #, python-format
@@ -381,6 +374,9 @@ msgid ""
 "codec/container) — it may be rejected on upload. Re-encoding as H.264/AAC"
 " in an MP4 is the safest bet."
 msgstr ""
+"%(filename)s: acest browser nu a putut reda fișierul (codec/container "
+"neacceptat) — este posibil să fie respins la încărcare. Cea mai sigură "
+"opțiune este reencodarea în H.264/AAC într-un MP4."
 
 #: app/templates/admin_new.html:148
 #, python-format
@@ -389,11 +385,14 @@ msgid ""
 "check isn't authoritative — it may still upload and play fine; the server"
 " has the final say)."
 msgstr ""
+"%(filename)s: nu s-a putut genera o previzualizare locală în acest "
+"browser (această verificare nu este definitivă — este posibil să se "
+"încarce și să se redea corect; serverul are ultimul cuvânt)."
 
 #: app/templates/admin_new.html:150
 #, python-format
 msgid "Alt text for %(filename)s"
-msgstr ""
+msgstr "Text alternativ pentru %(filename)s"
 
 #: app/templates/admin_new.html:152
 msgid "Publish"
@@ -614,6 +613,8 @@ msgstr "Căutarea a expirat, încercați să reîmprospătați pagina."
 #: app/templates/lookup.html:34
 msgid "This is not a URL or a fediverse handle (@user@domain.tld)."
 msgstr ""
+"Aceasta nu este un URL sau un identificator fedivers "
+"(@utilizator@domeniu.tld)."
 
 #: app/templates/lookup.html:36
 msgid "Unexpected error, please check the logs and report an issue if needed."
@@ -705,18 +706,16 @@ msgid "updated webmention from %(source)s"
 msgstr "webmention actualizat de la %(source)s"
 
 #: app/templates/notifications.html:113
-#, fuzzy
 msgid "published a new post"
-msgstr "nu mai apreciază o publicație"
+msgstr "a publicat o postare nouă"
 
 #: app/templates/notifications.html:116
-#, fuzzy
 msgid "edited a post"
-msgstr "a apreciat o publicație"
+msgstr "a editat o postare"
 
 #: app/templates/notifications.html:120
 msgid "a poll has ended"
-msgstr ""
+msgstr "un sondaj s-a încheiat"
 
 #: app/templates/components/actor.html:18 app/templates/notifications.html:122
 msgid "new"
@@ -1016,11 +1015,11 @@ msgstr "arată distribuirile"
 
 #: app/templates/components/admin_buttons.html:62
 msgid "notify on new posts"
-msgstr ""
+msgstr "notifică-mă la postările noi"
 
 #: app/templates/components/admin_buttons.html:71
 msgid "don't notify on new posts"
-msgstr ""
+msgstr "nu mă notifica la postările noi"
 
 #: app/templates/components/admin_buttons.html:89
 msgid "accept follow"
@@ -1075,6 +1074,8 @@ msgid ""
 "Do you really want to delete this object? A Delete will be sent to the "
 "other servers that have it."
 msgstr ""
+"Sigur doriți să ștergeți acest obiect? O ștergere (Delete) va fi trimisă "
+"către celelalte servere care îl dețin."
 
 #: app/templates/components/admin_buttons.html:190
 msgid "delete"
@@ -1085,6 +1086,8 @@ msgid ""
 "Do you really want to delete this object? It will only be removed from "
 "this instance."
 msgstr ""
+"Sigur doriți să ștergeți acest obiect? Va fi eliminat doar de pe această "
+"instanță."
 
 #: app/templates/components/admin_buttons.html:199
 #: app/templates/components/admin_buttons.html:208
@@ -1096,6 +1099,8 @@ msgid ""
 "Do you really want to delete this webmention? It will only be removed "
 "from this instance."
 msgstr ""
+"Sigur doriți să ștergeți acest webmention? Va fi eliminat doar de pe "
+"această instanță."
 
 #: app/templates/components/admin_buttons.html:217
 msgid "share"

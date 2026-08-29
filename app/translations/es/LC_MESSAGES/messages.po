@@ -19,18 +19,17 @@ msgstr ""
 "Generated-By: Babel 2.18.0\n"
 
 #: app/admin.py:131
-#, fuzzy
 msgid "Error: invalid URL alias"
-msgstr "Error: código de idioma no válido"
+msgstr "Error: alias de URL no válido"
 
 #: app/admin.py:135
 msgid "Error: URL alias is too long"
-msgstr ""
+msgstr "Error: el alias de URL es demasiado largo"
 
 #: app/admin.py:155
 #, python-format
 msgid "Error: URL alias %(alias)s is already used"
-msgstr ""
+msgstr "Error: el alias de URL %(alias)s ya está en uso"
 
 #: app/admin.py:1627 app/admin.py:1647 app/admin.py:1808
 msgid "Error: object must have a content"
@@ -41,20 +40,18 @@ msgid "Error: invalid language code"
 msgstr "Error: código de idioma no válido"
 
 #: app/admin.py:1650
-#, fuzzy
 msgid "Error: an article must have a title"
-msgstr "Error: el contenido es obligatorio"
+msgstr "Error: un artículo debe tener un título"
 
 #: app/admin.py:1666
 msgid "Error: file is too large"
-msgstr ""
+msgstr "Error: el archivo es demasiado grande"
 
 #: app/admin.py:1668 app/admin.py:1674
 msgid "files must be re-selected before trying again"
-msgstr ""
+msgstr "hay que volver a seleccionar los archivos antes de intentarlo de nuevo"
 
 #: app/admin.py:1672
-#, fuzzy
 msgid "Error: unable to process upload"
 msgstr "Error: no se pudo procesar la subida"
 
@@ -63,9 +60,8 @@ msgid "Error: Unable to process upload"
 msgstr "Error: no se pudo procesar la subida"
 
 #: app/admin.py:1701
-#, fuzzy
 msgid "Error: a poll must have at least 2 answers"
-msgstr "Error: el contenido es obligatorio"
+msgstr "Error: una encuesta debe tener al menos 2 respuestas"
 
 #: app/config.py:467
 msgid "please try again"
@@ -77,38 +73,37 @@ msgid "The security token has expired, %(please_try_again)s"
 msgstr "El token de seguridad ha caducado, %(please_try_again)s"
 
 #: app/main.py:368
-#, fuzzy
 msgid "Oops, nothing to see here"
-msgstr "¡Todavía no hay nada que ver aquí!"
+msgstr "Vaya, todavía no hay nada que ver aquí"
 
 #: app/main.py:369
 msgid "Oops, something went wrong"
-msgstr ""
+msgstr "Vaya, algo salió mal"
 
 #: app/push_notifications.py:100
-#, fuzzy, python-format
+#, python-format
 msgid "%(name)s mentioned you"
-msgstr "te ha mencionado"
+msgstr "%(name)s te ha mencionado"
 
 #: app/push_notifications.py:102
-#, fuzzy, python-format
+#, python-format
 msgid "%(name)s favourited your post"
-msgstr "%(name)s - Nueva publicación"
+msgstr "A %(name)s le ha gustado una publicación tuya"
 
 #: app/push_notifications.py:104
-#, fuzzy, python-format
+#, python-format
 msgid "%(name)s boosted your post"
-msgstr "%(name)s - Nueva publicación"
+msgstr "%(name)s ha impulsado una publicación tuya"
 
 #: app/push_notifications.py:106
-#, fuzzy, python-format
+#, python-format
 msgid "%(name)s started following you"
-msgstr "Seguidos de %(name)s"
+msgstr "%(name)s ha empezado a seguirte"
 
 #: app/push_notifications.py:108
 #, python-format
 msgid "%(name)s has requested to follow you"
-msgstr ""
+msgstr "%(name)s ha solicitado seguirte"
 
 #: app/templates/admin_blocks.html:6
 msgid "Blocked accounts"
@@ -150,53 +145,53 @@ msgid "Current version"
 msgstr "Versión actual"
 
 #: app/templates/admin_edit_text.html:5
-#, fuzzy, python-format
+#, python-format
 msgid "%(name)s - Edit"
-msgstr "%(name)s - Nuevo"
+msgstr "%(name)s - Editar"
 
 #: app/templates/admin_edit_text.html:21 app/templates/admin_new.html:66
 msgid "Title"
 msgstr "Título"
 
 #: app/templates/admin_edit_text.html:27 app/templates/admin_new.html:72
-#, fuzzy
 msgid "Content"
-msgstr "Saltar al contenido"
+msgstr "Contenido"
 
 #: app/templates/admin_edit_text.html:42 app/templates/admin_new.html:87
 msgid "Markdown is supported. #hashtags, @mentions and :custom_emoji: work too."
 msgstr ""
+"Se admite Markdown. Las #etiquetas, @menciones y los "
+":emojis_personalizados: también funcionan."
 
 #: app/templates/admin_edit_text.html:46 app/templates/admin_new.html:117
 msgid "Content warning"
-msgstr ""
+msgstr "Aviso de contenido"
 
 #: app/templates/admin_edit_text.html:47 app/templates/admin_new.html:118
-#, fuzzy
 msgid "will mark the post as sensitive"
 msgstr "aviso de contenido (marcará la publicación como sensible)"
 
 #: app/templates/admin_edit_text.html:51 app/templates/admin_new.html:122
-#, fuzzy
 msgid "More options"
-msgstr "mencionar"
+msgstr "Más opciones"
 
 #: app/templates/admin_edit_text.html:54 app/templates/admin_new.html:125
 msgid "URL alias"
-msgstr ""
+msgstr "Alias de URL"
 
 #: app/templates/admin_edit_text.html:55 app/templates/admin_new.html:126
-#, fuzzy
 msgid "optional"
-msgstr "Ubicación"
+msgstr "opcional"
 
 #: app/templates/admin_edit_text.html:56 app/templates/admin_new.html:127
 msgid "A short custom URL for this post, instead of its permalink."
 msgstr ""
+"Una URL personalizada y corta para esta publicación, en lugar de su "
+"enlace permanente."
 
 #: app/templates/admin_edit_text.html:56
 msgid "Leave empty to remove the alias."
-msgstr ""
+msgstr "Déjelo vacío para eliminar el alias."
 
 #: app/templates/admin_edit_text.html:60 app/templates/admin_new.html:136
 msgid "Mark attachment(s) as sensitive"
@@ -278,24 +273,23 @@ msgstr "Encuesta"
 
 #: app/templates/admin_new.html:41
 msgid "Public - sent to followers and visible on the homepage"
-msgstr ""
+msgstr "Público - enviado a los seguidores y visible en la página de inicio"
 
 #: app/templates/admin_new.html:42
 msgid "Unlisted - like public, but hidden from the homepage"
-msgstr ""
+msgstr "No listado - como público, pero oculto en la página de inicio"
 
 #: app/templates/admin_new.html:43
-#, fuzzy
 msgid "Followers only"
 msgstr "Seguidores"
 
 #: app/templates/admin_new.html:44
 msgid "Direct - only visible for mentioned actors"
-msgstr ""
+msgstr "Directo - solo visible para los actores mencionados"
 
 #: app/templates/admin_new.html:56
 msgid "Visibility"
-msgstr ""
+msgstr "Visibilidad"
 
 #: app/templates/admin_new.html:86
 msgid "Hey!"
@@ -303,7 +297,7 @@ msgstr "¡Hola!"
 
 #: app/templates/admin_new.html:92
 msgid "Poll type"
-msgstr ""
+msgstr "Tipo de encuesta"
 
 #: app/templates/admin_new.html:94
 msgid "single choice"
@@ -315,7 +309,7 @@ msgstr "opciones múltiples"
 
 #: app/templates/admin_new.html:99
 msgid "Poll duration"
-msgstr ""
+msgstr "Duración de la encuesta"
 
 #: app/templates/admin_new.html:101
 msgid "ends in 5 minutes"
@@ -340,21 +334,20 @@ msgstr "termina dentro de 1 día"
 #: app/templates/admin_new.html:110
 #, python-format
 msgid "Option %(n)s"
-msgstr ""
+msgstr "Opción %(n)s"
 
 #: app/templates/admin_new.html:111
-#, fuzzy
 msgid "leave empty to disable"
-msgstr "Opción %(n)s, déjela vacía para desactivarla"
+msgstr "déjelo vacío para desactivarla"
 
 #: app/templates/admin_new.html:131
 msgid "Language"
-msgstr ""
+msgstr "Idioma"
 
 #: app/templates/admin_new.html:132
-#, fuzzy, python-format
+#, python-format
 msgid "optional, e.g. %(lang)s"
-msgstr "código de idioma (opcional, p. ej. %(lang)s)"
+msgstr "opcional, p. ej. %(lang)s"
 
 #: app/templates/admin_new.html:132
 msgid "BCP 47 language code, e.g. en or pt-BR"
@@ -362,17 +355,17 @@ msgstr "código de idioma BCP 47, p. ej. en o pt-BR"
 
 #: app/templates/admin_new.html:143
 msgid "Attachments"
-msgstr ""
+msgstr "Adjuntos"
 
 #: app/templates/admin_new.html:145
 #, python-format
 msgid "%(filename)s: checking playback in this browser…"
-msgstr ""
+msgstr "%(filename)s: comprobando la reproducción en este navegador…"
 
 #: app/templates/admin_new.html:146
 #, python-format
 msgid "%(filename)s: %(details)s — plays in this browser"
-msgstr ""
+msgstr "%(filename)s: %(details)s — se reproduce en este navegador"
 
 #: app/templates/admin_new.html:147
 #, python-format
@@ -381,6 +374,9 @@ msgid ""
 "codec/container) — it may be rejected on upload. Re-encoding as H.264/AAC"
 " in an MP4 is the safest bet."
 msgstr ""
+"%(filename)s: este navegador no ha podido reproducir el archivo (códec o "
+"contenedor no compatible) — es posible que se rechace al subirlo. Lo más "
+"seguro es volver a codificarlo como H.264/AAC en un MP4."
 
 #: app/templates/admin_new.html:148
 #, python-format
@@ -389,11 +385,14 @@ msgid ""
 "check isn't authoritative — it may still upload and play fine; the server"
 " has the final say)."
 msgstr ""
+"%(filename)s: no se ha podido generar una vista previa local en este "
+"navegador (esta comprobación no es definitiva — puede que se suba y se "
+"reproduzca correctamente; el servidor tiene la última palabra)."
 
 #: app/templates/admin_new.html:150
 #, python-format
 msgid "Alt text for %(filename)s"
-msgstr ""
+msgstr "Texto alternativo para %(filename)s"
 
 #: app/templates/admin_new.html:152
 msgid "Publish"
@@ -613,11 +612,13 @@ msgstr "La búsqueda ha agotado el tiempo de espera; intenta actualizar la pági
 #: app/templates/lookup.html:34
 msgid "This is not a URL or a fediverse handle (@user@domain.tld)."
 msgstr ""
+"Esto no es una URL ni un identificador del fediverso "
+"(@usuario@dominio.tld)."
 
 #: app/templates/lookup.html:36
 msgid "Unexpected error, please check the logs and report an issue if needed."
 msgstr ""
-"Error inesperado; revisa los registros e informa del problema si es "
+"Error inesperado, revise los registros e informe de un problema si es "
 "necesario."
 
 #: app/templates/notifications.html:8
@@ -704,18 +705,16 @@ msgid "updated webmention from %(source)s"
 msgstr "webmention actualizada de %(source)s"
 
 #: app/templates/notifications.html:113
-#, fuzzy
 msgid "published a new post"
-msgstr "ya no le gusta una publicación"
+msgstr "ha publicado una entrada nueva"
 
 #: app/templates/notifications.html:116
-#, fuzzy
 msgid "edited a post"
-msgstr "le ha gustado una publicación"
+msgstr "ha editado una publicación"
 
 #: app/templates/notifications.html:120
 msgid "a poll has ended"
-msgstr ""
+msgstr "una encuesta ha finalizado"
 
 #: app/templates/components/actor.html:18 app/templates/notifications.html:122
 msgid "new"
@@ -1009,11 +1008,11 @@ msgstr "mostrar comparticiones"
 
 #: app/templates/components/admin_buttons.html:62
 msgid "notify on new posts"
-msgstr ""
+msgstr "notificarme las publicaciones nuevas"
 
 #: app/templates/components/admin_buttons.html:71
 msgid "don't notify on new posts"
-msgstr ""
+msgstr "no notificarme las publicaciones nuevas"
 
 #: app/templates/components/admin_buttons.html:89
 msgid "accept follow"
@@ -1068,6 +1067,8 @@ msgid ""
 "Do you really want to delete this object? A Delete will be sent to the "
 "other servers that have it."
 msgstr ""
+"¿Seguro que quieres eliminar este objeto? Se enviará una eliminación "
+"(Delete) a los demás servidores que lo tengan."
 
 #: app/templates/components/admin_buttons.html:190
 msgid "delete"
@@ -1078,6 +1079,8 @@ msgid ""
 "Do you really want to delete this object? It will only be removed from "
 "this instance."
 msgstr ""
+"¿Seguro que quieres eliminar este objeto? Solo se eliminará de esta "
+"instancia."
 
 #: app/templates/components/admin_buttons.html:199
 #: app/templates/components/admin_buttons.html:208
@@ -1089,6 +1092,8 @@ msgid ""
 "Do you really want to delete this webmention? It will only be removed "
 "from this instance."
 msgstr ""
+"¿Seguro que quieres eliminar esta webmention? Solo se eliminará de esta "
+"instancia."
 
 #: app/templates/components/admin_buttons.html:217
 msgid "share"
