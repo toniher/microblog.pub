@@ -508,6 +508,36 @@ def test_admin_edit_text__clearing_alias_restores_permalink(
     assert outbox_object.ap_object["url"] == f"http://localhost:8000/o/{public_id}"
 
 
+def test_admin_edit_text__shows_raw_permalink_when_aliased(
+    client: TestClient,
+) -> None:
+    public_id = _create_note_via_admin(
+        client, content="hello world", alias="hello-world"
+    )
+
+    response = client.get(
+        f"/admin/edit_text/{public_id}",
+        cookies=generate_admin_session_cookies(),
+    )
+
+    assert response.status_code == 200
+    assert f"http://localhost:8000/o/{public_id}" in response.text
+
+
+def test_admin_edit_text__hides_raw_permalink_when_not_aliased(
+    client: TestClient,
+) -> None:
+    public_id = _create_note_via_admin(client, content="hello world")
+
+    response = client.get(
+        f"/admin/edit_text/{public_id}",
+        cookies=generate_admin_session_cookies(),
+    )
+
+    assert response.status_code == 200
+    assert f"http://localhost:8000/o/{public_id}" not in response.text
+
+
 def test_admin_edit_text__rejects_duplicate_alias_but_allows_resubmitting_own(
     db: Session, client: TestClient
 ) -> None:

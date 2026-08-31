@@ -54,6 +54,10 @@
         <label for="alias">{{ _("URL alias") }}</label>
         <input type="text" class="width-95" id="alias" name="alias" placeholder="{{ _("optional") }}" value="{{ outbox_object.alias or "" }}">
         <span class="muted">{{ _("A short custom URL for this post, instead of its permalink.") }} {{ _("Leave empty to remove the alias.") }}</span>
+        {% set raw_permalink = BASE_URL + "/o/" + outbox_object.public_id %}
+        {% if outbox_object.url and outbox_object.url != raw_permalink %}
+        <span class="muted">{{ _("Permalink:") }} <a href="{{ raw_permalink }}">{{ raw_permalink }}</a></span>
+        {% endif %}
     </p>
 
     <p class="form-field-inline">
