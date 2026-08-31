@@ -267,6 +267,9 @@
 {# TODO turn these into a regular link and append permalink ID if it's a reply #}
 <form action="{{ request.url_for("admin_object") }}"  method="GET">
 <input type="hidden" name="ap_id" value="{{ ap_object.ap_id }}">
+{% if ap_object.is_from_inbox %}
+<input type="hidden" name="fetch_replies" value="1">
+{% endif %}
 <button type="submit">{{ _("expand") }}</button>
 </form>
 {% endmacro %}

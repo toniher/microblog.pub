@@ -1055,11 +1055,16 @@ async def get_notifications(
 async def admin_object(
     request: Request,
     ap_id: str,
+    fetch_replies: bool = False,
     db_session: AsyncSession = Depends(get_db_session),
 ) -> templates.TemplateResponse:
     requested_object = await boxes.get_anybox_object_by_ap_id(db_session, ap_id)
     if not requested_object or requested_object.is_deleted:
         raise HTTPException(status_code=404)
+
+    if fetch_replies:
+        await boxes.fetch_replies(db_session, requested_object)
+        await db_session.commit()
 
     replies_tree = await boxes.get_replies_tree(
         db_session,

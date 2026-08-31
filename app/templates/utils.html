@@ -366,9 +366,11 @@
                 <li>
                     {{ admin_buttons.admin_profile_button(request, csrf_token, object.actor.ap_id) }}
                 </li>
+                {% if is_object_page %}
                 <li>
                     {{ admin_buttons.admin_fetch_replies_button(request, csrf_token, object.ap_id, object.permalink_id) }}
                 </li>
+                {% endif %}
                 {% if object.is_quote_revocable %}
                 <li>
                     {{ admin_buttons.admin_revoke_quote_button(request, csrf_token, object.ap_id, object.permalink_id) }}
@@ -376,7 +378,7 @@
                 {% endif %}
             {% endif %}
         {% endif %}
-        {% if object.is_from_inbox or object.is_from_outbox %}
+        {% if not is_object_page and (object.is_from_inbox or object.is_from_outbox) %}
             <li>
                 {{ admin_buttons.admin_expand_button(request, csrf_token, object) }}
             </li>
