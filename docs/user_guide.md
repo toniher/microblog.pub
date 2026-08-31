@@ -1044,6 +1044,54 @@ docker compose up -d
 rm data/microblogpub.db.bak
 ```
 
+### Reporting unattached uploads
+
+Uploaded media (images, video, audio) is stored independently of the post it's
+attached to, and in a few cases a row can end up unattached to any post — e.g.
+a rejected multi-file post, or media uploaded via the Mastodon API and never
+used. This is a read-only report: it lists unattached `Upload` rows and files
+in `data/uploads` with no matching row, but **deletes nothing**. Unattached
+does not mean deletable: it can be in-flight media for a post not submitted
+yet, or media queued in a scheduled post. The server doesn't need to be
+stopped to run it.
+
+#### Python edition
+
+```bash
+poetry run inv report-unattached-uploads
+```
+
+#### Docker edition
+
+```bash
+make report-unattached-uploads
+```
+
+#### Removing a confirmed orphan by hand
+
+The report deliberately doesn't delete anything -- an unattached upload isn't
+necessarily garbage (see above). If, after checking, you're sure a row is
+safe to remove (e.g. an old, undated one with no `(referenced by a scheduled
+status)` note, and no ongoing draft it could belong to), remove it by hand.
+`data/` is the same directory in both the Python and Docker editions, so this
+runs against it directly on the host either way:
+
+```bash
+# Back up first
+cp -r data/microblogpub.db data/microblogpub.db.bak
+
+# id and hash are the Upload#<id> and hash=... values the report printed
+sqlite3 data/microblogpub.db "DELETE FROM upload WHERE id = <id>;"
+rm -f "data/uploads/<hash>" "data/uploads/<hash>_resized"
+
+# once you've confirmed the server still starts and behaves as expected
+rm data/microblogpub.db.bak
+```
+
+For a file the report lists with no matching `Upload` row (the second half
+of the report), there's nothing in the database to touch -- just remove the
+file(s) directly.
+
 ### Moving to another instance
 
 If you want to migrate to another instance, you have the ability to move your existing followers to your new account.

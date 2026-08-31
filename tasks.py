@@ -237,6 +237,50 @@ def prune_old_data(ctx):
 
 
 @task
+def report_unattached_uploads(ctx):
+    # type: (Context) -> None
+    """List Upload rows/files that aren't attached to any post. Read-only --
+    never deletes anything, since unattached does not mean deletable (in-flight
+    Mastodon-client media, scheduled posts, ...)."""
+    from app.database import async_session
+    from app.uploads import find_orphan_upload_files
+    from app.uploads import find_unattached_uploads
+
+    async def _report() -> None:
+        async with async_session() as db_session:
+            unattached = await find_unattached_uploads(db_session)
+            if not unattached:
+                print("No unattached Upload rows found")
+            for item in unattached:
+                upload = item.upload
+                note = (
+                    " (referenced by a scheduled status)"
+                    if item.referenced_by_scheduled_status
+                    else ""
+                )
+                print(
+                    f"Upload#{upload.id} {upload.content_type} "
+                    f"created={upload.created_at} "
+                    f"hash={upload.content_hash}{note}"
+                )
+
+            orphan_files = await find_orphan_upload_files(db_session)
+            if not orphan_files:
+                print("No orphan files found in data/uploads")
+            for path in orphan_files:
+                print(f"File with no Upload row: {path}")
+
+        print(
+            "\nNothing was deleted. An upload can be legitimately unattached: "
+            "in-flight media uploaded via the Mastodon API before a status is "
+            "posted, media queued in a scheduled post, or media a client "
+            "abandoned after uploading. Review before removing anything by hand."
+        )
+
+    asyncio.run(_report())
+
+
+@task
 def webfinger(ctx, account):
     # type: (Context, str) -> None
     import traceback

@@ -19,6 +19,10 @@ update:
 prune-old-data:
 	-docker run --rm --volume `pwd`/data:/app/data --volume microblogpub_static:/app/app/static microblogpub-server inv prune-old-data
 
+.PHONY: report-unattached-uploads
+report-unattached-uploads:
+	-docker run --rm --volume `pwd`/data:/app/data --volume microblogpub_static:/app/app/static microblogpub-server inv report-unattached-uploads
+
 .PHONY: webfinger
 webfinger:
 	-docker run --rm --volume `pwd`/data:/app/data --volume microblogpub_static:/app/app/static microblogpub-server inv webfinger $(account)

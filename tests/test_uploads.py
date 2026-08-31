@@ -1,6 +1,7 @@
 import hashlib
 import io
 import subprocess
+from datetime import timedelta
 from typing import Iterator
 
 import pytest
@@ -10,11 +11,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.datastructures import Headers
 
 import activitypub.models
+from activitypub import activitypub as ap
+from activitypub import boxes
 from app import ffmpeg
+from app import models
 from app.uploads import UPLOAD_DIR
 from app.uploads import IncompatibleMediaError
 from app.uploads import UploadTooLargeError
+from app.uploads import delete_uploads
+from app.uploads import find_orphan_upload_files
+from app.uploads import find_unattached_uploads
 from app.uploads import save_upload
+from app.utils.datetime import now
 
 
 def _upload_file(
@@ -261,6 +269,137 @@ async def test_palette_png_keeps_its_colors(
     with Image.open(UPLOAD_DIR / upload.content_hash) as stored:
         assert stored.mode == "P"
         assert stored.convert("RGB").getpixel((0, 0)) == (200, 40, 90)
+
+
+@pytest.mark.asyncio
+async def test_save_upload_dedup_only_appends_to_created_once(
+    async_db_session: AsyncSession,
+) -> None:
+    created: list[activitypub.models.Upload] = []
+    data = b"same bytes twice" + b"z" * 64
+    content_type = "application/octet-stream"
+
+    first = await save_upload(
+        async_db_session, _upload_file(data, content_type, "a.bin"), created=created
+    )
+    second = await save_upload(
+        async_db_session, _upload_file(data, content_type, "b.bin"), created=created
+    )
+
+    assert first is not None and second is not None
+    assert first.id == second.id
+    assert len(created) == 1
+    assert created[0].id == first.id
+
+
+@pytest.mark.asyncio
+async def test_delete_uploads_removes_row_and_files(
+    async_db_session: AsyncSession,
+) -> None:
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (10, 8), color=(10, 20, 30)).save(buf, format="PNG")
+
+    upload = await save_upload(
+        async_db_session, _upload_file(buf.getvalue(), "image/png", "del.png")
+    )
+    assert upload is not None
+    content_hash = str(upload.content_hash)
+    assert (UPLOAD_DIR / content_hash).exists()
+    assert (UPLOAD_DIR / f"{content_hash}_resized").exists()
+
+    await delete_uploads(async_db_session, [upload])
+
+    assert (await async_db_session.get(activitypub.models.Upload, upload.id)) is None
+    assert not (UPLOAD_DIR / content_hash).exists()
+    assert not (UPLOAD_DIR / f"{content_hash}_resized").exists()
+
+
+@pytest.mark.asyncio
+async def test_delete_uploads_survives_missing_file(
+    async_db_session: AsyncSession,
+) -> None:
+    upload = await save_upload(
+        async_db_session,
+        _upload_file(
+            b"missing file" + b"w" * 64, "application/octet-stream", "missing.bin"
+        ),
+    )
+    assert upload is not None
+    (UPLOAD_DIR / str(upload.content_hash)).unlink()
+
+    # Must not raise even though the row's own file is already gone.
+    await delete_uploads(async_db_session, [upload])
+
+    assert (await async_db_session.get(activitypub.models.Upload, upload.id)) is None
+
+
+@pytest.mark.asyncio
+async def test_find_unattached_uploads(
+    async_db_session: AsyncSession,
+) -> None:
+    content_type = "application/octet-stream"
+    attached = await save_upload(
+        async_db_session,
+        _upload_file(b"attached" + b"a" * 64, content_type, "attached.bin"),
+    )
+    unattached = await save_upload(
+        async_db_session,
+        _upload_file(b"unattached" + b"b" * 64, content_type, "unattached.bin"),
+    )
+    scheduled = await save_upload(
+        async_db_session,
+        _upload_file(b"scheduled" + b"c" * 64, content_type, "scheduled.bin"),
+    )
+    assert attached is not None and unattached is not None and scheduled is not None
+
+    await boxes.send_create(
+        async_db_session,
+        ap_type="Note",
+        source="hello with an attachment",
+        uploads=[(attached, "attached.bin", None)],
+        in_reply_to=None,
+        visibility=ap.VisibilityEnum.PUBLIC,
+    )
+    async_db_session.add(
+        models.ScheduledStatus(
+            scheduled_at=now() + timedelta(hours=1),
+            params={"media_ids": [str(scheduled.id)]},
+        )
+    )
+    await async_db_session.commit()
+
+    result = await find_unattached_uploads(async_db_session)
+    by_id = {item.upload.id: item for item in result}
+
+    assert attached.id not in by_id
+    assert unattached.id in by_id
+    assert by_id[unattached.id].referenced_by_scheduled_status is False
+    assert scheduled.id in by_id
+    assert by_id[scheduled.id].referenced_by_scheduled_status is True
+
+
+@pytest.mark.asyncio
+async def test_find_orphan_upload_files(
+    async_db_session: AsyncSession,
+) -> None:
+    upload = await save_upload(
+        async_db_session,
+        _upload_file(
+            b"known file" + b"d" * 64, "application/octet-stream", "known.bin"
+        ),
+    )
+    assert upload is not None
+
+    orphan_path = UPLOAD_DIR / "deadbeef_not_a_real_upload"
+    orphan_path.write_bytes(b"orphan")
+    try:
+        orphans = await find_orphan_upload_files(async_db_session)
+        assert orphan_path in orphans
+        assert not any(p.name.startswith(str(upload.content_hash)) for p in orphans)
+    finally:
+        orphan_path.unlink()
 
 
 def test_blurhash_is_stable_across_source_sizes() -> None:

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-31 16:57+0200\n"
+"POT-Creation-Date: 2026-08-31 17:49+0200\n"
 "PO-Revision-Date: 2026-07-17 22:20+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: it\n"
@@ -18,50 +18,66 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: app/admin.py:131
+#: app/admin.py:132
 msgid "Error: invalid URL alias"
 msgstr "Errore: alias URL non valido"
 
-#: app/admin.py:135
+#: app/admin.py:136
 msgid "Error: URL alias is too long"
 msgstr "Errore: l'alias URL è troppo lungo"
 
-#: app/admin.py:155
+#: app/admin.py:156
 #, python-format
 msgid "Error: URL alias %(alias)s is already used"
 msgstr "Errore: l'alias URL %(alias)s è già in uso"
 
-#: app/admin.py:1627 app/admin.py:1647 app/admin.py:1808
+#: app/admin.py:1640 app/admin.py:1660 app/admin.py:1843
 msgid "Error: object must have a content"
 msgstr "Errore: il contenuto è obbligatorio"
 
-#: app/admin.py:1637
+#: app/admin.py:1650
 msgid "Error: invalid language code"
 msgstr "Errore: codice lingua non valido"
 
-#: app/admin.py:1650
+#: app/admin.py:1663
 msgid "Error: an article must have a title"
 msgstr "Errore: un articolo deve avere un titolo"
 
 #: app/admin.py:1666
+msgid "Error: invalid visibility"
+msgstr "Errore: visibilità non valida"
+
+#: app/admin.py:1676
+msgid "Error: unable to find the object being replied to"
+msgstr "Errore: impossibile trovare l'oggetto a cui si sta rispondendo"
+
+#: app/admin.py:1689
+msgid "Error: a poll must have at least 2 answers"
+msgstr "Errore: un sondaggio deve avere almeno 2 risposte"
+
+#: app/admin.py:1695
+msgid "Error: invalid poll duration"
+msgstr "Errore: durata del sondaggio non valida"
+
+#: app/admin.py:1713
 msgid "Error: file is too large"
 msgstr "Errore: il file è troppo grande"
 
-#: app/admin.py:1668 app/admin.py:1674
+#: app/admin.py:1715 app/admin.py:1721
 msgid "files must be re-selected before trying again"
 msgstr "è necessario riselezionare i file prima di riprovare"
 
-#: app/admin.py:1672
+#: app/admin.py:1719
 msgid "Error: unable to process upload"
 msgstr "Errore: impossibile elaborare il caricamento"
 
-#: app/admin.py:1688
+#: app/admin.py:1735
 msgid "Error: Unable to process upload"
 msgstr "Errore: impossibile elaborare il caricamento"
 
-#: app/admin.py:1701
-msgid "Error: a poll must have at least 2 answers"
-msgstr "Errore: un sondaggio deve avere almeno 2 risposte"
+#: app/admin.py:1758
+msgid "Error: unable to create the post"
+msgstr "Errore: impossibile creare il post"
 
 #: app/config.py:467
 msgid "please try again"

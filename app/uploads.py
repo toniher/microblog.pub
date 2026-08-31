@@ -10,6 +10,7 @@ from fastapi import UploadFile
 from loguru import logger
 from PIL import Image
 from PIL import ImageOps
+from sqlalchemy import delete
 from sqlalchemy import select
 
 import activitypub.models
@@ -17,6 +18,7 @@ from activitypub import activitypub as ap
 from activitypub.ap_object import format_xsd_duration
 from app import config
 from app import ffmpeg
+from app import models
 from app.config import BASE_URL
 from app.config import ROOT_DIR
 from app.database import AsyncSession
@@ -233,7 +235,10 @@ def _process_av_upload(dest_filename: Path, content_hash: str) -> _ProcessedUplo
 
 
 async def save_upload(
-    db_session: AsyncSession, f: UploadFile
+    db_session: AsyncSession,
+    f: UploadFile,
+    *,
+    created: list[activitypub.models.Upload] | None = None,
 ) -> activitypub.models.Upload | None:
     if f.content_type is None:
         return None
@@ -285,7 +290,112 @@ async def save_upload(
     db_session.add(new_upload)
     await db_session.commit()
 
+    if created is not None:
+        created.append(new_upload)
+
     return new_upload
+
+
+async def delete_uploads(
+    db_session: AsyncSession,
+    uploads: list[activitypub.models.Upload],
+) -> None:
+    """Delete `Upload` rows and their files.
+
+    Callers must only pass uploads they know nothing else references (e.g.
+    freshly created ones from a rejected request) -- the dedup path in
+    `save_upload` can hand out an existing row backing an unrelated post, and
+    deleting that row here would break it.
+    """
+    if not uploads:
+        return
+
+    # Snapshot before the delete: once the rows are gone, re-reading these
+    # attributes from an expired instance would find nothing.
+    content_hashes = [str(upload.content_hash) for upload in uploads]
+    upload_ids = [upload.id for upload in uploads]
+
+    await db_session.execute(
+        delete(activitypub.models.Upload).where(
+            activitypub.models.Upload.id.in_(upload_ids)
+        )
+    )
+    await db_session.commit()
+
+    for content_hash in content_hashes:
+        for filename in (content_hash, f"{content_hash}_resized"):
+            path = UPLOAD_DIR / filename
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                logger.exception(f"Failed to remove upload file {path}")
+
+
+@dataclass
+class UnattachedUpload:
+    upload: activitypub.models.Upload
+    referenced_by_scheduled_status: bool
+
+
+async def find_unattached_uploads(
+    db_session: AsyncSession,
+) -> list[UnattachedUpload]:
+    """`Upload` rows with no `OutboxObjectAttachment`.
+
+    Unattached does not mean deletable: a row may be in-flight media for a
+    Mastodon-client post that hasn't been submitted yet, or media queued in a
+    `ScheduledStatus` (referenced by id in a JSON blob, not an FK -- see
+    `app.scheduled_statuses.ComposeParams`), or media uploaded via the
+    Mastodon API and never attached to anything. This only reports.
+    """
+    attached_upload_ids = select(
+        activitypub.models.OutboxObjectAttachment.upload_id
+    ).distinct()
+    uploads = (
+        (
+            await db_session.execute(
+                select(activitypub.models.Upload)
+                .where(activitypub.models.Upload.id.not_in(attached_upload_ids))
+                .order_by(activitypub.models.Upload.created_at)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not uploads:
+        return []
+
+    scheduled_media_ids: set[str] = set()
+    all_params = (
+        (await db_session.execute(select(models.ScheduledStatus.params)))
+        .scalars()
+        .all()
+    )
+    for params in all_params:
+        scheduled_media_ids.update(params.get("media_ids") or [])
+
+    return [
+        UnattachedUpload(
+            upload=upload,
+            referenced_by_scheduled_status=str(upload.id) in scheduled_media_ids,
+        )
+        for upload in uploads
+    ]
+
+
+async def find_orphan_upload_files(db_session: AsyncSession) -> list[Path]:
+    """Files under `UPLOAD_DIR` with no matching `Upload` row at all."""
+    known_hashes = set(
+        (await db_session.execute(select(activitypub.models.Upload.content_hash)))
+        .scalars()
+        .all()
+    )
+    return [
+        path
+        for path in sorted(UPLOAD_DIR.glob("*"))
+        if not path.name.startswith(".")
+        and path.name.split("_", 1)[0] not in known_hashes
+    ]
 
 
 def upload_to_attachment(

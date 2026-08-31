@@ -49,6 +49,7 @@ from app.lookup import lookup
 from app.templates import is_current_user_admin
 from app.uploads import IncompatibleMediaError
 from app.uploads import UploadTooLargeError
+from app.uploads import delete_uploads
 from app.uploads import save_upload
 from app.utils import pagination
 from app.utils.emoji import EMOJIS_BY_NAME
@@ -1584,7 +1585,19 @@ async def admin_actions_new(
     submitted_content_warning = content_warning
     submitted_is_sensitive = is_sensitive
 
+    # Uploads created by this request (as opposed to dedup-reused existing
+    # ones) -- rolled back below if the request ends up rejected.
+    created_uploads: list[activitypub.models.Upload] = []
+
     async def _rerender(error: str) -> templates.TemplateResponse:
+        # `send_create` only flushes its new outbox object (boxes.py:152) and
+        # does not commit until much later, after recipients/webmentions are
+        # computed -- without this rollback, deleting the uploads below could
+        # commit a half-built post (attachments, but no recipients/delivery).
+        # Both calls no-op for rejections that happen before any of that.
+        await db_session.rollback()
+        await delete_uploads(db_session, created_uploads)
+
         # The reply-to/quoted previews are resolved here rather than up front:
         # `get_anybox_object_by_ap_id` is a multi-joinedload query, and the
         # happy path never renders them, so eager-loading would tax every
@@ -1649,6 +1662,40 @@ async def admin_actions_new(
     if post_type == "Article" and not name:
         return await _rerender(gettext_default("Error: an article must have a title"))
 
+    if visibility not in ap.VisibilityEnum.__members__:
+        return await _rerender(gettext_default("Error: invalid visibility"))
+    ap_visibility = ap.VisibilityEnum[visibility]
+
+    # Same local lookup send_create does (boxes.py:849), run before anything
+    # is uploaded so an unresolvable parent is the form's own 422 instead of
+    # a ValueError 500 with the upload batch already committed.
+    if in_reply_to and not await boxes.get_anybox_object_by_ap_id(
+        db_session, in_reply_to
+    ):
+        return await _rerender(
+            gettext_default("Error: unable to find the object being replied to")
+        )
+
+    ap_type = "Note"
+
+    poll_duration_in_minutes = None
+    poll_answers = None
+    if poll_type:
+        ap_type = "Question"
+        poll_answers = poll_answers_submitted
+
+        if not poll_answers or len(poll_answers) < 2:
+            return await _rerender(
+                gettext_default("Error: a poll must have at least 2 answers")
+            )
+
+        try:
+            poll_duration_in_minutes = int(poll_duration or "1440")
+        except ValueError:
+            return await _rerender(gettext_default("Error: invalid poll duration"))
+    elif name:
+        ap_type = "Article"
+
     # XXX: for some reason, no files restuls in an empty single file
     uploads = []
     if len(files) >= 1:
@@ -1660,7 +1707,7 @@ async def admin_actions_new(
         for f in files:
             if f.filename is not None and f.filename != "":
                 try:
-                    upload = await save_upload(db_session, f)
+                    upload = await save_upload(db_session, f, created=created_uploads)
                 except UploadTooLargeError as exc:
                     return await _rerender(
                         f"{gettext_default('Error: file is too large')} "
@@ -1688,40 +1735,28 @@ async def admin_actions_new(
                         gettext_default("Error: Unable to process upload")
                     )
 
-    ap_type = "Note"
+    try:
+        public_id, _ = await boxes.send_create(
+            db_session,
+            ap_type=ap_type,
+            source=content,
+            uploads=uploads,
+            in_reply_to=in_reply_to or None,
+            visibility=ap_visibility,
+            content_warning=content_warning or None,
+            is_sensitive=True if content_warning else is_sensitive,
+            poll_type=poll_type,
+            poll_answers=poll_answers,
+            poll_duration_in_minutes=poll_duration_in_minutes,
+            name=name,
+            language=language,
+            quote_of=quote_of or None,
+            alias=new_alias,
+        )
+    except ValueError:
+        logger.exception("Failed to create post")
+        return await _rerender(gettext_default("Error: unable to create the post"))
 
-    poll_duration_in_minutes = None
-    poll_answers = None
-    if poll_type:
-        ap_type = "Question"
-        poll_answers = poll_answers_submitted
-
-        if not poll_answers or len(poll_answers) < 2:
-            return await _rerender(
-                gettext_default("Error: a poll must have at least 2 answers")
-            )
-
-        poll_duration_in_minutes = int(poll_duration or "1440")
-    elif name:
-        ap_type = "Article"
-
-    public_id, _ = await boxes.send_create(
-        db_session,
-        ap_type=ap_type,
-        source=content,
-        uploads=uploads,
-        in_reply_to=in_reply_to or None,
-        visibility=ap.VisibilityEnum[visibility],
-        content_warning=content_warning or None,
-        is_sensitive=True if content_warning else is_sensitive,
-        poll_type=poll_type,
-        poll_answers=poll_answers,
-        poll_duration_in_minutes=poll_duration_in_minutes,
-        name=name,
-        language=language,
-        quote_of=quote_of or None,
-        alias=new_alias,
-    )
     return RedirectResponse(
         request.url_for("outbox_by_public_id", public_id=public_id),
         status_code=302,

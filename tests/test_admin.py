@@ -1,3 +1,5 @@
+import hashlib
+import io
 from datetime import timedelta
 from typing import Iterator
 from uuid import uuid4
@@ -115,6 +117,156 @@ def test_admin_actions_new_rejects_oversized_upload(
     assert response.status_code == 422
     assert "too large" in response.text.lower()
     # The submitted content is preserved in the re-rendered form.
+    assert "hello" in response.text
+
+
+def test_admin_actions_new_rejects_batch_and_cleans_up_created_uploads(
+    db: Session, client: TestClient, monkeypatch
+) -> None:
+    """A mid-batch failure must not leave the first file's Upload row/file
+    behind -- the post as a whole was rejected."""
+    from PIL import Image
+
+    from app.uploads import UPLOAD_DIR
+
+    buf = io.BytesIO()
+    Image.new("RGB", (10, 8), color=(1, 2, 3)).save(buf, format="PNG")
+    small_png = buf.getvalue()
+    content_hash = hashlib.blake2b(small_png, digest_size=32).hexdigest()
+
+    monkeypatch.setattr("app.uploads.config.MAX_IMAGE_UPLOAD_SIZE", len(small_png) + 10)
+
+    response = client.post(
+        "/admin/actions/new",
+        data={
+            "content": "hello",
+            "redirect_url": "http://testserver/",
+            "visibility": ap.VisibilityEnum.PUBLIC.name,
+            "csrf_token": generate_csrf_token(),
+        },
+        files=[
+            ("files", ("first.png", small_png, "image/png")),
+            ("files", ("second.png", b"\x89PNG" + b"x" * 1000, "image/png")),
+        ],
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 422
+    assert "hello" in response.text
+
+    assert db.query(activitypub.models.Upload).count() == 0
+    assert not (UPLOAD_DIR / content_hash).exists()
+
+
+def test_admin_actions_new_rejected_batch_does_not_touch_a_dedup_reused_upload(
+    db: Session, client: TestClient, monkeypatch
+) -> None:
+    """Dedup can hand a rejected request an existing, already-attached Upload
+    row -- the cleanup must never delete that one."""
+    from PIL import Image
+
+    from app.uploads import UPLOAD_DIR
+
+    buf = io.BytesIO()
+    Image.new("RGB", (10, 8), color=(4, 5, 6)).save(buf, format="PNG")
+    shared_png = buf.getvalue()
+    content_hash = hashlib.blake2b(shared_png, digest_size=32).hexdigest()
+
+    first_response = client.post(
+        "/admin/actions/new",
+        data={
+            "content": "first post",
+            "redirect_url": "http://testserver/",
+            "visibility": ap.VisibilityEnum.PUBLIC.name,
+            "csrf_token": generate_csrf_token(),
+        },
+        files=[("files", ("shared.png", shared_png, "image/png"))],
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert first_response.status_code == 302
+    assert db.query(activitypub.models.Upload).count() == 1
+    assert db.query(activitypub.models.OutboxObjectAttachment).count() == 1
+
+    monkeypatch.setattr("app.uploads.config.MAX_IMAGE_UPLOAD_SIZE", 10)
+
+    second_response = client.post(
+        "/admin/actions/new",
+        data={
+            "content": "second post",
+            "redirect_url": "http://testserver/",
+            "visibility": ap.VisibilityEnum.PUBLIC.name,
+            "csrf_token": generate_csrf_token(),
+        },
+        files=[
+            ("files", ("shared.png", shared_png, "image/png")),
+            ("files", ("oversized.png", b"\x89PNG" + b"x" * 1000, "image/png")),
+        ],
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert second_response.status_code == 422
+
+    # The row from the first, successful post -- and its file -- survive.
+    assert db.query(activitypub.models.Upload).count() == 1
+    assert db.query(activitypub.models.OutboxObjectAttachment).count() == 1
+    assert (UPLOAD_DIR / content_hash).exists()
+
+
+def test_admin_actions_new_rejects_poll_with_one_answer(client: TestClient) -> None:
+    response = client.post(
+        "/admin/actions/new",
+        data={
+            "content": "a poll",
+            "redirect_url": "http://testserver/",
+            "visibility": ap.VisibilityEnum.PUBLIC.name,
+            "csrf_token": generate_csrf_token(),
+            "type": "Question",
+            "poll_type": "oneOf",
+            "poll_answer_1": "only one",
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 422
+    assert "a poll" in response.text
+
+
+def test_admin_actions_new_rejects_unknown_in_reply_to(client: TestClient) -> None:
+    """Regression test: an unresolvable `in_reply_to` used to reach
+    `send_create` and raise an uncaught `ValueError` (500)."""
+    response = client.post(
+        "/admin/actions/new",
+        data={
+            "content": "a reply",
+            "redirect_url": "http://testserver/",
+            "visibility": ap.VisibilityEnum.PUBLIC.name,
+            "csrf_token": generate_csrf_token(),
+            "in_reply_to": "https://example.com/unknown-object",
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 422
+    assert "a reply" in response.text
+
+
+def test_admin_actions_new_rejects_invalid_visibility(client: TestClient) -> None:
+    """Regression test: `ap.VisibilityEnum[visibility]` used to be evaluated
+    as a `send_create` argument expression, so a bogus value raised an
+    uncaught `KeyError` (500) instead of a form error."""
+    response = client.post(
+        "/admin/actions/new",
+        data={
+            "content": "hello",
+            "redirect_url": "http://testserver/",
+            "visibility": "not-a-real-visibility",
+            "csrf_token": generate_csrf_token(),
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 422
     assert "hello" in response.text
 
 
