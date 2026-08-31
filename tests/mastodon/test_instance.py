@@ -1,4 +1,5 @@
 import secrets
+from unittest import mock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -113,6 +114,18 @@ def test_instance_extended_description(client: TestClient) -> None:
     data = response.json()
     assert data["updated_at"]
     assert isinstance(data["content"], str)
+
+
+def test_instance_extended_description_prefers_about_field(
+    client: TestClient,
+) -> None:
+    with mock.patch(
+        "app.mastodon.serializers.config.ABOUT_HTML", "<p>a longer intro</p>"
+    ):
+        response = client.get("/api/v1/instance/extended_description")
+
+    assert response.status_code == 200
+    assert response.json()["content"] == "<p>a longer intro</p>"
 
 
 def test_instance_peers_is_empty_for_privacy(client: TestClient) -> None:

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-31 17:49+0200\n"
+"POT-Creation-Date: 2026-08-31 23:31+0200\n"
 "PO-Revision-Date: 2026-07-17 22:20+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: it\n"
@@ -31,59 +31,59 @@ msgstr "Errore: l'alias URL è troppo lungo"
 msgid "Error: URL alias %(alias)s is already used"
 msgstr "Errore: l'alias URL %(alias)s è già in uso"
 
-#: app/admin.py:1640 app/admin.py:1660 app/admin.py:1843
+#: app/admin.py:1645 app/admin.py:1665 app/admin.py:1848
 msgid "Error: object must have a content"
 msgstr "Errore: il contenuto è obbligatorio"
 
-#: app/admin.py:1650
+#: app/admin.py:1655
 msgid "Error: invalid language code"
 msgstr "Errore: codice lingua non valido"
 
-#: app/admin.py:1663
+#: app/admin.py:1668
 msgid "Error: an article must have a title"
 msgstr "Errore: un articolo deve avere un titolo"
 
-#: app/admin.py:1666
+#: app/admin.py:1671
 msgid "Error: invalid visibility"
 msgstr "Errore: visibilità non valida"
 
-#: app/admin.py:1676
+#: app/admin.py:1681
 msgid "Error: unable to find the object being replied to"
 msgstr "Errore: impossibile trovare l'oggetto a cui si sta rispondendo"
 
-#: app/admin.py:1689
+#: app/admin.py:1694
 msgid "Error: a poll must have at least 2 answers"
 msgstr "Errore: un sondaggio deve avere almeno 2 risposte"
 
-#: app/admin.py:1695
+#: app/admin.py:1700
 msgid "Error: invalid poll duration"
 msgstr "Errore: durata del sondaggio non valida"
 
-#: app/admin.py:1713
+#: app/admin.py:1718
 msgid "Error: file is too large"
 msgstr "Errore: il file è troppo grande"
 
-#: app/admin.py:1715 app/admin.py:1721
+#: app/admin.py:1720 app/admin.py:1726
 msgid "files must be re-selected before trying again"
 msgstr "è necessario riselezionare i file prima di riprovare"
 
-#: app/admin.py:1719
+#: app/admin.py:1724
 msgid "Error: unable to process upload"
 msgstr "Errore: impossibile elaborare il caricamento"
 
-#: app/admin.py:1735
+#: app/admin.py:1740
 msgid "Error: Unable to process upload"
 msgstr "Errore: impossibile elaborare il caricamento"
 
-#: app/admin.py:1758
+#: app/admin.py:1763
 msgid "Error: unable to create the post"
 msgstr "Errore: impossibile creare il post"
 
-#: app/config.py:467
+#: app/config.py:472
 msgid "please try again"
 msgstr "riprova"
 
-#: app/config.py:477
+#: app/config.py:482
 #, python-format
 msgid "The security token has expired, %(please_try_again)s"
 msgstr "Il token di sicurezza è scaduto, %(please_try_again)s"
@@ -120,6 +120,49 @@ msgstr "%(name)s ha iniziato a seguirti"
 #, python-format
 msgid "%(name)s has requested to follow you"
 msgstr "%(name)s ha richiesto di seguirti"
+
+#: app/templates/about.html:4 app/templates/about.html:7
+#, fuzzy, python-format
+msgid "About %(name)s"
+msgstr "Segui %(name)s"
+
+#: app/templates/about.html:25
+#, fuzzy
+msgid "Posts"
+msgstr "Note"
+
+#: app/templates/about.html:27 app/templates/header.html:54
+msgid "Articles"
+msgstr "Articoli"
+
+#: app/templates/about.html:29 app/templates/header.html:57
+msgid "Followers"
+msgstr "Follower"
+
+#: app/templates/about.html:31 app/templates/header.html:60
+msgid "Following"
+msgstr "Seguiti"
+
+#: app/templates/about.html:38
+msgid "Fediverse handle"
+msgstr ""
+
+#: app/templates/about.html:39 app/templates/components/filters.html:22
+#: app/templates/header.html:9
+msgid "Follow"
+msgstr "Segui"
+
+#: app/templates/about.html:41
+#, fuzzy
+msgid "Contact"
+msgstr "Contenuto"
+
+#: app/templates/about.html:50
+#, python-format
+msgid ""
+"This is a single-user instance running %(mbp)s, federating over %(ap)s. "
+"It has no other users, and does not accept sign-ups."
+msgstr ""
 
 #: app/templates/admin_blocks.html:6
 msgid "Blocked accounts"
@@ -495,25 +538,9 @@ msgstr "Seguiti di %(name)s"
 msgid "Manage follows"
 msgstr "Gestisci i seguiti"
 
-#: app/templates/components/filters.html:22 app/templates/header.html:9
-msgid "Follow"
-msgstr "Segui"
-
 #: app/templates/header.html:52
 msgid "Notes"
 msgstr "Note"
-
-#: app/templates/header.html:54
-msgid "Articles"
-msgstr "Articoli"
-
-#: app/templates/header.html:57
-msgid "Followers"
-msgstr "Follower"
-
-#: app/templates/header.html:60
-msgid "Following"
-msgstr "Seguiti"
 
 #: app/templates/index.html:58
 msgid "write your first note"
@@ -924,22 +951,22 @@ msgstr "rimuovi mi piace"
 msgid "unshare"
 msgstr "annulla condivisione"
 
-#: app/templates/utils.html:397
+#: app/templates/utils.html:402
 msgid "Likes"
 msgstr "Mi piace"
 
-#: app/templates/utils.html:406 app/templates/utils.html:423
+#: app/templates/utils.html:411 app/templates/utils.html:428
 #, python-format
 msgid "and %(count)s more."
 msgid_plural "and %(count)s more."
 msgstr[0] "e %(count)s in più."
 msgstr[1] "e %(count)s in più."
 
-#: app/templates/utils.html:414
+#: app/templates/utils.html:419
 msgid "Shares"
 msgstr "Condivisioni"
 
-#: app/templates/utils.html:431
+#: app/templates/utils.html:436
 msgid "Webmentions"
 msgstr "Webmentions"
 
@@ -1138,11 +1165,11 @@ msgstr "menziona"
 msgid "profile"
 msgstr "profilo"
 
-#: app/templates/components/admin_buttons.html:270
+#: app/templates/components/admin_buttons.html:273
 msgid "expand"
 msgstr "espandi"
 
-#: app/templates/components/admin_buttons.html:279
+#: app/templates/components/admin_buttons.html:282
 msgid "fetch replies"
 msgstr "recupera le risposte"
 

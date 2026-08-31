@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-31 17:49+0200\n"
+"POT-Creation-Date: 2026-08-31 23:31+0200\n"
 "PO-Revision-Date: 2026-07-17 22:20+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ro\n"
@@ -32,59 +32,59 @@ msgstr "Eroare: aliasul URL este prea lung"
 msgid "Error: URL alias %(alias)s is already used"
 msgstr "Eroare: aliasul URL %(alias)s este deja folosit"
 
-#: app/admin.py:1640 app/admin.py:1660 app/admin.py:1843
+#: app/admin.py:1645 app/admin.py:1665 app/admin.py:1848
 msgid "Error: object must have a content"
 msgstr "Eroare: conținutul este obligatoriu"
 
-#: app/admin.py:1650
+#: app/admin.py:1655
 msgid "Error: invalid language code"
 msgstr "Eroare: cod de limbă invalid"
 
-#: app/admin.py:1663
+#: app/admin.py:1668
 msgid "Error: an article must have a title"
 msgstr "Eroare: un articol trebuie să aibă un titlu"
 
-#: app/admin.py:1666
+#: app/admin.py:1671
 msgid "Error: invalid visibility"
 msgstr "Eroare: vizibilitate invalidă"
 
-#: app/admin.py:1676
+#: app/admin.py:1681
 msgid "Error: unable to find the object being replied to"
 msgstr "Eroare: nu s-a putut găsi obiectul la care răspunzi"
 
-#: app/admin.py:1689
+#: app/admin.py:1694
 msgid "Error: a poll must have at least 2 answers"
 msgstr "Eroare: un sondaj trebuie să aibă cel puțin 2 răspunsuri"
 
-#: app/admin.py:1695
+#: app/admin.py:1700
 msgid "Error: invalid poll duration"
 msgstr "Eroare: durata sondajului invalidă"
 
-#: app/admin.py:1713
+#: app/admin.py:1718
 msgid "Error: file is too large"
 msgstr "Eroare: fișierul este prea mare"
 
-#: app/admin.py:1715 app/admin.py:1721
+#: app/admin.py:1720 app/admin.py:1726
 msgid "files must be re-selected before trying again"
 msgstr "fișierele trebuie reselectate înainte de a încerca din nou"
 
-#: app/admin.py:1719
+#: app/admin.py:1724
 msgid "Error: unable to process upload"
 msgstr "Eroare: nu s-a putut procesa încărcarea"
 
-#: app/admin.py:1735
+#: app/admin.py:1740
 msgid "Error: Unable to process upload"
 msgstr "Eroare: nu s-a putut procesa încărcarea"
 
-#: app/admin.py:1758
+#: app/admin.py:1763
 msgid "Error: unable to create the post"
 msgstr "Eroare: nu s-a putut crea postarea"
 
-#: app/config.py:467
+#: app/config.py:472
 msgid "please try again"
 msgstr "încercați din nou"
 
-#: app/config.py:477
+#: app/config.py:482
 #, python-format
 msgid "The security token has expired, %(please_try_again)s"
 msgstr "Jetonul de securitate a expirat, %(please_try_again)s"
@@ -121,6 +121,49 @@ msgstr "%(name)s a început să vă urmărească"
 #, python-format
 msgid "%(name)s has requested to follow you"
 msgstr "%(name)s a solicitat să vă urmărească"
+
+#: app/templates/about.html:4 app/templates/about.html:7
+#, fuzzy, python-format
+msgid "About %(name)s"
+msgstr "Urmărește-l pe %(name)s"
+
+#: app/templates/about.html:25
+#, fuzzy
+msgid "Posts"
+msgstr "Note"
+
+#: app/templates/about.html:27 app/templates/header.html:54
+msgid "Articles"
+msgstr "Articole"
+
+#: app/templates/about.html:29 app/templates/header.html:57
+msgid "Followers"
+msgstr "Urmăritori"
+
+#: app/templates/about.html:31 app/templates/header.html:60
+msgid "Following"
+msgstr "Urmăriri"
+
+#: app/templates/about.html:38
+msgid "Fediverse handle"
+msgstr ""
+
+#: app/templates/about.html:39 app/templates/components/filters.html:22
+#: app/templates/header.html:9
+msgid "Follow"
+msgstr "Urmărește"
+
+#: app/templates/about.html:41
+#, fuzzy
+msgid "Contact"
+msgstr "Conținut"
+
+#: app/templates/about.html:50
+#, python-format
+msgid ""
+"This is a single-user instance running %(mbp)s, federating over %(ap)s. "
+"It has no other users, and does not accept sign-ups."
+msgstr ""
 
 #: app/templates/admin_blocks.html:6
 msgid "Blocked accounts"
@@ -495,25 +538,9 @@ msgstr "Urmăriri ale lui %(name)s"
 msgid "Manage follows"
 msgstr "Gestionează urmăririle"
 
-#: app/templates/components/filters.html:22 app/templates/header.html:9
-msgid "Follow"
-msgstr "Urmărește"
-
 #: app/templates/header.html:52
 msgid "Notes"
 msgstr "Note"
-
-#: app/templates/header.html:54
-msgid "Articles"
-msgstr "Articole"
-
-#: app/templates/header.html:57
-msgid "Followers"
-msgstr "Urmăritori"
-
-#: app/templates/header.html:60
-msgid "Following"
-msgstr "Urmăriri"
 
 #: app/templates/index.html:58
 msgid "write your first note"
@@ -935,11 +962,11 @@ msgstr "anulează aprecierea"
 msgid "unshare"
 msgstr "anulează distribuirea"
 
-#: app/templates/utils.html:397
+#: app/templates/utils.html:402
 msgid "Likes"
 msgstr "Aprecieri"
 
-#: app/templates/utils.html:406 app/templates/utils.html:423
+#: app/templates/utils.html:411 app/templates/utils.html:428
 #, python-format
 msgid "and %(count)s more."
 msgid_plural "and %(count)s more."
@@ -947,11 +974,11 @@ msgstr[0] "și încă %(count)s."
 msgstr[1] "și încă %(count)s."
 msgstr[2] "și încă %(count)s."
 
-#: app/templates/utils.html:414
+#: app/templates/utils.html:419
 msgid "Shares"
 msgstr "Distribuiri"
 
-#: app/templates/utils.html:431
+#: app/templates/utils.html:436
 msgid "Webmentions"
 msgstr "Webmentions"
 
@@ -1150,11 +1177,11 @@ msgstr "menționează"
 msgid "profile"
 msgstr "profil"
 
-#: app/templates/components/admin_buttons.html:270
+#: app/templates/components/admin_buttons.html:273
 msgid "expand"
 msgstr "extinde"
 
-#: app/templates/components/admin_buttons.html:279
+#: app/templates/components/admin_buttons.html:282
 msgid "fetch replies"
 msgstr "recuperează răspunsurile"
 

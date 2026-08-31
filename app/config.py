@@ -98,6 +98,9 @@ class Config(pydantic.BaseModel):
     admin_password: bytes
     name: str
     summary: str
+    # Optional long-form Markdown intro shown on /about (and mirrored into the
+    # Mastodon client API's extended_description); falls back to `summary`.
+    about: str | None = None
     https: bool
     icon_url: str | None = None
     image_url: str | None = None
@@ -178,6 +181,7 @@ class Config(pydantic.BaseModel):
             "t",
             "e",
             "articles",
+            "about",
             "admin",
             "inbox",
             "outbox",
@@ -362,6 +366,7 @@ CUSTOM_FOOTER = (
     else None
 )
 ANALYTICS_HTML = CONFIG.analytics_html
+ABOUT_HTML = markdown(CONFIG.about) if CONFIG.about else None
 
 BASE_URL = ID
 DEBUG = CONFIG.debug

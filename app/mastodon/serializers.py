@@ -293,16 +293,16 @@ async def _owner_counts(db_session: AsyncSession) -> tuple[int, int, int]:
 def serialize_extended_description() -> dict:
     """`GET /api/v1/instance/extended_description`.
 
-    `profile.toml` has no separate "long about" field — this reuses the same
-    bio text `/api/v1/instance`'s `description`/`short_description` already
-    collapse to a single config value. `updated_at` has no real change-history
-    to draw from either, so it reuses the same keypair-mtime proxy
-    `_owner_created_at` already stands in for "when this instance was set up"
-    on the account entity.
+    Prefers `profile.toml`'s optional long-form `about` field (also shown on
+    `/about`), falling back to the same bio text `/api/v1/instance`'s
+    `description`/`short_description` already collapse to. `updated_at` has no
+    real change-history to draw from either, so it reuses the same
+    keypair-mtime proxy `_owner_created_at` already stands in for "when this
+    instance was set up" on the account entity.
     """
     return {
         "updated_at": format_datetime(_owner_created_at()),
-        "content": LOCAL_ACTOR.summary or "",
+        "content": config.ABOUT_HTML or LOCAL_ACTOR.summary or "",
     }
 
 

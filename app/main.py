@@ -532,6 +532,25 @@ async def articles(
     )
 
 
+@app.get("/about", response_model=None)
+async def about(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+) -> templates.TemplateResponse:
+    posts_count = await public_outbox_objects_count(db_session)
+    return await templates.render_template(
+        db_session,
+        request,
+        "about.html",
+        {
+            "request": request,
+            "about_html": config.ABOUT_HTML,
+            "posts_count": posts_count,
+            "contact_email": config.CONTACT_EMAIL,
+        },
+    )
+
+
 async def _build_followx_collection(
     db_session: AsyncSession,
     model_cls: Type[activitypub.models.Following | activitypub.models.Follower],

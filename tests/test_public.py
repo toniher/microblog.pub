@@ -250,6 +250,40 @@ def test_following__html_hides_following(client, db) -> None:
     assert response.headers["content-type"].startswith("text/html")
 
 
+def test_about__html(client, db) -> None:
+    response = client.get("/about")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert LOCAL_ACTOR.display_name in response.text
+
+
+def test_about__falls_back_to_summary_when_about_unset(client, db) -> None:
+    # tests.toml sets `summary = "<p>Hello</p>"` and no `about` field.
+    response = client.get("/about")
+    assert response.status_code == 200
+    assert "Hello" in response.text
+
+
+def test_about__shows_about_html_when_set(client, db) -> None:
+    with mock.patch("app.main.config.ABOUT_HTML", "<p>a longer intro</p>"):
+        response = client.get("/about")
+    assert response.status_code == 200
+    assert "a longer intro" in response.text
+
+
+def test_about__shows_contact_email_when_configured(client, db) -> None:
+    with mock.patch("app.main.config.CONTACT_EMAIL", "me@example.com"):
+        response = client.get("/about")
+    assert response.status_code == 200
+    assert "mailto:me@example.com" in response.text
+
+
+def test_about__no_contact_email_by_default(client, db) -> None:
+    response = client.get("/about")
+    assert response.status_code == 200
+    assert "mailto:" not in response.text
+
+
 def test_index__no_analytics_html_by_default(client, db) -> None:
     response = client.get("/")
     assert "__ANALYTICS_TEST__" not in response.text
