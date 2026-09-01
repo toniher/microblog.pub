@@ -22,7 +22,9 @@ jobs:
         uses: Gr1N/setup-poetry@v9
 
       - name: Install ffmpeg
-        uses: federicocarboni/setup-ffmpeg@v3
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
 
       - name: Install dependencies
         run: |
