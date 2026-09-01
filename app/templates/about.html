@@ -24,10 +24,16 @@
 <dl>
     <dt class="muted">{{ _("Posts") }}</dt>
     <dd><a href="{{ url_for("index") }}">{{ posts_count }}</a></dd>
+</dl>
+<dl>
     <dt class="muted">{{ _("Articles") }}</dt>
     <dd><a href="{{ url_for("articles") }}">{{ articles_count }}</a></dd>
+</dl>
+<dl>
     <dt class="muted">{{ _("Followers") }}</dt>
     <dd><a href="{{ url_for("followers") }}">{{ followers_count }}</a></dd>
+</dl>
+<dl>
     <dt class="muted">{{ _("Following") }}</dt>
     <dd><a href="{{ url_for("following") }}">{{ following_count }}</a></dd>
 </dl>
@@ -37,11 +43,13 @@
 <dl>
     <dt class="muted">{{ _("Fediverse handle") }}</dt>
     <dd>{{ local_actor.handle }} <a class="label-btn" href="{{ local_actor.url }}remote_follow">{{ _("Follow") }}</a></dd>
-    {% if contact_email %}
+</dl>
+{% if contact_email %}
+<dl>
     <dt class="muted">{{ _("Contact") }}</dt>
     <dd><a href="mailto:{{ contact_email }}">{{ contact_email }}</a></dd>
-    {% endif %}
 </dl>
+{% endif %}
 </div>
 
 <div class="box">
