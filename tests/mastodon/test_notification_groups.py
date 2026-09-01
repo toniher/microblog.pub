@@ -388,6 +388,38 @@ async def test_show_group_round_trips_a_key_and_404s_unknown(
 
 
 @pytest.mark.asyncio
+async def test_most_recent_notification_id_is_a_json_integer(
+    client: TestClient, async_db_session: AsyncSession, respx_mock: respx.MockRouter
+) -> None:
+    """Strict clients (e.g. Ice Cubes) declare this field a non-optional
+    `Int`. Mastodon's own serializer emits it as a bare bigint attribute
+    (unlike every neighbouring id field, which gets an explicit `.to_s`), so
+    a JSON string here throws a decode error that kills the whole response --
+    this must stay an integer on the wire, not just in the Python object.
+    """
+    post = await _make_post(async_db_session)
+    actor = _make_actor(respx_mock, 0)
+    async_db_session.add(_like(actor.id, post.id))
+    await async_db_session.commit()
+
+    token = await _make_access_token(async_db_session, "read:notifications")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    list_response = client.get("/api/v2/notifications", headers=headers)
+    group = list_response.json()["notification_groups"][0]
+    assert isinstance(group["most_recent_notification_id"], int)
+    for field in ("page_min_id", "page_max_id", "status_id"):
+        assert isinstance(group[field], str)
+    assert all(isinstance(i, str) for i in group["sample_account_ids"])
+
+    show_response = client.get(
+        f"/api/v2/notifications/{group['group_key']}", headers=headers
+    )
+    show_group = show_response.json()["notification_groups"][0]
+    assert isinstance(show_group["most_recent_notification_id"], int)
+
+
+@pytest.mark.asyncio
 async def test_dismiss_group_deletes_exactly_that_groups_rows(
     client: TestClient, async_db_session: AsyncSession, respx_mock: respx.MockRouter
 ) -> None:

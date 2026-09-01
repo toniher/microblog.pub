@@ -721,7 +721,21 @@ async def _serialize_mentions(
     for tag in mention_tags:
         href = tag["href"]
         actor = known_actors.get(href)
-        if actor:
+        if href == LOCAL_ACTOR.ap_id:
+            # The owner is never a row in `Actor` (it's the `RemoteActor`
+            # wrapper `LOCAL_ACTOR`, same as `serialize_owner_account`), so
+            # without this branch every self-mention fell through to the
+            # "not cached locally" stub below with `id: ""` -- in a Mastodon
+            # client, tapping your own handle in a mention then does nothing.
+            mentions.append(
+                {
+                    "id": ids.LOCAL_ACTOR_ID,
+                    "username": _as_str(LOCAL_ACTOR.preferred_username),
+                    "url": _as_str(LOCAL_ACTOR.url, LOCAL_ACTOR.ap_id),
+                    "acct": _as_str(LOCAL_ACTOR.preferred_username),
+                }
+            )
+        elif actor:
             mentions.append(
                 {
                     "id": ids.encode_account_id(actor),
@@ -733,8 +747,14 @@ async def _serialize_mentions(
         else:
             # Not cached locally: degrade to a stub built from the tag itself
             # rather than fetching it (serializing must stay network-free).
-            name = _as_str(tag.get("name")).lstrip("@")
-            mentions.append({"id": "", "username": name, "url": href, "acct": name})
+            # The tag's `name` is the full "@user@domain" handle -- split it
+            # so `username` is bare like every other account this serializer
+            # emits, while `acct` keeps the full handle.
+            handle = _as_str(tag.get("name")).lstrip("@")
+            username = handle.split("@", 1)[0]
+            mentions.append(
+                {"id": "", "username": username, "url": href, "acct": handle}
+            )
 
     return mentions
 

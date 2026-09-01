@@ -11,12 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import activitypub.models
 from activitypub import activitypub as ap
 from activitypub import boxes
+from activitypub.actor import LOCAL_ACTOR
 from activitypub.ap_object import ObjectType
 from activitypub.ap_object import RemoteObject
 from activitypub.tests import factories
 from app import config
 from app import models
 from app.mastodon import ids
+from tests.utils import setup_outbox_note
 from tests.utils import setup_remote_actor
 from tests.utils import setup_remote_actor_as_follower
 
@@ -60,6 +62,52 @@ async def test_statuses_show_public(
 def test_statuses_show_not_found(client: TestClient) -> None:
     response = client.get("/api/v1/statuses/999999")
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_status_mentions_local_actor_and_uncached_remote(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    """A mention of the owner isn't a row in `Actor` -- it's the `LOCAL_ACTOR`
+    wrapper -- and a mention of a remote actor this server hasn't cached
+    falls back to a stub built from the tag. Both must still serialize a
+    usable `id`/`username`/`acct`, not the `id: ""`, full-handle-as-username
+    shape that made tapping either mention a no-op in Mastodon clients.
+    """
+    outbox_object = setup_outbox_note(
+        content="hi",
+        tags=[
+            {
+                "type": "Mention",
+                "href": LOCAL_ACTOR.ap_id,
+                "name": f"@{LOCAL_ACTOR.preferred_username}",
+            },
+            {
+                "type": "Mention",
+                "href": "https://remote.example/users/ghost",
+                "name": "@ghost@remote.example",
+            },
+        ],
+    )
+    status_id = ids.encode_outbox_id(outbox_object)
+
+    response = client.get(f"/api/v1/statuses/{status_id}")
+
+    assert response.status_code == 200
+    mentions = response.json()["mentions"]
+    assert len(mentions) == 2
+
+    local_mention = next(m for m in mentions if m["id"] == ids.LOCAL_ACTOR_ID)
+    assert local_mention["username"] == LOCAL_ACTOR.preferred_username
+    assert local_mention["acct"] == LOCAL_ACTOR.preferred_username
+    assert local_mention["url"] == LOCAL_ACTOR.url
+
+    ghost_mention = next(
+        m for m in mentions if m["url"] == "https://remote.example/users/ghost"
+    )
+    assert ghost_mention["id"] == ""
+    assert ghost_mention["username"] == "ghost"
+    assert ghost_mention["acct"] == "ghost@remote.example"
 
 
 @pytest.mark.asyncio

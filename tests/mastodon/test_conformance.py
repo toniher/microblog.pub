@@ -79,15 +79,18 @@ _STATUS_SPEC = {
 }
 
 # `most_recent_notification_id` is documented as a String in the spec's
-# attribute table, even though Mastodon's own response *example* on the same
-# page renders an unquoted integer -- String is the side taken in
-# `app.mastodon.router._serialize_notification_group`, matching every
-# neighbouring id field this entity emits.
+# attribute table (and in Mastodon's own `api_types/notifications.ts`), but
+# Mastodon's Ruby `NotificationGroupSerializer` emits it as a bare bigint
+# attribute -- every neighbouring id field there gets an explicit `.to_s`,
+# this one doesn't -- so the actual wire type is an integer. Real clients
+# (e.g. Ice Cubes, which declares `mostRecentNotificationId: Int`) follow the
+# wire, not the docs; matching int here is what
+# `app.mastodon.router._serialize_notification_group` does.
 _NOTIFICATION_GROUP_SPEC = {
     "group_key": (str, False),
     "notifications_count": (int, False),
     "type": (str, False),
-    "most_recent_notification_id": (str, False),
+    "most_recent_notification_id": (int, False),
     "sample_account_ids": (list, False),
 }
 
@@ -324,5 +327,5 @@ async def test_notification_group_entity_conforms_to_spec(
     group = data["notification_groups"][0]
     errors = _check_entity(group, _NOTIFICATION_GROUP_SPEC, "group")
     assert not errors, "conformance violations:\n" + "\n".join(errors)
-    assert isinstance(group["most_recent_notification_id"], str)
-    int(group["most_recent_notification_id"])  # must still parse as an id
+    assert isinstance(group["most_recent_notification_id"], int)
+    assert not isinstance(group["most_recent_notification_id"], bool)

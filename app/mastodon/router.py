@@ -1597,12 +1597,17 @@ async def _serialize_notification_group(
         "group_key": group.key,
         "notifications_count": group.notifications_count,
         "type": group.mastodon_type,
-        # The spec's attribute table types this as a String -- even though
-        # Mastodon's own response *example* on the same page renders an
-        # unquoted integer. String matches every neighbouring id field this
-        # entity emits (status_id, sample_account_ids, page_min_id/
-        # page_max_id), so that's the side taken here; see `test_conformance.py`.
-        "most_recent_notification_id": str(group.most_recent_notification_id),
+        # The spec's attribute table types this as a String, and so does
+        # Mastodon's own `api_types/notifications.ts` -- but its Ruby
+        # `NotificationGroupSerializer` gives every *other* id field here an
+        # explicit `.to_s` (page_min_id, page_max_id, status_id,
+        # sample_account_ids) and leaves this one as a bare bigint attribute,
+        # so the wire format is an unquoted integer. Real clients follow the
+        # wire, not the docs: Ice Cubes declares `mostRecentNotificationId:
+        # Int` (non-optional), and a JSON string there throws a
+        # `typeMismatch` that fails the whole `{accounts, statuses,
+        # notification_groups}` decode -- see `test_conformance.py`.
+        "most_recent_notification_id": group.most_recent_notification_id,
         "sample_account_ids": [str(i) for i in group.sample_account_ids],
     }
     target = group.target

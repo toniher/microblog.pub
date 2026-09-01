@@ -10,6 +10,7 @@ from sqlalchemy import select
 
 import activitypub.models
 from activitypub import activitypub as ap
+from app import models
 from app.config import BASE_URL
 from app.config import INBOX_RETENTION_DAYS
 from app.database import AsyncSession
@@ -73,46 +74,65 @@ async def _prune_old_inbox_objects(
         activitypub.models.OutboxObject.conversation.is_not(None),
         activitypub.models.OutboxObject.conversation.not_like(f"{BASE_URL}%"),
     )
+    # Shared by the notification cascade below and the object delete itself,
+    # so the two can never drift apart and leave a `Notification` pointing at
+    # a row that was actually pruned.
+    prune_conditions = (
+        # Keep bookmarked objects
+        activitypub.models.InboxObject.is_bookmarked.is_(False),
+        # Keep liked objects
+        activitypub.models.InboxObject.liked_via_outbox_object_ap_id.is_(None),
+        # Keep announced objects
+        activitypub.models.InboxObject.announced_via_outbox_object_ap_id.is_(None),
+        # Keep objects mentioning the local actor
+        activitypub.models.InboxObject.has_local_mention.is_(False),
+        # Keep objects related to local conversations (i.e. don't break the
+        # public website)
+        or_(
+            activitypub.models.InboxObject.conversation.not_like(f"{BASE_URL}%"),
+            activitypub.models.InboxObject.conversation.is_(None),
+            activitypub.models.InboxObject.conversation.not_in(outbox_conversation),
+        ),
+        # Keep activities related to the outbox (like Like/Announce/Follow...)
+        or_(
+            # XXX: no `/` here because the local ID does not have one
+            activitypub.models.InboxObject.activity_object_ap_id.not_like(
+                f"{BASE_URL}%"
+            ),
+            activitypub.models.InboxObject.activity_object_ap_id.is_(None),
+        ),
+        # Keep direct messages
+        not_(
+            and_(
+                activitypub.models.InboxObject.visibility == ap.VisibilityEnum.DIRECT,
+                activitypub.models.InboxObject.ap_type.in_(["Note"]),
+            )
+        ),
+        # Keep Move object as they are linked to notifications
+        activitypub.models.InboxObject.ap_type.not_in(["Move"]),
+        # Filter by retention days
+        activitypub.models.InboxObject.ap_published_at
+        < now() - timedelta(days=INBOX_RETENTION_DAYS),
+    )
+
+    # `Notification.inbox_object_id` is a nullable FK with no cascade (and
+    # SQLite's FK enforcement is off), so deleting the object without this
+    # leaves the notification behind pointing at nothing -- the orphan that
+    # broke `status_id`/`most_recent_notification_id` for Mastodon clients.
+    to_prune = select(activitypub.models.InboxObject.id).where(*prune_conditions)
+    notifications_result = await db_session.execute(
+        delete(models.Notification)
+        .where(models.Notification.inbox_object_id.in_(to_prune))
+        .execution_options(synchronize_session=False)
+    )
+    logger.info(
+        f"Deleted {notifications_result.rowcount} notifications "  # type: ignore
+        "for pruned inbox objects"
+    )
+
     result = await db_session.execute(
         delete(activitypub.models.InboxObject)
-        .where(
-            # Keep bookmarked objects
-            activitypub.models.InboxObject.is_bookmarked.is_(False),
-            # Keep liked objects
-            activitypub.models.InboxObject.liked_via_outbox_object_ap_id.is_(None),
-            # Keep announced objects
-            activitypub.models.InboxObject.announced_via_outbox_object_ap_id.is_(None),
-            # Keep objects mentioning the local actor
-            activitypub.models.InboxObject.has_local_mention.is_(False),
-            # Keep objects related to local conversations (i.e. don't break the
-            # public website)
-            or_(
-                activitypub.models.InboxObject.conversation.not_like(f"{BASE_URL}%"),
-                activitypub.models.InboxObject.conversation.is_(None),
-                activitypub.models.InboxObject.conversation.not_in(outbox_conversation),
-            ),
-            # Keep activities related to the outbox (like Like/Announce/Follow...)
-            or_(
-                # XXX: no `/` here because the local ID does not have one
-                activitypub.models.InboxObject.activity_object_ap_id.not_like(
-                    f"{BASE_URL}%"
-                ),
-                activitypub.models.InboxObject.activity_object_ap_id.is_(None),
-            ),
-            # Keep direct messages
-            not_(
-                and_(
-                    activitypub.models.InboxObject.visibility
-                    == ap.VisibilityEnum.DIRECT,
-                    activitypub.models.InboxObject.ap_type.in_(["Note"]),
-                )
-            ),
-            # Keep Move object as they are linked to notifications
-            activitypub.models.InboxObject.ap_type.not_in(["Move"]),
-            # Filter by retention days
-            activitypub.models.InboxObject.ap_published_at
-            < now() - timedelta(days=INBOX_RETENTION_DAYS),
-        )
+        .where(*prune_conditions)
         .execution_options(synchronize_session=False)
     )
     logger.info(f"Deleted {result.rowcount} old inbox objects")  # type: ignore
