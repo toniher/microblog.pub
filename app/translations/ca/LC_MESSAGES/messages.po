@@ -122,12 +122,11 @@ msgid "%(name)s has requested to follow you"
 msgstr "%(name)s ha sol·licitat seguir-vos"
 
 #: app/templates/about.html:4 app/templates/about.html:7
-#, fuzzy, python-format
+#, python-format
 msgid "About %(name)s"
-msgstr "Segueix %(name)s"
+msgstr "Quant a %(name)s"
 
 #: app/templates/about.html:25
-#, fuzzy
 msgid "Posts"
 msgstr "Notes"
 
@@ -145,7 +144,7 @@ msgstr "Seguint"
 
 #: app/templates/about.html:38
 msgid "Fediverse handle"
-msgstr ""
+msgstr "Identificador del Fediverse"
 
 #: app/templates/about.html:39 app/templates/components/filters.html:22
 #: app/templates/header.html:9
@@ -153,9 +152,8 @@ msgid "Follow"
 msgstr "Segueix"
 
 #: app/templates/about.html:41
-#, fuzzy
 msgid "Contact"
-msgstr "Contingut"
+msgstr "Contacte"
 
 #: app/templates/about.html:50
 #, python-format
@@ -163,6 +161,8 @@ msgid ""
 "This is a single-user instance running %(mbp)s, federating over %(ap)s. "
 "It has no other users, and does not accept sign-ups."
 msgstr ""
+"Aquesta és una instància d'un sol usuari que executa %(mbp)s, federant-se "
+"a través d'%(ap)s. No té altres usuaris ni accepta registres."
 
 #: app/templates/admin_blocks.html:6
 msgid "Blocked accounts"

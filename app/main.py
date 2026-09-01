@@ -538,6 +538,19 @@ async def about(
     db_session: AsyncSession = Depends(get_db_session),
 ) -> templates.TemplateResponse:
     posts_count = await public_outbox_objects_count(db_session)
+    articles_count = await db_session.scalar(
+        select(func.count(activitypub.models.OutboxObject.id)).where(
+            activitypub.models.OutboxObject.visibility == ap.VisibilityEnum.PUBLIC,
+            activitypub.models.OutboxObject.is_deleted.is_(False),
+            activitypub.models.OutboxObject.ap_type == "Article",
+        )
+    )
+    followers_count = await db_session.scalar(
+        select(func.count(activitypub.models.Follower.id))
+    )
+    following_count = await db_session.scalar(
+        select(func.count(activitypub.models.Following.id))
+    )
     return await templates.render_template(
         db_session,
         request,
@@ -546,6 +559,9 @@ async def about(
             "request": request,
             "about_html": config.ABOUT_HTML,
             "posts_count": posts_count,
+            "articles_count": articles_count,
+            "followers_count": followers_count,
+            "following_count": following_count,
             "contact_email": config.CONTACT_EMAIL,
         },
     )

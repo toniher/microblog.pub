@@ -123,12 +123,11 @@ msgid "%(name)s has requested to follow you"
 msgstr "%(name)s a solicitat să vă urmărească"
 
 #: app/templates/about.html:4 app/templates/about.html:7
-#, fuzzy, python-format
+#, python-format
 msgid "About %(name)s"
-msgstr "Urmărește-l pe %(name)s"
+msgstr "Despre %(name)s"
 
 #: app/templates/about.html:25
-#, fuzzy
 msgid "Posts"
 msgstr "Note"
 
@@ -146,7 +145,7 @@ msgstr "Urmăriri"
 
 #: app/templates/about.html:38
 msgid "Fediverse handle"
-msgstr ""
+msgstr "Identificator Fediverse"
 
 #: app/templates/about.html:39 app/templates/components/filters.html:22
 #: app/templates/header.html:9
@@ -154,9 +153,8 @@ msgid "Follow"
 msgstr "Urmărește"
 
 #: app/templates/about.html:41
-#, fuzzy
 msgid "Contact"
-msgstr "Conținut"
+msgstr "Contact"
 
 #: app/templates/about.html:50
 #, python-format
@@ -164,6 +162,9 @@ msgid ""
 "This is a single-user instance running %(mbp)s, federating over %(ap)s. "
 "It has no other users, and does not accept sign-ups."
 msgstr ""
+"Aceasta este o instanță cu un singur utilizator care rulează %(mbp)s, "
+"federalizată prin %(ap)s. Nu are alți utilizatori și nu acceptă "
+"înregistrări."
 
 #: app/templates/admin_blocks.html:6
 msgid "Blocked accounts"

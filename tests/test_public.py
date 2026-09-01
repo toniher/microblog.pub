@@ -1,3 +1,4 @@
+import re
 from datetime import timedelta
 from unittest import mock
 
@@ -15,6 +16,8 @@ from app import templates
 from app.utils.datetime import now
 from tests.utils import setup_inbox_note
 from tests.utils import setup_remote_actor
+from tests.utils import setup_remote_actor_as_follower
+from tests.utils import setup_remote_actor_as_following
 
 _ACCEPTED_AP_HEADERS = [
     "application/activity+json",
@@ -282,6 +285,34 @@ def test_about__no_contact_email_by_default(client, db) -> None:
     response = client.get("/about")
     assert response.status_code == 200
     assert "mailto:" not in response.text
+
+
+def test_about__shows_stats(
+    client: TestClient, db: Session, respx_mock: respx.MockRouter
+) -> None:
+    _create_public_note(1)
+    factories.OutboxObjectFactory(
+        public_id="article-1",
+        ap_type="Article",
+        ap_id="http://localhost:8000/o/article-1",
+        ap_object={"type": "Article", "name": "Hello", "content": "hello"},
+        visibility=ap.VisibilityEnum.PUBLIC,
+    )
+    setup_remote_actor_as_follower(
+        setup_remote_actor(respx_mock, base_url="https://follower.example.com")
+    )
+    setup_remote_actor_as_following(
+        setup_remote_actor(respx_mock, base_url="https://following.example.com")
+    )
+
+    response = client.get("/about")
+
+    assert response.status_code == 200
+    html = response.text
+    assert re.search(r"Posts.*?>2<", html, re.DOTALL)
+    assert re.search(r"Articles.*?>1<", html, re.DOTALL)
+    assert re.search(r"Followers.*?>1<", html, re.DOTALL)
+    assert re.search(r"Following.*?>1<", html, re.DOTALL)
 
 
 def test_index__no_analytics_html_by_default(client, db) -> None:
