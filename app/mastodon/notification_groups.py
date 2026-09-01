@@ -66,7 +66,20 @@ def is_groupable_row(notification: models.Notification) -> bool:
         and notification.notification_type != models.NotificationType.POLL
     ):
         return False
-    return notification.notification_type in serializers.NOTIFICATION_TYPE_MAP
+    if notification.notification_type not in serializers.NOTIFICATION_TYPE_MAP:
+        return False
+    # The FK survived but the row it pointed to is gone, so the group would
+    # carry a dangling `status_id` -- mirrors the drop in
+    # `serializers.serialize_notification`. Normally already excluded in SQL
+    # by `models.notification_target_present()`; kept as the backstop for a
+    # caller that builds its own `where`.
+    if (
+        (notification.outbox_object_id or notification.inbox_object_id)
+        and notification.outbox_object is None
+        and notification.inbox_object is None
+    ):
+        return False
+    return True
 
 
 def group_key_for(

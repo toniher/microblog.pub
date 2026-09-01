@@ -108,6 +108,82 @@ async def test_three_favourites_of_one_post_group_together(
 
 
 @pytest.mark.asyncio
+async def test_notification_with_dangling_target_is_dropped(
+    client: TestClient, async_db_session: AsyncSession, respx_mock: respx.MockRouter
+) -> None:
+    """A notification whose `outbox_object_id` FK survives but whose row is
+    gone (hard-deleted by `app/prune.py`, or predating the mention-retention
+    guard) must not surface as a group with a dangling `status_id: null` --
+    real Mastodon never outlives a status with a notification about it, so a
+    strict client decoder isn't prepared for one here either.
+    """
+    actor = _make_actor(respx_mock, 0)
+    async_db_session.add(_like(actor.id, 999999))
+    await async_db_session.commit()
+
+    token = await _make_access_token(async_db_session, "read:notifications")
+    response = client.get(
+        "/api/v2/notifications", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 200
+    assert response.json()["notification_groups"] == []
+
+
+@pytest.mark.asyncio
+async def test_dangling_targets_do_not_empty_the_assembly_window(
+    client: TestClient, async_db_session: AsyncSession, respx_mock: respx.MockRouter
+) -> None:
+    """Dangling rows are filtered in SQL, not after the assembly window.
+
+    The window is `min(limit * 4, 200)` rows: with four dangling rows newer
+    than the only real one, filtering afterwards leaves a `limit=1` page with
+    zero groups and no `Link` header, which a client reads as end-of-list —
+    every older notification unreachable from then on.
+    """
+    post = await _make_post(async_db_session)
+    actor = _make_actor(respx_mock, 0)
+    async_db_session.add(_like(actor.id, post.id))
+    await async_db_session.commit()
+
+    # Newer than the real one, so the id-desc walk hits these first.
+    async_db_session.add_all([_like(actor.id, 999990 + i) for i in range(4)])
+    await async_db_session.commit()
+
+    token = await _make_access_token(async_db_session, "read:notifications")
+    response = client.get(
+        "/api/v2/notifications?limit=1", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    assert [g["group_key"] for g in data["notification_groups"]] == [
+        f"favourite-{post.id}"
+    ]
+    assert "Link" in response.headers
+
+
+@pytest.mark.asyncio
+async def test_dangling_group_key_is_not_found(
+    client: TestClient, async_db_session: AsyncSession, respx_mock: respx.MockRouter
+) -> None:
+    """The single-group route resolves a key straight to SQL rather than
+    re-walking a page, so it needs the same guard: without it, a key a client
+    still holds from before the target was pruned would answer with a group
+    carrying `status_id: null`.
+    """
+    actor = _make_actor(respx_mock, 0)
+    async_db_session.add(_like(actor.id, 999999))
+    await async_db_session.commit()
+
+    token = await _make_access_token(async_db_session, "read:notifications")
+    response = client.get(
+        "/api/v2/notifications/favourite-999999",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_favourites_of_two_posts_are_two_groups(
     client: TestClient, async_db_session: AsyncSession, respx_mock: respx.MockRouter
 ) -> None:

@@ -14,6 +14,7 @@ from sqlalchemy import Integer
 from sqlalchemy import String
 from sqlalchemy import Table
 from sqlalchemy import UniqueConstraint
+from sqlalchemy import and_
 from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy.orm import Mapped
@@ -381,6 +382,33 @@ def notification_not_in_muted_conversation() -> Any:
     return or_(
         Notification.inbox_object_id.is_(None),
         Notification.inbox_object_id.not_in(muted_inbox_object_ids),
+    )
+
+
+def notification_target_present() -> Any:
+    """Where-clause dropping notifications whose target row is gone.
+
+    `outbox_object_id`/`inbox_object_id` are nullable FKs with no cascade and
+    SQLite's FK enforcement is off, so hard-deleting the row they point at
+    (`app/prune.py`) leaves the notification behind with a dangling
+    reference. Mastodon never outlives a status with a notification about it,
+    so its clients aren't prepared for one either — a `status_id: null`
+    mention group is what broke the notifications screen in the wild.
+
+    Kept in SQL rather than only filtered after the fact so `LIMIT` (and the
+    grouped-notifications assembly window) counts serviceable rows only:
+    filtering afterwards silently shortens a page, and an all-dangling page
+    yields no `Link` header at all, which clients read as end-of-list. Both
+    FK columns are indexed and the targets are primary keys, so each arm
+    costs an index lookup.
+    """
+    return or_(
+        and_(
+            Notification.outbox_object_id.is_(None),
+            Notification.inbox_object_id.is_(None),
+        ),
+        Notification.outbox_object.has(),
+        Notification.inbox_object.has(),
     )
 
 

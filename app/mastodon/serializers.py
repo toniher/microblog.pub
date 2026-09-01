@@ -99,6 +99,17 @@ async def serialize_notification(
     if mastodon_type is None:
         return None
 
+    target = notification.outbox_object or notification.inbox_object
+    # The FK survived but the row it pointed to is gone: drop it rather than
+    # serialize a dangling reference (rationale in
+    # `models.notification_target_present`, the SQL guard that keeps these
+    # out of the endpoints' pages in the first place -- this is the backstop
+    # for callers that build their own query, e.g. `mastodon/streaming.py`).
+    if target is None and (
+        notification.outbox_object_id or notification.inbox_object_id
+    ):
+        return None
+
     # Local import: `notification_groups` reuses this module's
     # NOTIFICATION_TYPE_MAP/NOTIFICATION_OPTIONS, so importing it at module
     # level here would be circular.
@@ -126,7 +137,6 @@ async def serialize_notification(
         "account": account,
     }
 
-    target = notification.outbox_object or notification.inbox_object
     if target is not None:
         result["status"] = await serialize_status(db_session, target)
 

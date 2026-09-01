@@ -1463,6 +1463,7 @@ def _notification_filters(
         models.Notification.notification_type.in_(allowed_internal_types),
         models.notification_not_muted(),
         models.notification_not_in_muted_conversation(),
+        models.notification_target_present(),
     ]
     if account_id := request.query_params.get("account_id"):
         decoded = ids.decode_account_id(account_id)
@@ -1875,6 +1876,11 @@ async def notifications_unread_count(
             models.Notification.is_new.is_(True),
             models.notification_not_muted(),
             models.notification_not_in_muted_conversation(),
+            # Not `_notification_filters` (this endpoint takes no
+            # `account_id`), but the same dangling-target guard: the list
+            # endpoint can no longer show these, so counting them would mean
+            # a badge that never clears.
+            models.notification_target_present(),
         )
         .limit(limit)
         .subquery()

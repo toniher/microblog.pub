@@ -104,6 +104,123 @@ async def test_notifications_list_maps_types_and_filters_unmapped(
 
 
 @pytest.mark.asyncio
+async def test_notifications_list_drops_dangling_target(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    """A notification whose `outbox_object_id`/`inbox_object_id` FK survives
+    but whose row is gone (hard-deleted by `app/prune.py`, or predating the
+    mention-retention guard) must be dropped rather than surfaced with a
+    `status`/`status_id` a real Mastodon notification never lacks.
+    """
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    follower = setup_remote_actor_as_follower(ra)
+    assert follower.actor is not None
+
+    dangling_notif = models.Notification(
+        notification_type=models.NotificationType.MENTION,
+        actor_id=follower.actor.id,
+        inbox_object_id=999999,
+    )
+    async_db_session.add(dangling_notif)
+    await async_db_session.commit()
+
+    token = await _make_access_token(async_db_session, "read:notifications")
+    response = client.get(
+        "/api/v1/notifications", headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+@pytest.mark.asyncio
+async def test_notifications_dangling_target_does_not_shorten_page(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    """Dangling rows are filtered in SQL, not after `LIMIT`.
+
+    Filtering them afterwards shortens the page instead: here the newest row
+    is dangling, so a `limit=1` query would come back empty with no `Link`
+    header — which a client reads as end-of-list, hiding every older
+    notification behind it for good.
+    """
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    follower = setup_remote_actor_as_follower(ra)
+    assert follower.actor is not None
+
+    _, outbox_object = await boxes.send_create(
+        async_db_session,
+        ObjectType.NOTE.value,
+        "Like me",
+        uploads=[],
+        in_reply_to=None,
+        visibility=ap.VisibilityEnum.PUBLIC,
+    )
+    like_notif = models.Notification(
+        notification_type=models.NotificationType.LIKE,
+        actor_id=follower.actor.id,
+        outbox_object_id=outbox_object.id,
+    )
+    async_db_session.add(like_notif)
+    await async_db_session.commit()
+
+    # Newer than the valid one, so id-desc puts it first.
+    async_db_session.add(
+        models.Notification(
+            notification_type=models.NotificationType.MENTION,
+            actor_id=follower.actor.id,
+            inbox_object_id=999999,
+        )
+    )
+    await async_db_session.commit()
+
+    token = await _make_access_token(async_db_session, "read:notifications")
+    response = client.get(
+        "/api/v1/notifications?limit=1", headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert [n["id"] for n in data] == [str(like_notif.id)]
+    assert "Link" in response.headers
+
+
+@pytest.mark.asyncio
+async def test_notifications_unread_count_skips_dangling_target(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    """The list endpoint can't show a dangling notification, so the badge
+    must not count it either — nothing would ever clear it."""
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    follower = setup_remote_actor_as_follower(ra)
+    assert follower.actor is not None
+
+    async_db_session.add(
+        models.Notification(
+            notification_type=models.NotificationType.MENTION,
+            actor_id=follower.actor.id,
+            inbox_object_id=999999,
+        )
+    )
+    await async_db_session.commit()
+
+    token = await _make_access_token(async_db_session, "read:notifications")
+    response = client.get(
+        "/api/v1/notifications/unread_count",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"count": 0}
+
+
+@pytest.mark.asyncio
 async def test_notifications_list_maps_status_update_and_poll_types(
     client: TestClient,
     async_db_session: AsyncSession,
