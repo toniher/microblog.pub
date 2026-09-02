@@ -545,6 +545,239 @@ def test_admin_edit_history(db: Session, client: TestClient) -> None:
     assert "hello world, edited" in response.text
 
 
+def test_admin_edit_history__no_revisions(db: Session, client: TestClient) -> None:
+    public_id = _create_note_via_admin(client, content="hello world")
+
+    response = client.get(
+        f"/admin/edit_history/{public_id}",
+        cookies=generate_admin_session_cookies(),
+    )
+    assert response.status_code == 200
+    assert "never been edited" in response.text
+    assert 'name="rev_from"' not in response.text
+
+
+def test_admin_edit_history__lists_revisions_with_picker(
+    db: Session, client: TestClient
+) -> None:
+    public_id = _create_note_via_admin(client, content="hello world")
+    client.post(
+        f"/admin/actions/edit_text/{public_id}",
+        data={"content": "hello world, edited", "csrf_token": generate_csrf_token()},
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    client.post(
+        f"/admin/actions/edit_text/{public_id}",
+        data={
+            "content": "hello world, edited again",
+            "csrf_token": generate_csrf_token(),
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+
+    response = client.get(
+        f"/admin/edit_history/{public_id}",
+        cookies=generate_admin_session_cookies(),
+    )
+    assert response.status_code == 200
+    assert 'name="rev_from"' in response.text
+    assert 'name="rev_to"' in response.text
+
+
+def test_admin_edit_history__diff_between_revisions(
+    db: Session, client: TestClient
+) -> None:
+    public_id = _create_note_via_admin(client, content="hello wrold")
+    client.post(
+        f"/admin/actions/edit_text/{public_id}",
+        data={"content": "hello world", "csrf_token": generate_csrf_token()},
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+
+    response = client.get(
+        f"/admin/edit_history/{public_id}",
+        params={"rev_from": 0, "rev_to": 1},
+        cookies=generate_admin_session_cookies(),
+    )
+    assert response.status_code == 200
+    assert "<del>" in response.text
+    assert "<ins>" in response.text
+    assert "<del>wrold</del>" in response.text
+
+
+def test_admin_edit_history__diff_from_greater_than_to_is_normalized(
+    db: Session, client: TestClient
+) -> None:
+    public_id = _create_note_via_admin(client, content="hello wrold")
+    client.post(
+        f"/admin/actions/edit_text/{public_id}",
+        data={"content": "hello world", "csrf_token": generate_csrf_token()},
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+
+    forward = client.get(
+        f"/admin/edit_history/{public_id}",
+        params={"rev_from": 0, "rev_to": 1},
+        cookies=generate_admin_session_cookies(),
+    )
+    backward = client.get(
+        f"/admin/edit_history/{public_id}",
+        params={"rev_from": 1, "rev_to": 0},
+        cookies=generate_admin_session_cookies(),
+    )
+    assert forward.status_code == backward.status_code == 200
+
+    def _diff_panel(text: str) -> str:
+        return text.split('class="diff-panel"')[1].split("edit-history-compare")[0]
+
+    assert _diff_panel(forward.text) == _diff_panel(backward.text)
+
+
+def test_admin_edit_history__diff_same_revision(
+    db: Session, client: TestClient
+) -> None:
+    public_id = _create_note_via_admin(client, content="hello world")
+    client.post(
+        f"/admin/actions/edit_text/{public_id}",
+        data={"content": "hello world, edited", "csrf_token": generate_csrf_token()},
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+
+    response = client.get(
+        f"/admin/edit_history/{public_id}",
+        params={"rev_from": 0, "rev_to": 0},
+        cookies=generate_admin_session_cookies(),
+    )
+    assert response.status_code == 200
+    assert "Select two different revisions" in response.text
+
+
+def test_admin_edit_history__diff_out_of_range(db: Session, client: TestClient) -> None:
+    public_id = _create_note_via_admin(client, content="hello world")
+    client.post(
+        f"/admin/actions/edit_text/{public_id}",
+        data={"content": "hello world, edited", "csrf_token": generate_csrf_token()},
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+
+    too_large = client.get(
+        f"/admin/edit_history/{public_id}",
+        params={"rev_from": 0, "rev_to": 99},
+        cookies=generate_admin_session_cookies(),
+    )
+    assert too_large.status_code == 400
+
+    negative = client.get(
+        f"/admin/edit_history/{public_id}",
+        params={"rev_from": -1, "rev_to": 1},
+        cookies=generate_admin_session_cookies(),
+    )
+    assert negative.status_code == 400
+
+
+def test_admin_edit_history__diff_requires_both_params(
+    db: Session, client: TestClient
+) -> None:
+    public_id = _create_note_via_admin(client, content="hello world")
+    client.post(
+        f"/admin/actions/edit_text/{public_id}",
+        data={"content": "hello world, edited", "csrf_token": generate_csrf_token()},
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+
+    response = client.get(
+        f"/admin/edit_history/{public_id}",
+        params={"rev_from": 0},
+        cookies=generate_admin_session_cookies(),
+    )
+    assert response.status_code == 400
+
+
+def test_admin_edit_history__diff_non_integer(db: Session, client: TestClient) -> None:
+    public_id = _create_note_via_admin(client, content="hello world")
+    client.post(
+        f"/admin/actions/edit_text/{public_id}",
+        data={"content": "hello world, edited", "csrf_token": generate_csrf_token()},
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+
+    response = client.get(
+        f"/admin/edit_history/{public_id}",
+        params={"rev_from": "a", "rev_to": "b"},
+        cookies=generate_admin_session_cookies(),
+    )
+    assert response.status_code == 422
+
+
+def test_admin_edit_history__unknown_public_id(client: TestClient) -> None:
+    response = client.get(
+        "/admin/edit_history/unknown",
+        cookies=generate_admin_session_cookies(),
+    )
+    assert response.status_code == 404
+
+
+def test_admin_edit_history__content_warning_change_is_shown(
+    db: Session, client: TestClient
+) -> None:
+    public_id = _create_note_via_admin(client, content="hello world")
+    client.post(
+        f"/admin/actions/edit_text/{public_id}",
+        data={
+            "content": "hello world",
+            "content_warning": "spoilers",
+            "csrf_token": generate_csrf_token(),
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+
+    response = client.get(
+        f"/admin/edit_history/{public_id}",
+        params={"rev_from": 0, "rev_to": 1},
+        cookies=generate_admin_session_cookies(),
+    )
+    assert response.status_code == 200
+    assert "Content warning" in response.text
+    assert "spoilers" in response.text
+
+
+def test_admin_edit_history__revision_without_source(
+    db: Session, client: TestClient
+) -> None:
+    public_id = _create_note_via_admin(client, content="hello world")
+    client.post(
+        f"/admin/actions/edit_text/{public_id}",
+        data={"content": "hello world, edited", "csrf_token": generate_csrf_token()},
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    outbox_object = db.query(activitypub.models.OutboxObject).one()
+    assert outbox_object.revisions
+    # revisions is a plain JSON column (no mutation tracking), so the whole
+    # list must be reassigned for the change to persist.
+    outbox_object.revisions = [
+        {**rev, "source": None} for rev in outbox_object.revisions
+    ]
+    db.commit()
+
+    response = client.get(
+        f"/admin/edit_history/{public_id}",
+        params={"rev_from": 0, "rev_to": 1},
+        cookies=generate_admin_session_cookies(),
+    )
+    assert response.status_code == 200
+    assert "approximated from the rendered HTML" in response.text
+
+
 def _create_note_via_admin(
     client: TestClient, content: str = "hello world", alias: str | None = None
 ) -> str:

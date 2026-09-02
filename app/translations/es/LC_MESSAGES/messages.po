@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-31 23:31+0200\n"
+"POT-Creation-Date: 2026-09-02 22:37+0200\n"
 "PO-Revision-Date: 2026-07-17 22:20+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: es\n"
@@ -18,64 +18,64 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: app/admin.py:132
+#: app/admin.py:134
 msgid "Error: invalid URL alias"
 msgstr "Error: alias de URL no válido"
 
-#: app/admin.py:136
+#: app/admin.py:138
 msgid "Error: URL alias is too long"
 msgstr "Error: el alias de URL es demasiado largo"
 
-#: app/admin.py:156
+#: app/admin.py:158
 #, python-format
 msgid "Error: URL alias %(alias)s is already used"
 msgstr "Error: el alias de URL %(alias)s ya está en uso"
 
-#: app/admin.py:1645 app/admin.py:1665 app/admin.py:1848
+#: app/admin.py:1647 app/admin.py:1667 app/admin.py:1850
 msgid "Error: object must have a content"
 msgstr "Error: el contenido es obligatorio"
 
-#: app/admin.py:1655
+#: app/admin.py:1657
 msgid "Error: invalid language code"
 msgstr "Error: código de idioma no válido"
 
-#: app/admin.py:1668
+#: app/admin.py:1670
 msgid "Error: an article must have a title"
 msgstr "Error: un artículo debe tener un título"
 
-#: app/admin.py:1671
+#: app/admin.py:1673
 msgid "Error: invalid visibility"
 msgstr "Error: visibilidad no válida"
 
-#: app/admin.py:1681
+#: app/admin.py:1683
 msgid "Error: unable to find the object being replied to"
 msgstr "Error: no se pudo encontrar el objeto al que respondes"
 
-#: app/admin.py:1694
+#: app/admin.py:1696
 msgid "Error: a poll must have at least 2 answers"
 msgstr "Error: una encuesta debe tener al menos 2 respuestas"
 
-#: app/admin.py:1700
+#: app/admin.py:1702
 msgid "Error: invalid poll duration"
 msgstr "Error: duración de la encuesta no válida"
 
-#: app/admin.py:1718
+#: app/admin.py:1720
 msgid "Error: file is too large"
 msgstr "Error: el archivo es demasiado grande"
 
-#: app/admin.py:1720 app/admin.py:1726
+#: app/admin.py:1722 app/admin.py:1728
 msgid "files must be re-selected before trying again"
 msgstr "hay que volver a seleccionar los archivos antes de intentarlo de nuevo"
 
-#: app/admin.py:1724
+#: app/admin.py:1726
 msgid "Error: unable to process upload"
 msgstr "Error: no se pudo procesar la subida"
 
-#: app/admin.py:1740
+#: app/admin.py:1742
 msgid "Error: Unable to process upload"
 msgstr "Error: no se pudo procesar la subida"
 
-#: app/admin.py:1763
+#: app/admin.py:1765
 msgid "Error: unable to create the post"
 msgstr "Error: no se pudo crear la publicación"
 
@@ -130,39 +130,39 @@ msgstr "Acerca de %(name)s"
 msgid "Posts"
 msgstr "Notas"
 
-#: app/templates/about.html:27 app/templates/header.html:54
+#: app/templates/about.html:29 app/templates/header.html:54
 msgid "Articles"
 msgstr "Artículos"
 
-#: app/templates/about.html:29 app/templates/header.html:57
+#: app/templates/about.html:33 app/templates/header.html:57
 msgid "Followers"
 msgstr "Seguidores"
 
-#: app/templates/about.html:31 app/templates/header.html:60
+#: app/templates/about.html:37 app/templates/header.html:60
 msgid "Following"
 msgstr "Siguiendo"
 
-#: app/templates/about.html:38
+#: app/templates/about.html:44
 msgid "Fediverse handle"
 msgstr "Identificador del Fediverso"
 
-#: app/templates/about.html:39 app/templates/components/filters.html:22
+#: app/templates/about.html:45 app/templates/components/filters.html:22
 #: app/templates/header.html:9
 msgid "Follow"
 msgstr "Seguir"
 
-#: app/templates/about.html:41
+#: app/templates/about.html:49
 msgid "Contact"
 msgstr "Contacto"
 
-#: app/templates/about.html:50
+#: app/templates/about.html:58
 #, python-format
 msgid ""
 "This is a single-user instance running %(mbp)s, federating over %(ap)s. "
 "It has no other users, and does not accept sign-ups."
 msgstr ""
-"Esta es una instancia de un solo usuario que ejecuta %(mbp)s, federándose "
-"a través de %(ap)s. No tiene más usuarios y no acepta registros."
+"Esta es una instancia de un solo usuario que ejecuta %(mbp)s, federándose"
+" a través de %(ap)s. No tiene más usuarios y no acepta registros."
 
 #: app/templates/admin_blocks.html:6
 msgid "Blocked accounts"
@@ -191,26 +191,97 @@ msgstr "Con %(actors)s"
 msgid "%(name)s - Edit history"
 msgstr "%(name)s - Historial de ediciones"
 
-#: app/templates/admin_edit_history.html:10
+#: app/templates/admin_edit_history.html:11
+msgid "Current version"
+msgstr "Versión actual"
+
+#: app/templates/admin_edit_history.html:15
+msgid "Unknown date"
+msgstr ""
+
+#: app/templates/admin_edit_history.html:29
 msgid "Edit history"
 msgstr "Historial de ediciones"
 
-#: app/templates/admin_edit_history.html:12
+#: app/templates/admin_edit_history.html:31
 msgid "Back to post"
 msgstr "Volver a la publicación"
 
-#: app/templates/admin_edit_history.html:22
-msgid "Current version"
-msgstr "Versión actual"
+#: app/templates/admin_edit_history.html:35
+msgid "This post has never been edited."
+msgstr ""
+
+#: app/templates/admin_edit_history.html:41
+msgid "Select two different revisions to compare."
+msgstr ""
+
+#: app/templates/admin_edit_history.html:46
+#, python-format
+msgid "Changes from %(old)s to %(new)s"
+msgstr ""
+
+#: app/templates/admin_edit_history.html:49
+msgid ""
+"One of these revisions has no saved Markdown source, so this diff is "
+"approximated from the rendered HTML."
+msgstr ""
+
+#: app/templates/admin_edit_history.html:53
+msgid ""
+"This post is too long to compare word by word, so changes are shown as "
+"larger blocks."
+msgstr ""
+
+#: app/templates/admin_edit_history.html:57
+#: app/templates/admin_edit_text.html:21 app/templates/admin_new.html:66
+msgid "Title"
+msgstr "Título"
+
+#: app/templates/admin_edit_history.html:61
+#: app/templates/admin_edit_text.html:46 app/templates/admin_new.html:117
+msgid "Content warning"
+msgstr "Aviso de contenido"
+
+#: app/templates/admin_edit_history.html:65
+#, fuzzy
+msgid "Now marked as sensitive"
+msgstr "aviso de contenido (marcará la publicación como sensible)"
+
+#: app/templates/admin_edit_history.html:65
+#, fuzzy
+msgid "No longer marked as sensitive"
+msgstr "aviso de contenido (marcará la publicación como sensible)"
+
+#: app/templates/admin_edit_history.html:71
+msgid "No changes to the post body."
+msgstr ""
+
+#: app/templates/admin_edit_history.html:77
+msgid "Compare selected revisions"
+msgstr ""
+
+#: app/templates/admin_edit_history.html:83
+msgid "Compare from this revision"
+msgstr ""
+
+#: app/templates/admin_edit_history.html:84
+msgid "Compare to this revision"
+msgstr ""
+
+#: app/templates/admin_edit_history.html:89
+#: app/templates/admin_edit_history.html:91
+#, fuzzy
+msgid "prev"
+msgstr "Anterior"
+
+#: app/templates/admin_edit_history.html:94
+msgid "cur"
+msgstr ""
 
 #: app/templates/admin_edit_text.html:5
 #, python-format
 msgid "%(name)s - Edit"
 msgstr "%(name)s - Editar"
-
-#: app/templates/admin_edit_text.html:21 app/templates/admin_new.html:66
-msgid "Title"
-msgstr "Título"
 
 #: app/templates/admin_edit_text.html:27 app/templates/admin_new.html:72
 msgid "Content"
@@ -221,10 +292,6 @@ msgid "Markdown is supported. #hashtags, @mentions and :custom_emoji: work too."
 msgstr ""
 "Se admite Markdown. Las #etiquetas, @menciones y los "
 ":emojis_personalizados: también funcionan."
-
-#: app/templates/admin_edit_text.html:46 app/templates/admin_new.html:117
-msgid "Content warning"
-msgstr "Aviso de contenido"
 
 #: app/templates/admin_edit_text.html:47 app/templates/admin_new.html:118
 msgid "will mark the post as sensitive"

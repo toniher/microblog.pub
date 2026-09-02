@@ -14,6 +14,10 @@ $nav-button-text-color: #333;
 $muted-color: #4a4a4a; // darkened for AA contrast on the default background
 $primary-button-text-color: #fff;
 $code-highlight-background: #f0f0f0;
+$diff-ins-background: #cdeccd;
+$diff-ins-color: #0b3d0b;
+$diff-del-background: #f7cfcf;
+$diff-del-color: #5c1010;
 
 // Dark theme defaults (applied via prefers-color-scheme below).
 $dark-background: #16181c;
@@ -29,6 +33,10 @@ $dark-muted-color: #9aa0a6;
 $dark-primary-button-text-color: #16181c;
 // Keep code blocks light so the (light) Pygments token colours stay readable.
 $dark-code-highlight-background: $code-highlight-background;
+$dark-diff-ins-background: #1d3a1d;
+$dark-diff-ins-color: #b8e6b8;
+$dark-diff-del-background: #45201f;
+$dark-diff-del-color: #f0b7b5;
 
 // Load custom theme (may override any of the variables above).
 @import "theme.scss";
@@ -51,6 +59,10 @@ $dark-code-highlight-background: $code-highlight-background;
   --muted-color: #{$muted-color};
   --primary-button-text-color: #{$primary-button-text-color};
   --code-highlight-background: #{$code-highlight-background};
+  --diff-ins-background: #{$diff-ins-background};
+  --diff-ins-color: #{$diff-ins-color};
+  --diff-del-background: #{$diff-del-background};
+  --diff-del-color: #{$diff-del-color};
 }
 
 @media (prefers-color-scheme: dark) {
@@ -67,6 +79,10 @@ $dark-code-highlight-background: $code-highlight-background;
     --muted-color: #{$dark-muted-color};
     --primary-button-text-color: #{$dark-primary-button-text-color};
     --code-highlight-background: #{$dark-code-highlight-background};
+    --diff-ins-background: #{$dark-diff-ins-background};
+    --diff-ins-color: #{$dark-diff-ins-color};
+    --diff-del-background: #{$dark-diff-del-background};
+    --diff-del-color: #{$dark-diff-del-color};
   }
 }
 
@@ -89,6 +105,10 @@ $nav-button-text-color: var(--nav-button-text-color);
 $muted-color: var(--muted-color);
 $primary-button-text-color: var(--primary-button-text-color);
 $code-highlight-background: var(--code-highlight-background);
+$diff-ins-background: var(--diff-ins-background);
+$diff-ins-color: var(--diff-ins-color);
+$diff-del-background: var(--diff-del-background);
+$diff-del-color: var(--diff-del-color);
 
 // Accessible focus ring for keyboard users across the whole UI.
 :focus-visible {
@@ -590,6 +610,72 @@ a.label-btn {
     text-decoration: none;
     color: $nav-button-text-color;
   }
+}
+
+.edit-history {
+    list-style: none;
+    padding: 0;
+    margin: 20px 0;
+
+    > li {
+        padding: 10px 0;
+        border-top: 1px solid $muted-color;
+    }
+}
+
+.revision-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: baseline;
+}
+
+.revision-radios input[type=radio] {
+    margin-right: 4px;
+}
+
+.revision-links {
+    a, span {
+        margin-right: 10px;
+    }
+}
+
+.diff-panel {
+    margin: 20px 0;
+    padding: 10px 15px;
+    background: $light-background;
+
+    h3 {
+        margin-top: 0;
+    }
+}
+
+.diff-field {
+    margin: 10px 0;
+
+    .diff-field-label {
+        color: $muted-color;
+        margin-right: 5px;
+    }
+}
+
+.diff-body {
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    font-family: monospace;
+    margin: 0;
+
+    del {
+        background: $diff-del-background;
+        color: $diff-del-color;
+        text-decoration: line-through;
+    }
+
+    ins {
+        background: $diff-ins-background;
+        color: $diff-ins-color;
+        text-decoration: underline;
+    }
 }
 
 .ap-object {

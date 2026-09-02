@@ -6,22 +6,100 @@
 
 {% block content %}
 
+{% macro rev_label(entry) %}
+{%- if entry.is_current -%}
+{{ _("Current version") }}
+{%- elif entry.updated -%}
+{{ entry.updated | parse_datetime | format_date }}
+{%- else -%}
+{{ _("Unknown date") }}
+{%- endif -%}
+{% endmacro %}
+
+{% macro render_diff(segments) %}
+<div class="diff-body">{% for seg in segments -%}
+{%- if seg.op == "equal" -%}{{ seg.text }}
+{%- elif seg.op == "delete" -%}<del>{{ seg.text }}</del>
+{%- else -%}<ins>{{ seg.text }}</ins>
+{%- endif -%}
+{%- endfor %}</div>
+{% endmacro %}
+
 <div class="box">
 <h2>{{ _("Edit history") }}</h2>
 
 <p><a href="{{ request.url_for("outbox_by_public_id", public_id=outbox_object.public_id) }}">{{ _("Back to post") }}</a></p>
 
-<ul class="edit-history">
-    {% for revision in revisions %}
-    <li>
-        <p><em>{{ revision.updated | parse_datetime | format_date }}</em></p>
-        <div>{{ revision.ap_object.content | clean_html(outbox_object) | safe }}</div>
-    </li>
-    {% endfor %}
-    <li>
-        <p><em>{{ _("Current version") }}</em></p>
-        <div>{{ outbox_object.ap_object.content | clean_html(outbox_object) | safe }}</div>
-    </li>
-</ul>
+{% if revision_entries | length == 1 %}
+<div class="empty-state">
+    <p>{{ _("This post has never been edited.") }}</p>
+</div>
+<div>{{ outbox_object.ap_object.content | clean_html(outbox_object) | safe }}</div>
+{% else %}
+
+{% if same_revision_selected %}
+<p class="muted">{{ _("Select two different revisions to compare.") }}</p>
+{% endif %}
+
+{% if diff is not none %}
+<div class="diff-panel">
+    <h3>{{ _("Changes from %(old)s to %(new)s", old=rev_label(diff_from), new=rev_label(diff_to)) }}</h3>
+
+    {% if diff_is_approximate %}
+    <p class="muted">{{ _("One of these revisions has no saved Markdown source, so this diff is approximated from the rendered HTML.") }}</p>
+    {% endif %}
+
+    {% if diff_is_coarse %}
+    <p class="muted">{{ _("This post is too long to compare word by word, so changes are shown as larger blocks.") }}</p>
+    {% endif %}
+
+    {% if title_diff %}
+    <p class="diff-field"><span class="diff-field-label">{{ _("Title") }}</span>{{ render_diff(title_diff) }}</p>
+    {% endif %}
+
+    {% if summary_diff %}
+    <p class="diff-field"><span class="diff-field-label">{{ _("Content warning") }}</span>{{ render_diff(summary_diff) }}</p>
+    {% endif %}
+
+    {% if sensitive_changed %}
+    <p class="diff-field">{% if now_sensitive %}{{ _("Now marked as sensitive") }}{% else %}{{ _("No longer marked as sensitive") }}{% endif %}</p>
+    {% endif %}
+
+    {% if diff_has_changes %}
+    {{ render_diff(diff) }}
+    {% else %}
+    <p class="muted">{{ _("No changes to the post body.") }}</p>
+    {% endif %}
+</div>
+{% endif %}
+
+<form class="form edit-history-compare" method="get" action="{{ request.url_for("admin_edit_history", public_id=outbox_object.public_id) }}">
+    <button type="submit">{{ _("Compare selected revisions") }}</button>
+    <ul class="edit-history">
+        {% for entry in revision_entries | reverse %}
+        <li>
+            <p class="revision-meta">
+                <span class="revision-radios">
+                    <input type="radio" name="rev_from" value="{{ entry.index }}" {% if entry.index == default_from %}checked{% endif %} aria-label="{{ _("Compare from this revision") }}">
+                    <input type="radio" name="rev_to" value="{{ entry.index }}" {% if entry.index == default_to %}checked{% endif %} aria-label="{{ _("Compare to this revision") }}">
+                </span>
+                <em>{{ rev_label(entry) }}</em>
+                <span class="revision-links">
+                    {% if entry.index > 0 %}
+                    <a href="?rev_from={{ entry.index - 1 }}&rev_to={{ entry.index }}">{{ _("prev") }}</a>
+                    {% else %}
+                    <span class="muted">{{ _("prev") }}</span>
+                    {% endif %}
+                    {% if not entry.is_current %}
+                    <a href="?rev_from={{ entry.index }}&rev_to={{ revision_entries | length - 1 }}">{{ _("cur") }}</a>
+                    {% endif %}
+                </span>
+            </p>
+            <div>{{ entry.ap_object.content | clean_html(outbox_object) | safe }}</div>
+        </li>
+        {% endfor %}
+    </ul>
+</form>
+{% endif %}
 </div>
 {% endblock %}

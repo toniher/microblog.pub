@@ -1,3 +1,4 @@
+import asyncio
 import re
 from datetime import datetime
 from typing import Any
@@ -51,6 +52,7 @@ from app.uploads import IncompatibleMediaError
 from app.uploads import UploadTooLargeError
 from app.uploads import delete_uploads
 from app.uploads import save_upload
+from app.utils import diff
 from app.utils import pagination
 from app.utils.emoji import EMOJIS_BY_NAME
 from app.utils.text import slugify
@@ -1887,35 +1889,118 @@ async def admin_actions_edit_text(
     return RedirectResponse(maybe_object.url, status_code=302)  # type: ignore
 
 
+def _revision_entries(
+    outbox_object: activitypub.models.OutboxObject,
+) -> list[dict[str, Any]]:
+    """Snapshots (oldest first) plus the live object as the last entry.
+
+    Unifying the two shapes keeps the radio picker, the per-row links and the
+    index arithmetic uniform in the template.
+    """
+    entries: list[dict[str, Any]] = []
+    for rev in outbox_object.revisions or []:
+        entries.append(
+            {
+                "index": len(entries),
+                "is_current": False,
+                "ap_object": rev.get("ap_object") or {},
+                "source": rev.get("source"),
+                "updated": rev.get("updated"),
+            }
+        )
+    entries.append(
+        {
+            "index": len(entries),
+            "is_current": True,
+            "ap_object": outbox_object.ap_object,
+            "source": outbox_object.source,
+            "updated": outbox_object.ap_object.get("updated")
+            or outbox_object.ap_object.get("published"),
+        }
+    )
+    return entries
+
+
+def _field_diff(old: str | None, new: str | None) -> list[diff.DiffSegment] | None:
+    """Word-diff a short scalar field, or None when it's unchanged/absent."""
+    if (old or "") == (new or ""):
+        return None
+    return diff.word_diff(old or "", new or "").segments
+
+
+def _build_diff(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
+    """Diff two revisions. Pure CPU work, superlinear in the post length --
+    run via `asyncio.to_thread` from the handler, never called inline."""
+    old_text = diff.revision_text(old["ap_object"], old["source"])
+    new_text = diff.revision_text(new["ap_object"], new["source"])
+    body = diff.word_diff(old_text.text, new_text.text)
+    old_ap, new_ap = old["ap_object"], new["ap_object"]
+    return {
+        "diff": body.segments,
+        "diff_has_changes": diff.has_changes(body.segments),
+        "diff_is_approximate": old_text.is_approximate or new_text.is_approximate,
+        "diff_is_coarse": body.is_coarse,
+        "diff_from": old,
+        "diff_to": new,
+        "title_diff": _field_diff(old_ap.get("name"), new_ap.get("name")),
+        "summary_diff": _field_diff(old_ap.get("summary"), new_ap.get("summary")),
+        "sensitive_changed": bool(old_ap.get("sensitive"))
+        != bool(new_ap.get("sensitive")),
+        "now_sensitive": bool(new_ap.get("sensitive")),
+    }
+
+
 @router.get("/edit_history/{public_id}", response_model=None)
 async def admin_edit_history(
     request: Request,
     public_id: str,
+    rev_from: int | None = None,
+    rev_to: int | None = None,
     db_session: AsyncSession = Depends(get_db_session),
 ) -> templates.TemplateResponse:
-    maybe_object = (
-        (
-            await db_session.execute(
-                select(activitypub.models.OutboxObject).where(
-                    activitypub.models.OutboxObject.public_id == public_id,
-                    activitypub.models.OutboxObject.is_deleted.is_(False),
-                )
-            )
+    maybe_object = await _get_editable_outbox_object(db_session, public_id)
+    entries = _revision_entries(maybe_object)
+
+    ctx: dict[str, Any] = {
+        "outbox_object": maybe_object,
+        "revisions": maybe_object.revisions or [],
+        "revision_entries": entries,
+        "same_revision_selected": False,
+        "diff": None,
+        "diff_is_coarse": False,
+        "diff_from": None,
+        "diff_to": None,
+        "default_from": max(len(entries) - 2, 0),
+        "default_to": len(entries) - 1,
+    }
+
+    if (rev_from is None) != (rev_to is None):
+        raise HTTPException(
+            status_code=400, detail="rev_from and rev_to are both required"
         )
-        .unique()
-        .scalar_one_or_none()
-    )
-    if not maybe_object:
-        raise HTTPException(status_code=404)
+
+    if rev_from is not None and rev_to is not None:
+        if not (0 <= rev_from < len(entries)) or not (0 <= rev_to < len(entries)):
+            raise HTTPException(status_code=400, detail="revision out of range")
+
+        ctx["default_from"] = rev_from
+        ctx["default_to"] = rev_to
+
+        if rev_from == rev_to:
+            ctx["same_revision_selected"] = True
+        else:
+            # Normalise so the diff always reads old -> new.
+            lo, hi = sorted((rev_from, rev_to))
+            # Diffing is CPU-bound and superlinear in the post length, so it
+            # runs off the event loop -- inline it would stall every other
+            # request (federation deliveries included) for its whole duration.
+            ctx.update(await asyncio.to_thread(_build_diff, entries[lo], entries[hi]))
 
     return await templates.render_template(
         db_session,
         request,
         "admin_edit_history.html",
-        {
-            "outbox_object": maybe_object,
-            "revisions": maybe_object.revisions or [],
-        },
+        ctx,
     )
 
 

@@ -763,7 +763,12 @@ Each post shows a row of admin-only action buttons. Two of them apply to specifi
 
 - `history` — shown on your own posts once they have at least one edit. Opens a page listing
   every past revision, with the timestamp it was saved at, so you can see what a post looked
-  like before each edit.
+  like before each edit. Each revision has a pair of radio buttons; pick a "from" and a "to"
+  revision and press "Compare selected revisions" to see a word-by-word diff of what changed,
+  with removed text struck through and added text underlined. Title, content warning and
+  sensitive-flag changes are called out alongside the body. Every row but the oldest also has
+  a `prev` link (diff against the revision right before it), and every past revision has a
+  `cur` link (diff against the current version).
 - `fetch replies` — shown on posts from other instances that appear in your inbox (boosts and
   replies included). Triggers an on-demand fetch of that post's `replies` collection from the
   remote server, for replies that were never delivered to you directly. It's capped to a few
