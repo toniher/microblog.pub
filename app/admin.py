@@ -1776,9 +1776,17 @@ async def _get_editable_outbox_object(
     maybe_object = (
         (
             await db_session.execute(
-                select(activitypub.models.OutboxObject).where(
+                select(activitypub.models.OutboxObject)
+                .where(
                     activitypub.models.OutboxObject.public_id == public_id,
                     activitypub.models.OutboxObject.is_deleted.is_(False),
+                )
+                .options(
+                    joinedload(
+                        activitypub.models.OutboxObject.outbox_object_attachments
+                    ).options(
+                        joinedload(activitypub.models.OutboxObjectAttachment.upload)
+                    ),
                 )
             )
         )
@@ -1788,6 +1796,24 @@ async def _get_editable_outbox_object(
     if not maybe_object:
         raise HTTPException(status_code=404)
     return maybe_object
+
+
+def _existing_attachment_choices(
+    outbox_object: activitypub.models.OutboxObject,
+) -> list[dict[str, Any]]:
+    """Pair each attachment DB row with its display-ready `Attachment`, so the
+    edit form can offer a per-attachment keep/remove checkbox keyed by row id.
+
+    `OutboxObject.attachments` builds one `Attachment` per
+    `outbox_object_attachments` row, in the same order and with no filtering,
+    so zipping the two lists is safe.
+    """
+    return [
+        {"id": row.id, "attachment": attachment}
+        for row, attachment in zip(
+            outbox_object.outbox_object_attachments, outbox_object.attachments
+        )
+    ]
 
 
 @router.get("/edit_text/{public_id}", response_model=None)
@@ -1807,6 +1833,8 @@ async def admin_edit_text(
             "content": maybe_object.source,
             "content_warning": maybe_object.summary,
             "is_sensitive": maybe_object.sensitive,
+            "language": boxes.get_object_language(maybe_object.ap_object),
+            "existing_attachments": _existing_attachment_choices(maybe_object),
             "outbox_object": maybe_object,
             "emojis": _EMOJI_PICKER_EMOJIS,
             "custom_emojis": _EMOJI_PICKER_CUSTOM_EMOJIS,
@@ -1818,9 +1846,11 @@ async def admin_edit_text(
 async def admin_actions_edit_text(
     request: Request,
     public_id: str,
+    files: list[UploadFile] = [],
     content: str | None = Form(None),
     name: str | None = Form(None),
     alias: str | None = Form(None),
+    language: str | None = Form(None),
     content_warning: str | None = Form(None),
     is_sensitive: bool = Form(False),
     csrf_check: None = Depends(verify_csrf_token),
@@ -1828,7 +1858,16 @@ async def admin_actions_edit_text(
 ) -> templates.TemplateResponse | RedirectResponse:
     maybe_object = await _get_editable_outbox_object(db_session, public_id)
 
+    # Uploads created by this request (as opposed to attachments kept from
+    # before) -- rolled back below if the request ends up rejected.
+    created_uploads: list[activitypub.models.Upload] = []
+
     async def _rerender(error: str) -> templates.TemplateResponse:
+        # The rollback expires `maybe_object` (loaded before any of this ran),
+        # so re-fetch it rather than touch its now-stale relationships.
+        await db_session.rollback()
+        await delete_uploads(db_session, created_uploads)
+        current_object = await _get_editable_outbox_object(db_session, public_id)
         return await templates.render_template(
             db_session,
             request,
@@ -1838,7 +1877,9 @@ async def admin_actions_edit_text(
                 "content": content,
                 "content_warning": content_warning,
                 "is_sensitive": is_sensitive,
-                "outbox_object": maybe_object,
+                "language": language,
+                "existing_attachments": _existing_attachment_choices(current_object),
+                "outbox_object": current_object,
                 "emojis": _EMOJI_PICKER_EMOJIS,
                 "custom_emojis": _EMOJI_PICKER_CUSTOM_EMOJIS,
                 "error": error,
@@ -1856,15 +1897,70 @@ async def admin_actions_edit_text(
     except HTTPException as exc:
         return await _rerender(str(exc.detail))
 
+    # Optional Mastodon-style post language (BCP 47); empty means unset (None).
+    language = (language or "").strip() or None
+    if language and not _LANGUAGE_CODE_RE.match(language):
+        return await _rerender(gettext_default("Error: invalid language code"))
+
     # A CW always implies sensitive, mirroring the compose form's rule.
     is_sensitive = True if content_warning else is_sensitive
 
+    # `keep_attachment_ids` comes from a checkbox per existing attachment
+    # (checked by default), read from the raw form rather than declared as a
+    # typed param since it's a dynamic, possibly-empty list of ids.
+    raw_form_data = await request.form()
+    keep_attachment_ids = {
+        int(v)
+        for v in (str(v) for v in raw_form_data.getlist("keep_attachment_ids"))
+        if v.strip().isdigit()
+    }
+    existing_rows = maybe_object.outbox_object_attachments
+    kept_rows = [row for row in existing_rows if row.id in keep_attachment_ids]
+    attachments_removed = len(kept_rows) != len(existing_rows)
+
+    # XXX: for some reason, no files results in an empty single file
+    new_uploads: list[tuple[activitypub.models.Upload, str, str | None]] = []
+    if len(files) >= 1:
+        alt_index = 0
+        for f in files:
+            if f.filename is not None and f.filename != "":
+                try:
+                    upload = await save_upload(db_session, f, created=created_uploads)
+                except UploadTooLargeError as exc:
+                    return await _rerender(
+                        f"{gettext_default('Error: file is too large')} "
+                        f"({exc.limit} bytes max) -- "
+                        f"{gettext_default('files must be re-selected before trying again')}"
+                    )
+                except IncompatibleMediaError as exc:
+                    return await _rerender(
+                        f"{gettext_default('Error: unable to process upload')}: "
+                        f"{exc.reason} -- "
+                        f"{gettext_default('files must be re-selected before trying again')}"
+                    )
+                if upload is not None:
+                    alt = raw_form_data.get(f"alt_{alt_index}")
+                    alt_index += 1
+                    new_uploads.append(
+                        (upload, f.filename, str(alt) if alt is not None else None)
+                    )
+                else:
+                    return await _rerender(
+                        gettext_default("Error: Unable to process upload")
+                    )
+
+    uploads_changed = attachments_removed or bool(new_uploads)
+    uploads = [(row.upload, row.filename, row.alt) for row in kept_rows] + new_uploads
+
     alias_changed = new_alias != maybe_object.alias
+    language_changed = language != boxes.get_object_language(maybe_object.ap_object)
     object_changed = (
         content != maybe_object.source
         or (name or None) != maybe_object.name
         or (content_warning or None) != maybe_object.summary
         or is_sensitive != maybe_object.sensitive
+        or language_changed
+        or uploads_changed
     )
 
     if object_changed:
@@ -1875,6 +1971,9 @@ async def admin_actions_edit_text(
         # url.
         if alias_changed:
             maybe_object.alias = new_alias
+        send_update_kwargs: dict[str, Any] = {}
+        if uploads_changed:
+            send_update_kwargs["uploads"] = uploads
         await boxes.send_update(
             db_session,
             ap_id=maybe_object.ap_id,
@@ -1882,6 +1981,8 @@ async def admin_actions_edit_text(
             name=name,
             content_warning=content_warning or None,
             is_sensitive=is_sensitive,
+            language=language,
+            **send_update_kwargs,
         )
     elif alias_changed:
         await boxes.set_outbox_object_alias(db_session, maybe_object, new_alias)

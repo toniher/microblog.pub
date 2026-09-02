@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-09-02 22:37+0200\n"
+"POT-Creation-Date: 2026-09-02 23:13+0200\n"
 "PO-Revision-Date: 2026-07-17 22:20+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ro\n"
@@ -17,7 +17,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.18.0\n"
+"Generated-By: Babel 2.10.3\n"
 
 #: app/admin.py:134
 msgid "Error: invalid URL alias"
@@ -32,11 +32,11 @@ msgstr "Eroare: aliasul URL este prea lung"
 msgid "Error: URL alias %(alias)s is already used"
 msgstr "Eroare: aliasul URL %(alias)s este deja folosit"
 
-#: app/admin.py:1647 app/admin.py:1667 app/admin.py:1850
+#: app/admin.py:1647 app/admin.py:1667 app/admin.py:1891
 msgid "Error: object must have a content"
 msgstr "Eroare: conținutul este obligatoriu"
 
-#: app/admin.py:1657
+#: app/admin.py:1657 app/admin.py:1903
 msgid "Error: invalid language code"
 msgstr "Eroare: cod de limbă invalid"
 
@@ -60,19 +60,19 @@ msgstr "Eroare: un sondaj trebuie să aibă cel puțin 2 răspunsuri"
 msgid "Error: invalid poll duration"
 msgstr "Eroare: durata sondajului invalidă"
 
-#: app/admin.py:1720
+#: app/admin.py:1720 app/admin.py:1931
 msgid "Error: file is too large"
 msgstr "Eroare: fișierul este prea mare"
 
-#: app/admin.py:1722 app/admin.py:1728
+#: app/admin.py:1722 app/admin.py:1728 app/admin.py:1933 app/admin.py:1939
 msgid "files must be re-selected before trying again"
 msgstr "fișierele trebuie reselectate înainte de a încerca din nou"
 
-#: app/admin.py:1726
+#: app/admin.py:1726 app/admin.py:1937
 msgid "Error: unable to process upload"
 msgstr "Eroare: nu s-a putut procesa încărcarea"
 
-#: app/admin.py:1742
+#: app/admin.py:1742 app/admin.py:1949
 msgid "Error: Unable to process upload"
 msgstr "Eroare: nu s-a putut procesa încărcarea"
 
@@ -84,7 +84,7 @@ msgstr "Eroare: nu s-a putut crea postarea"
 msgid "please try again"
 msgstr "încercați din nou"
 
-#: app/config.py:482
+#: app/config.py:481
 #, python-format
 msgid "The security token has expired, %(please_try_again)s"
 msgstr "Jetonul de securitate a expirat, %(please_try_again)s"
@@ -325,11 +325,79 @@ msgstr "Lăsați gol pentru a elimina aliasul."
 msgid "Permalink:"
 msgstr "Permalink:"
 
-#: app/templates/admin_edit_text.html:64 app/templates/admin_new.html:136
+#: app/templates/admin_edit_text.html:64 app/templates/admin_new.html:131
+msgid "Language"
+msgstr "Limbă"
+
+#: app/templates/admin_edit_text.html:65 app/templates/admin_new.html:132
+#, python-format
+msgid "optional, e.g. %(lang)s"
+msgstr "opțional, de ex. %(lang)s"
+
+#: app/templates/admin_edit_text.html:65 app/templates/admin_new.html:132
+msgid "BCP 47 language code, e.g. en or pt-BR"
+msgstr "cod de limbă BCP 47, de ex. en sau pt-BR"
+
+#: app/templates/admin_edit_text.html:69 app/templates/admin_new.html:136
 msgid "Mark attachment(s) as sensitive"
 msgstr "Marchează atașamentele ca fiind sensibile"
 
-#: app/templates/admin_edit_text.html:69
+#: app/templates/admin_edit_text.html:75
+#, fuzzy
+msgid "Current attachments"
+msgstr "Atașamente"
+
+#: app/templates/admin_edit_text.html:76
+msgid "Uncheck an attachment to remove it when you submit."
+msgstr ""
+
+#: app/templates/admin_edit_text.html:92
+msgid "Keep"
+msgstr ""
+
+#: app/templates/admin_edit_text.html:101
+#, fuzzy
+msgid "Add attachments"
+msgstr "Atașamente"
+
+#: app/templates/admin_edit_text.html:103 app/templates/admin_new.html:145
+#, python-format
+msgid "%(filename)s: checking playback in this browser…"
+msgstr "%(filename)s: se verifică redarea în acest browser…"
+
+#: app/templates/admin_edit_text.html:104 app/templates/admin_new.html:146
+#, python-format
+msgid "%(filename)s: %(details)s — plays in this browser"
+msgstr "%(filename)s: %(details)s — se redă în acest browser"
+
+#: app/templates/admin_edit_text.html:105 app/templates/admin_new.html:147
+#, python-format
+msgid ""
+"%(filename)s: this browser could not play this file (unsupported "
+"codec/container) — it may be rejected on upload. Re-encoding as H.264/AAC"
+" in an MP4 is the safest bet."
+msgstr ""
+"%(filename)s: acest browser nu a putut reda fișierul (codec/container "
+"neacceptat) — este posibil să fie respins la încărcare. Cea mai sigură "
+"opțiune este reencodarea în H.264/AAC într-un MP4."
+
+#: app/templates/admin_edit_text.html:106 app/templates/admin_new.html:148
+#, python-format
+msgid ""
+"%(filename)s: couldn't generate a local preview in this browser (this "
+"check isn't authoritative — it may still upload and play fine; the server"
+" has the final say)."
+msgstr ""
+"%(filename)s: nu s-a putut genera o previzualizare locală în acest "
+"browser (această verificare nu este definitivă — este posibil să se "
+"încarce și să se redea corect; serverul are ultimul cuvânt)."
+
+#: app/templates/admin_edit_text.html:108 app/templates/admin_new.html:150
+#, python-format
+msgid "Alt text for %(filename)s"
+msgstr "Text alternativ pentru %(filename)s"
+
+#: app/templates/admin_edit_text.html:111
 msgid "Submit"
 msgstr "Trimite"
 
@@ -471,59 +539,9 @@ msgstr "Opțiunea %(n)s"
 msgid "leave empty to disable"
 msgstr "lăsați gol pentru a o dezactiva"
 
-#: app/templates/admin_new.html:131
-msgid "Language"
-msgstr "Limbă"
-
-#: app/templates/admin_new.html:132
-#, python-format
-msgid "optional, e.g. %(lang)s"
-msgstr "opțional, de ex. %(lang)s"
-
-#: app/templates/admin_new.html:132
-msgid "BCP 47 language code, e.g. en or pt-BR"
-msgstr "cod de limbă BCP 47, de ex. en sau pt-BR"
-
 #: app/templates/admin_new.html:143
 msgid "Attachments"
 msgstr "Atașamente"
-
-#: app/templates/admin_new.html:145
-#, python-format
-msgid "%(filename)s: checking playback in this browser…"
-msgstr "%(filename)s: se verifică redarea în acest browser…"
-
-#: app/templates/admin_new.html:146
-#, python-format
-msgid "%(filename)s: %(details)s — plays in this browser"
-msgstr "%(filename)s: %(details)s — se redă în acest browser"
-
-#: app/templates/admin_new.html:147
-#, python-format
-msgid ""
-"%(filename)s: this browser could not play this file (unsupported "
-"codec/container) — it may be rejected on upload. Re-encoding as H.264/AAC"
-" in an MP4 is the safest bet."
-msgstr ""
-"%(filename)s: acest browser nu a putut reda fișierul (codec/container "
-"neacceptat) — este posibil să fie respins la încărcare. Cea mai sigură "
-"opțiune este reencodarea în H.264/AAC într-un MP4."
-
-#: app/templates/admin_new.html:148
-#, python-format
-msgid ""
-"%(filename)s: couldn't generate a local preview in this browser (this "
-"check isn't authoritative — it may still upload and play fine; the server"
-" has the final say)."
-msgstr ""
-"%(filename)s: nu s-a putut genera o previzualizare locală în acest "
-"browser (această verificare nu este definitivă — este posibil să se "
-"încarce și să se redea corect; serverul are ultimul cuvânt)."
-
-#: app/templates/admin_new.html:150
-#, python-format
-msgid "Alt text for %(filename)s"
-msgstr "Text alternativ pentru %(filename)s"
 
 #: app/templates/admin_new.html:152
 msgid "Publish"

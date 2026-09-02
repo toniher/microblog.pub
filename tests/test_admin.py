@@ -1083,6 +1083,151 @@ def test_admin_edit_text__clearing_content_warning_federates_update(
     assert outbox_object.revisions and len(outbox_object.revisions) == 2
 
 
+def test_admin_edit_text__sets_and_updates_language(
+    db: Session, client: TestClient
+) -> None:
+    public_id = _create_note_via_admin(client, content="hello world")
+    outbox_object = db.query(activitypub.models.OutboxObject).one()
+    assert "contentMap" not in outbox_object.ap_object
+
+    response = client.post(
+        f"/admin/actions/edit_text/{public_id}",
+        data={
+            "content": "hello world",
+            "language": "en",
+            "csrf_token": generate_csrf_token(),
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    db.refresh(outbox_object)
+    assert outbox_object.ap_object["contentMap"] == {"en": "<p>hello world</p>\n"}
+    assert outbox_object.revisions and len(outbox_object.revisions) == 1
+
+    # Re-editing without touching the language field must keep it set.
+    response = client.post(
+        f"/admin/actions/edit_text/{public_id}",
+        data={
+            "content": "hello world, edited",
+            "language": "en",
+            "csrf_token": generate_csrf_token(),
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    db.refresh(outbox_object)
+    assert outbox_object.ap_object["contentMap"] == {
+        "en": "<p>hello world, edited</p>\n"
+    }
+
+    # Clearing the field drops the language map.
+    response = client.post(
+        f"/admin/actions/edit_text/{public_id}",
+        data={
+            "content": "hello world, edited",
+            "language": "",
+            "csrf_token": generate_csrf_token(),
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    db.refresh(outbox_object)
+    assert "contentMap" not in outbox_object.ap_object
+
+
+def test_admin_edit_text__invalid_language_rerenders_form_with_content(
+    client: TestClient,
+) -> None:
+    public_id = _create_note_via_admin(client, content="hello world")
+
+    response = client.post(
+        f"/admin/actions/edit_text/{public_id}",
+        data={
+            "content": "a post I don't want to lose",
+            "language": "not a code",
+            "csrf_token": generate_csrf_token(),
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 422
+    assert "a post I don&#39;t want to lose" in response.text
+
+
+def test_admin_edit_text__can_add_and_remove_attachments(
+    db: Session, client: TestClient
+) -> None:
+    from PIL import Image
+
+    def _make_png(color: tuple[int, int, int]) -> bytes:
+        buf = io.BytesIO()
+        Image.new("RGB", (10, 8), color=color).save(buf, format="PNG")
+        return buf.getvalue()
+
+    public_id = _create_note_via_admin(client, content="hello world")
+    outbox_object = db.query(activitypub.models.OutboxObject).one()
+    assert outbox_object.outbox_object_attachments == []
+
+    first_png = _make_png((1, 2, 3))
+    response = client.post(
+        f"/admin/actions/edit_text/{public_id}",
+        data={
+            "content": "hello world",
+            "csrf_token": generate_csrf_token(),
+        },
+        files=[("files", ("first.png", first_png, "image/png"))],
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    db.refresh(outbox_object)
+    assert len(outbox_object.outbox_object_attachments) == 1
+    first_attachment_id = outbox_object.outbox_object_attachments[0].id
+    assert outbox_object.revisions and len(outbox_object.revisions) == 1
+
+    # Keep the first attachment and add a second one.
+    second_png = _make_png((4, 5, 6))
+    response = client.post(
+        f"/admin/actions/edit_text/{public_id}",
+        data={
+            "content": "hello world",
+            "keep_attachment_ids": [str(first_attachment_id)],
+            "csrf_token": generate_csrf_token(),
+        },
+        files=[("files", ("second.png", second_png, "image/png"))],
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    db.refresh(outbox_object)
+    assert len(outbox_object.outbox_object_attachments) == 2
+    assert len(outbox_object.ap_object["attachment"]) == 2
+
+    # Unchecking every existing attachment (and adding no new files) clears
+    # the attachment list entirely.
+    response = client.post(
+        f"/admin/actions/edit_text/{public_id}",
+        data={
+            "content": "hello world",
+            "csrf_token": generate_csrf_token(),
+        },
+        cookies=generate_admin_session_cookies(),
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    db.refresh(outbox_object)
+    assert outbox_object.outbox_object_attachments == []
+    assert outbox_object.ap_object["attachment"] == []
+
+
 def test_admin_actions_new__invalid_language_rerenders_form_with_content(
     client: TestClient,
 ) -> None:

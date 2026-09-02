@@ -1123,10 +1123,22 @@ async def send_vote(
 
 # Sentinel distinguishing "not passed, keep the existing value" from an
 # explicit `None`/falsy override — send_update() is shared by the admin web UI
-# (app/admin.py, only ever changes source/name) and the Mastodon API edit
-# endpoint (app/mastodon/router.py, always resends the full edit form), so the
-# default must mean "unchanged", not "cleared".
+# (app/admin.py) and the Mastodon API edit endpoint (app/mastodon/router.py,
+# always resends the full edit form), so the default must mean "unchanged",
+# not "cleared".
 _UNSET = object()
+
+
+def get_object_language(ap_object: ap.RawObject) -> str | None:
+    """The BCP 47 language set on a note/article, if any.
+
+    There's no dedicated column for it — it only exists as the key of the
+    Mastodon-style `contentMap` language map on the AP object itself.
+    """
+    content_map = ap_object.get("contentMap") or {}
+    if content_map:
+        return next(iter(content_map))
+    return None
 
 
 async def send_update(
@@ -1137,6 +1149,7 @@ async def send_update(
     content_warning: Any = _UNSET,
     is_sensitive: Any = _UNSET,
     uploads: Any = _UNSET,
+    language: Any = _UNSET,
     *,
     _commit: bool = True,
 ) -> str:
@@ -1170,6 +1183,11 @@ async def send_update(
     resolved_is_sensitive = (
         outbox_object.sensitive if is_sensitive is _UNSET else bool(is_sensitive)
     )
+    resolved_language = (
+        get_object_language(outbox_object.ap_object)
+        if language is _UNSET
+        else (language or None)
+    )
 
     if uploads is _UNSET:
         attachments = outbox_object.ap_object.get("attachment") or []
@@ -1195,8 +1213,8 @@ async def send_update(
     # send_create() spreads extra keys (poll answers, language maps, and the
     # quote fields below) into the note it builds; this rebuilds the note as a
     # fresh literal dict, so anything not re-added here is silently dropped on
-    # the first edit. Quote fields are re-added below -- the poll/language-map
-    # fields have the same latent gap, left alone as out of scope here.
+    # the first edit. Quote fields and language maps are re-added below -- the
+    # poll fields have the same latent gap, left alone as out of scope here.
     tag_list = dedup_tags(tags)
     quote_wire_fields: dict[str, Any] = {}
     if outbox_object.quote_ap_id:
@@ -1207,6 +1225,14 @@ async def send_update(
                 outbox_object.quote_authorization_ap_id
             )
         content += _quote_reply_link_html(outbox_object.quote_ap_id)
+
+    # Mirrors send_create()'s lang_maps: rebuilt from scratch every edit since
+    # `note` below is a fresh literal, not a mutation of the previous version.
+    lang_maps: dict[str, dict[str, str]] = {}
+    if resolved_language:
+        lang_maps["contentMap"] = {resolved_language: content}
+        if resolved_content_warning:
+            lang_maps["summaryMap"] = {resolved_language: resolved_content_warning}
 
     note = {
         "@context": ap.AS_EXTENDED_CTX,
@@ -1228,9 +1254,12 @@ async def send_update(
         "updated": updated,
         **quote_wire_fields,  # type: ignore
         **_quote_interaction_policy(outbox_object.visibility),  # type: ignore
+        **lang_maps,  # type: ignore
     }
     if outbox_object.ap_type == "Article" and name:
         note["name"] = name
+        if resolved_language:
+            note["nameMap"] = {resolved_language: name}
 
     outbox_object.ap_object = note
     outbox_object.source = source

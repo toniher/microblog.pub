@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-09-02 22:37+0200\n"
+"POT-Creation-Date: 2026-09-02 23:13+0200\n"
 "PO-Revision-Date: 2026-07-17 22:19+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ca\n"
@@ -16,7 +16,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.18.0\n"
+"Generated-By: Babel 2.10.3\n"
 
 #: app/admin.py:134
 msgid "Error: invalid URL alias"
@@ -31,11 +31,11 @@ msgstr "Error: l'àlies d'URL és massa llarg"
 msgid "Error: URL alias %(alias)s is already used"
 msgstr "Error: l'àlies d'URL %(alias)s ja s'està utilitzant"
 
-#: app/admin.py:1647 app/admin.py:1667 app/admin.py:1850
+#: app/admin.py:1647 app/admin.py:1667 app/admin.py:1891
 msgid "Error: object must have a content"
 msgstr "Error: el contingut és obligatori"
 
-#: app/admin.py:1657
+#: app/admin.py:1657 app/admin.py:1903
 msgid "Error: invalid language code"
 msgstr "Error: codi d'idioma no vàlid"
 
@@ -59,19 +59,19 @@ msgstr "Error: una enquesta ha de tenir com a mínim 2 respostes"
 msgid "Error: invalid poll duration"
 msgstr "Error: durada de l'enquesta no vàlida"
 
-#: app/admin.py:1720
+#: app/admin.py:1720 app/admin.py:1931
 msgid "Error: file is too large"
 msgstr "Error: el fitxer és massa gran"
 
-#: app/admin.py:1722 app/admin.py:1728
+#: app/admin.py:1722 app/admin.py:1728 app/admin.py:1933 app/admin.py:1939
 msgid "files must be re-selected before trying again"
 msgstr "cal tornar a seleccionar els fitxers abans de tornar-ho a provar"
 
-#: app/admin.py:1726
+#: app/admin.py:1726 app/admin.py:1937
 msgid "Error: unable to process upload"
 msgstr "Error: no s'ha pogut processar la pujada"
 
-#: app/admin.py:1742
+#: app/admin.py:1742 app/admin.py:1949
 msgid "Error: Unable to process upload"
 msgstr "Error: no s'ha pogut processar la pujada"
 
@@ -83,7 +83,7 @@ msgstr "Error: no s'ha pogut crear la publicació"
 msgid "please try again"
 msgstr "torneu-ho a provar"
 
-#: app/config.py:482
+#: app/config.py:481
 #, python-format
 msgid "The security token has expired, %(please_try_again)s"
 msgstr "El testimoni de seguretat ha caducat, %(please_try_again)s"
@@ -324,11 +324,77 @@ msgstr "Deixeu-ho buit per eliminar l'àlies."
 msgid "Permalink:"
 msgstr "Enllaç permanent:"
 
-#: app/templates/admin_edit_text.html:64 app/templates/admin_new.html:136
+#: app/templates/admin_edit_text.html:64 app/templates/admin_new.html:131
+msgid "Language"
+msgstr "Idioma"
+
+#: app/templates/admin_edit_text.html:65 app/templates/admin_new.html:132
+#, python-format
+msgid "optional, e.g. %(lang)s"
+msgstr "opcional, p. ex. %(lang)s"
+
+#: app/templates/admin_edit_text.html:65 app/templates/admin_new.html:132
+msgid "BCP 47 language code, e.g. en or pt-BR"
+msgstr "codi d'idioma BCP 47, p. ex. en o pt-BR"
+
+#: app/templates/admin_edit_text.html:69 app/templates/admin_new.html:136
 msgid "Mark attachment(s) as sensitive"
 msgstr "Marca els adjunts com a sensibles"
 
-#: app/templates/admin_edit_text.html:69
+#: app/templates/admin_edit_text.html:75
+msgid "Current attachments"
+msgstr "Adjunts actuals"
+
+#: app/templates/admin_edit_text.html:76
+msgid "Uncheck an attachment to remove it when you submit."
+msgstr "Desmarqueu un adjunt per eliminar-lo en enviar el formulari."
+
+#: app/templates/admin_edit_text.html:92
+msgid "Keep"
+msgstr "Mantén"
+
+#: app/templates/admin_edit_text.html:101
+msgid "Add attachments"
+msgstr "Afegeix adjunts"
+
+#: app/templates/admin_edit_text.html:103 app/templates/admin_new.html:145
+#, python-format
+msgid "%(filename)s: checking playback in this browser…"
+msgstr "%(filename)s: comprovant la reproducció en aquest navegador…"
+
+#: app/templates/admin_edit_text.html:104 app/templates/admin_new.html:146
+#, python-format
+msgid "%(filename)s: %(details)s — plays in this browser"
+msgstr "%(filename)s: %(details)s — es reprodueix en aquest navegador"
+
+#: app/templates/admin_edit_text.html:105 app/templates/admin_new.html:147
+#, python-format
+msgid ""
+"%(filename)s: this browser could not play this file (unsupported "
+"codec/container) — it may be rejected on upload. Re-encoding as H.264/AAC"
+" in an MP4 is the safest bet."
+msgstr ""
+"%(filename)s: aquest navegador no ha pogut reproduir el fitxer (còdec o "
+"contenidor no compatible) — és possible que es rebutgi en pujar-lo. "
+"L'opció més segura és tornar-lo a codificar com a H.264/AAC en un MP4."
+
+#: app/templates/admin_edit_text.html:106 app/templates/admin_new.html:148
+#, python-format
+msgid ""
+"%(filename)s: couldn't generate a local preview in this browser (this "
+"check isn't authoritative — it may still upload and play fine; the server"
+" has the final say)."
+msgstr ""
+"%(filename)s: no s'ha pogut generar una previsualització local en aquest "
+"navegador (aquesta comprovació no és definitiva — és possible que es pugi"
+" i es reprodueixi correctament; el servidor té la darrera paraula)."
+
+#: app/templates/admin_edit_text.html:108 app/templates/admin_new.html:150
+#, python-format
+msgid "Alt text for %(filename)s"
+msgstr "Text alternatiu per a %(filename)s"
+
+#: app/templates/admin_edit_text.html:111
 msgid "Submit"
 msgstr "Envia"
 
@@ -471,59 +537,9 @@ msgstr "Opció %(n)s"
 msgid "leave empty to disable"
 msgstr "deixeu-ho buit per desactivar-la"
 
-#: app/templates/admin_new.html:131
-msgid "Language"
-msgstr "Idioma"
-
-#: app/templates/admin_new.html:132
-#, python-format
-msgid "optional, e.g. %(lang)s"
-msgstr "opcional, p. ex. %(lang)s"
-
-#: app/templates/admin_new.html:132
-msgid "BCP 47 language code, e.g. en or pt-BR"
-msgstr "codi d'idioma BCP 47, p. ex. en o pt-BR"
-
 #: app/templates/admin_new.html:143
 msgid "Attachments"
 msgstr "Adjunts"
-
-#: app/templates/admin_new.html:145
-#, python-format
-msgid "%(filename)s: checking playback in this browser…"
-msgstr "%(filename)s: comprovant la reproducció en aquest navegador…"
-
-#: app/templates/admin_new.html:146
-#, python-format
-msgid "%(filename)s: %(details)s — plays in this browser"
-msgstr "%(filename)s: %(details)s — es reprodueix en aquest navegador"
-
-#: app/templates/admin_new.html:147
-#, python-format
-msgid ""
-"%(filename)s: this browser could not play this file (unsupported "
-"codec/container) — it may be rejected on upload. Re-encoding as H.264/AAC"
-" in an MP4 is the safest bet."
-msgstr ""
-"%(filename)s: aquest navegador no ha pogut reproduir el fitxer (còdec o "
-"contenidor no compatible) — és possible que es rebutgi en pujar-lo. "
-"L'opció més segura és tornar-lo a codificar com a H.264/AAC en un MP4."
-
-#: app/templates/admin_new.html:148
-#, python-format
-msgid ""
-"%(filename)s: couldn't generate a local preview in this browser (this "
-"check isn't authoritative — it may still upload and play fine; the server"
-" has the final say)."
-msgstr ""
-"%(filename)s: no s'ha pogut generar una previsualització local en aquest "
-"navegador (aquesta comprovació no és definitiva — és possible que es pugi"
-" i es reprodueixi correctament; el servidor té la darrera paraula)."
-
-#: app/templates/admin_new.html:150
-#, python-format
-msgid "Alt text for %(filename)s"
-msgstr "Text alternatiu per a %(filename)s"
 
 #: app/templates/admin_new.html:152
 msgid "Publish"
