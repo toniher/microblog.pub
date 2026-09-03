@@ -212,6 +212,7 @@ body.htmx-request::after {
 }
 
 .emoji-picker {
+  display: block;
   max-height: 120px;
   overflow-y: auto;
   margin-bottom: 10px;
@@ -296,6 +297,11 @@ body.htmx-request::after {
   dt { color: $muted-color; }
   dd { margin: 0; }
   code { font-family: monospace; white-space: pre-wrap; }
+
+  .muted {
+    display: block;
+    margin-top: 5px;
+  }
 }
 
 // Available to assistive tech, but not shown -- for a label whose field is
