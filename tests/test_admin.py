@@ -84,6 +84,22 @@ def test_public_works_authenticated(client: TestClient) -> None:
     assert resp.status_code == 200
 
 
+def test_admin_new__renders_markdown_bar(client: TestClient) -> None:
+    response = client.get("/admin/new", cookies=generate_admin_session_cookies())
+
+    assert response.status_code == 200
+    # The bar ships hidden and is revealed by new.js, so it never renders as a
+    # row of dead buttons when the script is unavailable.
+    assert 'class="md-bar" hidden' in response.text
+    # A wrapping construct, a line-prefix construct and a shortcut hook -- new.js
+    # reads all three straight off these attributes.
+    assert 'data-md-tpl="**$1**"' in response.text
+    assert 'data-md-line="&gt; "' in response.text
+    assert 'data-md-key="b"' in response.text
+    # The cheatsheet is server-rendered, so it works without JS.
+    assert 'class="md-help"' in response.text
+
+
 def test_admin_lookup_rejects_non_url_query(client: TestClient) -> None:
     """A bare word (not a URL, not an `@user@domain.tld` handle) is invalid
     input, not a lookup failure -- `check_url` rejects it before any network
@@ -798,6 +814,36 @@ def _create_note_via_admin(
     assert response.status_code == 302
     location = response.headers["location"]
     return location.rsplit("/", 1)[-1]
+
+
+def test_admin_edit_text__renders_markdown_bar(
+    client: TestClient,
+) -> None:
+    public_id = _create_note_via_admin(client, content="hello world")
+
+    response = client.get(
+        f"/admin/edit_text/{public_id}",
+        cookies=generate_admin_session_cookies(),
+    )
+
+    assert response.status_code == 200
+    assert 'class="md-bar" hidden' in response.text
+    assert 'data-md-tpl="**$1**"' in response.text
+    # The edit form is still prefilled with the original source.
+    assert "hello world" in response.text
+
+
+def test_horizontal_rule_survives_sanitization(client: TestClient) -> None:
+    """`---` parses to <hr /> like any other mistletoe construct, but it used
+    to be silently dropped by bleach because "hr" was missing from
+    ALLOWED_TAGS -- unlike every other unsupported construct, this one has no
+    visible trace once stripped, so it's worth its own regression test."""
+    public_id = _create_note_via_admin(client, content="before\n\n---\n\nafter")
+
+    response = client.get(f"/o/{public_id}", cookies=generate_admin_session_cookies())
+
+    assert response.status_code == 200
+    assert "<hr" in response.text
 
 
 def test_admin_edit_text__alias_only_change_is_local_only(

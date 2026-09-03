@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-09-02 23:13+0200\n"
+"POT-Creation-Date: 2026-09-03 14:33+0200\n"
 "PO-Revision-Date: 2026-07-17 22:20+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: it\n"
@@ -16,7 +16,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.10.3\n"
+"Generated-By: Babel 2.18.0\n"
 
 #: app/admin.py:134
 msgid "Error: invalid URL alias"
@@ -83,7 +83,7 @@ msgstr "Errore: impossibile creare il post"
 msgid "please try again"
 msgstr "riprova"
 
-#: app/config.py:481
+#: app/config.py:482
 #, python-format
 msgid "The security token has expired, %(please_try_again)s"
 msgstr "Il token di sicurezza è scaduto, %(please_try_again)s"
@@ -233,12 +233,12 @@ msgid ""
 msgstr ""
 
 #: app/templates/admin_edit_history.html:57
-#: app/templates/admin_edit_text.html:21 app/templates/admin_new.html:66
+#: app/templates/admin_edit_text.html:22 app/templates/admin_new.html:67
 msgid "Title"
 msgstr "Titolo"
 
 #: app/templates/admin_edit_history.html:61
-#: app/templates/admin_edit_text.html:46 app/templates/admin_new.html:117
+#: app/templates/admin_edit_text.html:49 app/templates/admin_new.html:120
 msgid "Content warning"
 msgstr "Avviso sul contenuto"
 
@@ -278,97 +278,97 @@ msgstr "Precedente"
 msgid "cur"
 msgstr ""
 
-#: app/templates/admin_edit_text.html:5
+#: app/templates/admin_edit_text.html:6
 #, python-format
 msgid "%(name)s - Edit"
 msgstr "%(name)s - Modifica"
 
-#: app/templates/admin_edit_text.html:27 app/templates/admin_new.html:72
+#: app/templates/admin_edit_text.html:28 app/templates/admin_new.html:73
 msgid "Content"
 msgstr "Contenuto"
 
-#: app/templates/admin_edit_text.html:42 app/templates/admin_new.html:87
+#: app/templates/admin_edit_text.html:44 app/templates/admin_new.html:89
 msgid "Markdown is supported. #hashtags, @mentions and :custom_emoji: work too."
 msgstr ""
 "Markdown è supportato. Anche #hashtag, @menzioni e :emoji_personalizzate:"
 " funzionano."
 
-#: app/templates/admin_edit_text.html:47 app/templates/admin_new.html:118
+#: app/templates/admin_edit_text.html:50 app/templates/admin_new.html:121
 msgid "will mark the post as sensitive"
 msgstr "avviso sul contenuto (contrassegnerà il post come sensibile)"
 
-#: app/templates/admin_edit_text.html:51 app/templates/admin_new.html:122
+#: app/templates/admin_edit_text.html:54 app/templates/admin_new.html:125
 msgid "More options"
 msgstr "Altre opzioni"
 
-#: app/templates/admin_edit_text.html:54 app/templates/admin_new.html:125
+#: app/templates/admin_edit_text.html:57 app/templates/admin_new.html:128
 msgid "URL alias"
 msgstr "Alias URL"
 
-#: app/templates/admin_edit_text.html:55 app/templates/admin_new.html:126
+#: app/templates/admin_edit_text.html:58 app/templates/admin_new.html:129
 msgid "optional"
 msgstr "facoltativo"
 
-#: app/templates/admin_edit_text.html:56 app/templates/admin_new.html:127
+#: app/templates/admin_edit_text.html:59 app/templates/admin_new.html:130
 msgid "A short custom URL for this post, instead of its permalink."
 msgstr ""
 "Un URL personalizzato e breve per questo post, invece del suo link "
 "permanente."
 
-#: app/templates/admin_edit_text.html:56
+#: app/templates/admin_edit_text.html:59
 msgid "Leave empty to remove the alias."
 msgstr "Lascia vuoto per rimuovere l'alias."
 
-#: app/templates/admin_edit_text.html:59
+#: app/templates/admin_edit_text.html:62
 msgid "Permalink:"
 msgstr "Permalink:"
 
-#: app/templates/admin_edit_text.html:64 app/templates/admin_new.html:131
+#: app/templates/admin_edit_text.html:67 app/templates/admin_new.html:134
 msgid "Language"
 msgstr "Lingua"
 
-#: app/templates/admin_edit_text.html:65 app/templates/admin_new.html:132
+#: app/templates/admin_edit_text.html:68 app/templates/admin_new.html:135
 #, python-format
 msgid "optional, e.g. %(lang)s"
 msgstr "facoltativo, es. %(lang)s"
 
-#: app/templates/admin_edit_text.html:65 app/templates/admin_new.html:132
+#: app/templates/admin_edit_text.html:68 app/templates/admin_new.html:135
 msgid "BCP 47 language code, e.g. en or pt-BR"
 msgstr "codice lingua BCP 47, es. en o pt-BR"
 
-#: app/templates/admin_edit_text.html:69 app/templates/admin_new.html:136
+#: app/templates/admin_edit_text.html:72 app/templates/admin_new.html:139
 msgid "Mark attachment(s) as sensitive"
 msgstr "Contrassegna gli allegati come sensibili"
 
-#: app/templates/admin_edit_text.html:75
+#: app/templates/admin_edit_text.html:78
 #, fuzzy
 msgid "Current attachments"
 msgstr "Allegati"
 
-#: app/templates/admin_edit_text.html:76
+#: app/templates/admin_edit_text.html:79
 msgid "Uncheck an attachment to remove it when you submit."
 msgstr ""
 
-#: app/templates/admin_edit_text.html:92
+#: app/templates/admin_edit_text.html:95
 msgid "Keep"
 msgstr ""
 
-#: app/templates/admin_edit_text.html:101
+#: app/templates/admin_edit_text.html:104
 #, fuzzy
 msgid "Add attachments"
 msgstr "Allegati"
 
-#: app/templates/admin_edit_text.html:103 app/templates/admin_new.html:145
+#: app/templates/admin_edit_text.html:106 app/templates/admin_new.html:148
 #, python-format
 msgid "%(filename)s: checking playback in this browser…"
 msgstr "%(filename)s: controllo della riproduzione in questo browser…"
 
-#: app/templates/admin_edit_text.html:104 app/templates/admin_new.html:146
+#: app/templates/admin_edit_text.html:107 app/templates/admin_new.html:149
 #, python-format
 msgid "%(filename)s: %(details)s — plays in this browser"
 msgstr "%(filename)s: %(details)s — si riproduce in questo browser"
 
-#: app/templates/admin_edit_text.html:105 app/templates/admin_new.html:147
+#: app/templates/admin_edit_text.html:108 app/templates/admin_new.html:150
 #, python-format
 msgid ""
 "%(filename)s: this browser could not play this file (unsupported "
@@ -380,7 +380,7 @@ msgstr ""
 "caricamento. La soluzione più sicura è ricodificarlo in H.264/AAC in un "
 "MP4."
 
-#: app/templates/admin_edit_text.html:106 app/templates/admin_new.html:148
+#: app/templates/admin_edit_text.html:109 app/templates/admin_new.html:151
 #, python-format
 msgid ""
 "%(filename)s: couldn't generate a local preview in this browser (this "
@@ -391,12 +391,12 @@ msgstr ""
 "(questo controllo non è definitivo — potrebbe comunque essere caricato e "
 "riprodotto correttamente; il server ha l'ultima parola)."
 
-#: app/templates/admin_edit_text.html:108 app/templates/admin_new.html:150
+#: app/templates/admin_edit_text.html:111 app/templates/admin_new.html:153
 #, python-format
 msgid "Alt text for %(filename)s"
 msgstr "Testo alternativo per %(filename)s"
 
-#: app/templates/admin_edit_text.html:111
+#: app/templates/admin_edit_text.html:114
 msgid "Submit"
 msgstr "Invia"
 
@@ -444,106 +444,106 @@ msgstr ""
 "silenziato. I suoi post non appaiono più nel flusso e le sue notifiche "
 "sono nascoste."
 
-#: app/templates/admin_new.html:7
+#: app/templates/admin_new.html:8
 #, python-format
 msgid "%(name)s - New"
 msgstr "%(name)s - Nuovo"
 
-#: app/templates/admin_new.html:13
+#: app/templates/admin_new.html:14
 msgid "In reply to:"
 msgstr "In risposta a:"
 
-#: app/templates/admin_new.html:18
+#: app/templates/admin_new.html:19
 msgid "Quoting:"
 msgstr "Citando:"
 
-#: app/templates/admin_new.html:40 app/templates/components/filters.html:22
+#: app/templates/admin_new.html:41 app/templates/components/filters.html:22
 #: app/templates/object.html:18
 msgid "Note"
 msgstr "Nota"
 
-#: app/templates/admin_new.html:40 app/templates/components/filters.html:22
+#: app/templates/admin_new.html:41 app/templates/components/filters.html:22
 msgid "Article"
 msgstr "Articolo"
 
-#: app/templates/admin_new.html:40 app/templates/components/filters.html:22
+#: app/templates/admin_new.html:41 app/templates/components/filters.html:22
 msgid "Question"
 msgstr "Sondaggio"
 
-#: app/templates/admin_new.html:41
+#: app/templates/admin_new.html:42
 msgid "Public - sent to followers and visible on the homepage"
 msgstr "Pubblico - inviato ai follower e visibile nella home page"
 
-#: app/templates/admin_new.html:42
+#: app/templates/admin_new.html:43
 msgid "Unlisted - like public, but hidden from the homepage"
 msgstr "Non elencato - come pubblico, ma nascosto dalla home page"
 
-#: app/templates/admin_new.html:43
+#: app/templates/admin_new.html:44
 msgid "Followers only"
 msgstr "Follower"
 
-#: app/templates/admin_new.html:44
+#: app/templates/admin_new.html:45
 msgid "Direct - only visible for mentioned actors"
 msgstr "Diretto - visibile solo per gli attori menzionati"
 
-#: app/templates/admin_new.html:56
+#: app/templates/admin_new.html:57
 msgid "Visibility"
 msgstr "Visibilità"
 
-#: app/templates/admin_new.html:86
+#: app/templates/admin_new.html:88
 msgid "Hey!"
 msgstr "Ehi!"
 
-#: app/templates/admin_new.html:92
+#: app/templates/admin_new.html:95
 msgid "Poll type"
 msgstr "Tipo di sondaggio"
 
-#: app/templates/admin_new.html:94
+#: app/templates/admin_new.html:97
 msgid "single choice"
 msgstr "scelta singola"
 
-#: app/templates/admin_new.html:95
+#: app/templates/admin_new.html:98
 msgid "multiple choices"
 msgstr "scelta multipla"
 
-#: app/templates/admin_new.html:99
+#: app/templates/admin_new.html:102
 msgid "Poll duration"
 msgstr "Durata del sondaggio"
 
-#: app/templates/admin_new.html:101
+#: app/templates/admin_new.html:104
 msgid "ends in 5 minutes"
 msgstr "termina tra 5 minuti"
 
-#: app/templates/admin_new.html:102
+#: app/templates/admin_new.html:105
 msgid "ends in 30 minutes"
 msgstr "termina tra 30 minuti"
 
-#: app/templates/admin_new.html:103
+#: app/templates/admin_new.html:106
 msgid "ends in 1 hour"
 msgstr "termina tra 1 ora"
 
-#: app/templates/admin_new.html:104
+#: app/templates/admin_new.html:107
 msgid "ends in 6 hours"
 msgstr "termina tra 6 ore"
 
-#: app/templates/admin_new.html:105
+#: app/templates/admin_new.html:108
 msgid "ends in 1 day"
 msgstr "termina tra 1 giorno"
 
-#: app/templates/admin_new.html:110
+#: app/templates/admin_new.html:113
 #, python-format
 msgid "Option %(n)s"
 msgstr "Opzione %(n)s"
 
-#: app/templates/admin_new.html:111
+#: app/templates/admin_new.html:114
 msgid "leave empty to disable"
 msgstr "lascia vuoto per disattivarla"
 
-#: app/templates/admin_new.html:143
+#: app/templates/admin_new.html:146
 msgid "Attachments"
 msgstr "Allegati"
 
-#: app/templates/admin_new.html:152
+#: app/templates/admin_new.html:155
 msgid "Publish"
 msgstr "Pubblica"
 
@@ -1281,6 +1281,165 @@ msgstr "Mi piace"
 #: app/templates/components/filters.html:22
 msgid "Announce"
 msgstr "Condivisione"
+
+#: app/templates/components/markdown_bar.html:11
+#: app/templates/components/markdown_bar.html:28
+msgid "Markdown formatting"
+msgstr "Formattazione Markdown"
+
+#: app/templates/components/markdown_bar.html:12
+msgid "bold text"
+msgstr "testo in grassetto"
+
+#: app/templates/components/markdown_bar.html:12
+msgid "Bold"
+msgstr "Grassetto"
+
+#: app/templates/components/markdown_bar.html:13
+msgid "italic text"
+msgstr "testo in corsivo"
+
+#: app/templates/components/markdown_bar.html:13
+msgid "Italic"
+msgstr "Corsivo"
+
+#: app/templates/components/markdown_bar.html:14
+msgid "strikethrough text"
+msgstr "testo barrato"
+
+#: app/templates/components/markdown_bar.html:14
+msgid "Strikethrough"
+msgstr "Barrato"
+
+#: app/templates/components/markdown_bar.html:15
+msgid "heading"
+msgstr "titolo"
+
+#: app/templates/components/markdown_bar.html:15
+msgid "Heading"
+msgstr "Titolo"
+
+#: app/templates/components/markdown_bar.html:16
+msgid "quoted text"
+msgstr "testo citato"
+
+#: app/templates/components/markdown_bar.html:16
+msgid "Quote"
+msgstr "Citazione"
+
+#: app/templates/components/markdown_bar.html:17
+#: app/templates/components/markdown_bar.html:18
+msgid "list item"
+msgstr "elemento dell'elenco"
+
+#: app/templates/components/markdown_bar.html:17
+msgid "Bulleted list"
+msgstr "Elenco puntato"
+
+#: app/templates/components/markdown_bar.html:18
+msgid "Numbered list"
+msgstr "Elenco numerato"
+
+#: app/templates/components/markdown_bar.html:19
+#: app/templates/components/markdown_bar.html:20
+msgid "code"
+msgstr "codice"
+
+#: app/templates/components/markdown_bar.html:19
+msgid "Inline code"
+msgstr "Codice in linea"
+
+#: app/templates/components/markdown_bar.html:20
+msgid "Code block"
+msgstr "Blocco di codice"
+
+#: app/templates/components/markdown_bar.html:21
+msgid "link text"
+msgstr "testo del link"
+
+#: app/templates/components/markdown_bar.html:21
+#: app/templates/components/markdown_bar.html:35
+msgid "Link"
+msgstr "Link"
+
+#: app/templates/components/markdown_bar.html:21
+msgid "url"
+msgstr "url"
+
+#: app/templates/components/markdown_bar.html:22
+msgid "alt text"
+msgstr "testo alternativo"
+
+#: app/templates/components/markdown_bar.html:22
+#: app/templates/components/markdown_bar.html:36
+msgid "Image"
+msgstr "Immagine"
+
+#: app/templates/components/markdown_bar.html:22
+msgid "img"
+msgstr "img"
+
+#: app/templates/components/markdown_bar.html:30
+msgid "Headings"
+msgstr "Titoli"
+
+#: app/templates/components/markdown_bar.html:31
+msgid "Emphasis"
+msgstr "Enfasi"
+
+#: app/templates/components/markdown_bar.html:32
+msgid "Code"
+msgstr "Codice"
+
+#: app/templates/components/markdown_bar.html:33
+msgid "Blockquote"
+msgstr "Citazione a blocco"
+
+#: app/templates/components/markdown_bar.html:34
+msgid "Lists"
+msgstr "Elenchi"
+
+#: app/templates/components/markdown_bar.html:34
+msgid "indent 2 spaces to nest"
+msgstr "rientra di 2 spazi per annidare"
+
+#: app/templates/components/markdown_bar.html:37
+msgid "Table"
+msgstr "Tabella"
+
+#: app/templates/components/markdown_bar.html:37
+msgid "then"
+msgstr "poi"
+
+#: app/templates/components/markdown_bar.html:38
+msgid "Horizontal rule"
+msgstr "Riga orizzontale"
+
+#: app/templates/components/markdown_bar.html:39
+msgid "Line break"
+msgstr "Interruzione di riga"
+
+#: app/templates/components/markdown_bar.html:39
+msgid "end a line with two spaces"
+msgstr "termina una riga con due spazi"
+
+#: app/templates/components/markdown_bar.html:40
+msgid "Autolink"
+msgstr "Link automatico"
+
+#: app/templates/components/markdown_bar.html:40
+msgid "or a bare URL"
+msgstr "o un URL semplice"
+
+#: app/templates/components/markdown_bar.html:41
+msgid "Fediverse"
+msgstr "Fediverso"
+
+#: app/templates/components/markdown_bar.html:43
+msgid ""
+"Not supported: task lists (- [ ]) and footnotes ([^1]). Raw HTML is "
+"filtered down to a small set of tags."
+msgstr "Non supportato: elenchi di attività (- [ ]) e note a piè di pagina ([^1]). L'HTML grezzo viene filtrato a un piccolo insieme di tag."
 
 #~ msgid "%(name)s - New Post"
 #~ msgstr "%(name)s - Nuovo post"

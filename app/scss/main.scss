@@ -234,6 +234,70 @@ body.htmx-request::after {
   }
 }
 
+// Markdown bar above the compose box. Rendered `hidden` and revealed by new.js so
+// the buttons never appear without the JS that drives them -- hence
+// `:not([hidden])` rather than a bare `display: flex`, which would beat the UA
+// stylesheet's `[hidden] { display: none }`.
+.md-bar {
+  margin-bottom: 10px;
+
+  &:not([hidden]) {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 4px;
+    row-gap: 4px;
+  }
+
+  button {
+    background: none;
+    border: 0;
+    padding: 2px 6px;
+    cursor: pointer;
+    border-radius: 4px;
+    color: $muted-color;
+    // `.form { input, select, textarea }` doesn't cover <button>, and buttons
+    // don't inherit the page font.
+    font-family: $font-stack;
+    font-size: 1rem;
+    line-height: 1.4;
+    min-width: 2em;
+
+    &:hover, &:focus-visible {
+      outline: 1px solid $secondary-color;
+      color: $text-color;
+    }
+  }
+
+  // The glyph previews what the button does.
+  .md-bold { font-weight: bold; }
+  .md-italic { font-style: italic; }
+  .md-strike { text-decoration: line-through; }
+  .md-code { font-family: monospace; }
+}
+
+.md-help {
+  margin-top: 3px;
+
+  summary {
+    cursor: pointer;
+    color: $muted-color;
+    font-size: 0.9em;
+  }
+
+  dl {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    column-gap: 15px;
+    row-gap: 2px;
+    margin: 5px 0 0 0;
+    font-size: 0.9em;
+  }
+
+  dt { color: $muted-color; }
+  dd { margin: 0; }
+  code { font-family: monospace; white-space: pre-wrap; }
+}
+
 // Available to assistive tech, but not shown -- for a label whose field is
 // already self-evident on screen (the compose box).
 .visually-hidden {

@@ -1,0 +1,45 @@
+{#- Markdown affordances for the composer textarea, shared by admin_new.html and
+    admin_edit_text.html. These macros use `_`, which render_template injects
+    per-request into the template *context*, so this file MUST be imported
+    `with context` -- an env-global identity gettext would otherwise render every
+    string untranslated without erroring. -#}
+
+{% macro bar() %}
+{#- A <span>, not a <div>: this sits inside <p class="form-field">, and a <div> would
+    implicitly close the <p>. Ships `hidden` and is revealed by new.js so the buttons
+    are never dead controls; the CSP forbids the usual inline `no-js` class trick. -#}
+<span class="md-bar" hidden role="toolbar" aria-label="{{ _("Markdown formatting") }}">
+  <button type="button" class="md-bold" tabindex="-1" data-md-tpl="**$1**" data-md-key="b" data-md-ph="{{ _("bold text") }}" title="{{ _("Bold") }}" aria-label="{{ _("Bold") }}">B</button>
+  <button type="button" class="md-italic" tabindex="-1" data-md-tpl="*$1*" data-md-key="i" data-md-ph="{{ _("italic text") }}" title="{{ _("Italic") }}" aria-label="{{ _("Italic") }}">I</button>
+  <button type="button" class="md-strike" tabindex="-1" data-md-tpl="~~$1~~" data-md-ph="{{ _("strikethrough text") }}" title="{{ _("Strikethrough") }}" aria-label="{{ _("Strikethrough") }}">S</button>
+  <button type="button" tabindex="-1" data-md-line="## " data-md-ph="{{ _("heading") }}" title="{{ _("Heading") }}" aria-label="{{ _("Heading") }}">H</button>
+  <button type="button" tabindex="-1" data-md-line="&gt; " data-md-ph="{{ _("quoted text") }}" title="{{ _("Quote") }}" aria-label="{{ _("Quote") }}">&ldquo;</button>
+  <button type="button" tabindex="-1" data-md-line="- " data-md-ph="{{ _("list item") }}" title="{{ _("Bulleted list") }}" aria-label="{{ _("Bulleted list") }}">&bull;</button>
+  <button type="button" tabindex="-1" data-md-line="$n. " data-md-ph="{{ _("list item") }}" title="{{ _("Numbered list") }}" aria-label="{{ _("Numbered list") }}">1.</button>
+  <button type="button" class="md-code" tabindex="-1" data-md-tpl="`$1`" data-md-ph="{{ _("code") }}" title="{{ _("Inline code") }}" aria-label="{{ _("Inline code") }}">&lt;&gt;</button>
+  <button type="button" class="md-code" tabindex="-1" data-md-tpl="```\n$1\n```" data-md-block data-md-ph="{{ _("code") }}" title="{{ _("Code block") }}" aria-label="{{ _("Code block") }}">```</button>
+  <button type="button" tabindex="-1" data-md-tpl="[$1](https://)" data-md-key="k" data-md-ph="{{ _("link text") }}" title="{{ _("Link") }}" aria-label="{{ _("Link") }}">{{ _("url") }}</button>
+  <button type="button" tabindex="-1" data-md-tpl="![$1](https://)" data-md-ph="{{ _("alt text") }}" title="{{ _("Image") }}" aria-label="{{ _("Image") }}">{{ _("img") }}</button>
+</span>
+{% endmacro %}
+
+{% macro help() %}
+<details class="md-help">
+  <summary>{{ _("Markdown formatting") }}</summary>
+  <dl>
+    <dt>{{ _("Headings") }}</dt><dd><code># Heading</code> &hellip; <code>###### Heading</code></dd>
+    <dt>{{ _("Emphasis") }}</dt><dd><code>**bold**</code>, <code>*italic*</code>, <code>~~strikethrough~~</code></dd>
+    <dt>{{ _("Code") }}</dt><dd><code>`inline code`</code>, or a &nbsp;<code>```python</code>&nbsp; fenced block</dd>
+    <dt>{{ _("Blockquote") }}</dt><dd><code>&gt; quoted text</code></dd>
+    <dt>{{ _("Lists") }}</dt><dd><code>- item</code>, <code>1. item</code> ({{ _("indent 2 spaces to nest") }})</dd>
+    <dt>{{ _("Link") }}</dt><dd><code>[text](https://example.com)</code></dd>
+    <dt>{{ _("Image") }}</dt><dd><code>![alt text](https://example.com/i.png)</code></dd>
+    <dt>{{ _("Table") }}</dt><dd><code>| a | b |</code> {{ _("then") }} <code>| --- | :-- |</code></dd>
+    <dt>{{ _("Horizontal rule") }}</dt><dd><code>---</code></dd>
+    <dt>{{ _("Line break") }}</dt><dd>{{ _("end a line with two spaces") }}</dd>
+    <dt>{{ _("Autolink") }}</dt><dd><code>&lt;https://example.com&gt;</code>, {{ _("or a bare URL") }}</dd>
+    <dt>{{ _("Fediverse") }}</dt><dd><code>#hashtag</code>, <code>@user@example.com</code>, <code>:custom_emoji:</code></dd>
+  </dl>
+  <span class="muted">{{ _("Not supported: task lists (- [ ]) and footnotes ([^1]). Raw HTML is filtered down to a small set of tags.") }}</span>
+</details>
+{% endmacro %}

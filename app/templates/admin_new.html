@@ -1,5 +1,6 @@
 {%- import "utils.html" as utils with context -%}
 {%- import "components/hidden_inputs.html" as hidden_inputs -%}
+{%- import "components/markdown_bar.html" as markdown_bar with context -%}
 {% extends "layout.html" %}
 
 {% block head %}
@@ -83,9 +84,11 @@
         {% endfor %}
         </div>
         {% endif %}
+        {{ markdown_bar.bar() }}
         <textarea id="content" name="content" rows="10" cols="50" autofocus="autofocus" placeholder="{{ _("Hey!") }}">{{ content }}</textarea>
         <span class="muted">{{ _("Markdown is supported. #hashtags, @mentions and :custom_emoji: work too.") }}</span>
     </p>
+    {{ markdown_bar.help() }}
 
     {% if current_type == "Question" %}
         <p class="form-field">

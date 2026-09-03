@@ -201,6 +201,9 @@ ALLOWED_TAGS = {
     "b",
     "br",
     "blockquote",
+    # mistletoe renders `---` to <hr />; without this it parses fine and is
+    # then silently stripped from every post, local and remote.
+    "hr",
     "code",
     "pre",
     "em",

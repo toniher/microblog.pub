@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-09-02 23:13+0200\n"
+"POT-Creation-Date: 2026-09-03 14:33+0200\n"
 "PO-Revision-Date: 2026-07-17 21:46+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -16,7 +16,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.10.3\n"
+"Generated-By: Babel 2.18.0\n"
 
 #: app/admin.py:134
 msgid "Error: invalid URL alias"
@@ -83,7 +83,7 @@ msgstr ""
 msgid "please try again"
 msgstr ""
 
-#: app/config.py:481
+#: app/config.py:482
 #, python-format
 msgid "The security token has expired, %(please_try_again)s"
 msgstr ""
@@ -231,12 +231,12 @@ msgid ""
 msgstr ""
 
 #: app/templates/admin_edit_history.html:57
-#: app/templates/admin_edit_text.html:21 app/templates/admin_new.html:66
+#: app/templates/admin_edit_text.html:22 app/templates/admin_new.html:67
 msgid "Title"
 msgstr ""
 
 #: app/templates/admin_edit_history.html:61
-#: app/templates/admin_edit_text.html:46 app/templates/admin_new.html:117
+#: app/templates/admin_edit_text.html:49 app/templates/admin_new.html:120
 msgid "Content warning"
 msgstr ""
 
@@ -273,91 +273,91 @@ msgstr ""
 msgid "cur"
 msgstr ""
 
-#: app/templates/admin_edit_text.html:5
+#: app/templates/admin_edit_text.html:6
 #, python-format
 msgid "%(name)s - Edit"
 msgstr ""
 
-#: app/templates/admin_edit_text.html:27 app/templates/admin_new.html:72
+#: app/templates/admin_edit_text.html:28 app/templates/admin_new.html:73
 msgid "Content"
 msgstr ""
 
-#: app/templates/admin_edit_text.html:42 app/templates/admin_new.html:87
+#: app/templates/admin_edit_text.html:44 app/templates/admin_new.html:89
 msgid "Markdown is supported. #hashtags, @mentions and :custom_emoji: work too."
 msgstr ""
 
-#: app/templates/admin_edit_text.html:47 app/templates/admin_new.html:118
+#: app/templates/admin_edit_text.html:50 app/templates/admin_new.html:121
 msgid "will mark the post as sensitive"
 msgstr ""
 
-#: app/templates/admin_edit_text.html:51 app/templates/admin_new.html:122
+#: app/templates/admin_edit_text.html:54 app/templates/admin_new.html:125
 msgid "More options"
 msgstr ""
 
-#: app/templates/admin_edit_text.html:54 app/templates/admin_new.html:125
+#: app/templates/admin_edit_text.html:57 app/templates/admin_new.html:128
 msgid "URL alias"
 msgstr ""
 
-#: app/templates/admin_edit_text.html:55 app/templates/admin_new.html:126
+#: app/templates/admin_edit_text.html:58 app/templates/admin_new.html:129
 msgid "optional"
 msgstr ""
 
-#: app/templates/admin_edit_text.html:56 app/templates/admin_new.html:127
+#: app/templates/admin_edit_text.html:59 app/templates/admin_new.html:130
 msgid "A short custom URL for this post, instead of its permalink."
 msgstr ""
 
-#: app/templates/admin_edit_text.html:56
+#: app/templates/admin_edit_text.html:59
 msgid "Leave empty to remove the alias."
 msgstr ""
 
-#: app/templates/admin_edit_text.html:59
+#: app/templates/admin_edit_text.html:62
 msgid "Permalink:"
 msgstr ""
 
-#: app/templates/admin_edit_text.html:64 app/templates/admin_new.html:131
+#: app/templates/admin_edit_text.html:67 app/templates/admin_new.html:134
 msgid "Language"
 msgstr ""
 
-#: app/templates/admin_edit_text.html:65 app/templates/admin_new.html:132
+#: app/templates/admin_edit_text.html:68 app/templates/admin_new.html:135
 #, python-format
 msgid "optional, e.g. %(lang)s"
 msgstr ""
 
-#: app/templates/admin_edit_text.html:65 app/templates/admin_new.html:132
+#: app/templates/admin_edit_text.html:68 app/templates/admin_new.html:135
 msgid "BCP 47 language code, e.g. en or pt-BR"
 msgstr ""
 
-#: app/templates/admin_edit_text.html:69 app/templates/admin_new.html:136
+#: app/templates/admin_edit_text.html:72 app/templates/admin_new.html:139
 msgid "Mark attachment(s) as sensitive"
 msgstr ""
 
-#: app/templates/admin_edit_text.html:75
+#: app/templates/admin_edit_text.html:78
 msgid "Current attachments"
 msgstr ""
 
-#: app/templates/admin_edit_text.html:76
+#: app/templates/admin_edit_text.html:79
 msgid "Uncheck an attachment to remove it when you submit."
 msgstr ""
 
-#: app/templates/admin_edit_text.html:92
+#: app/templates/admin_edit_text.html:95
 msgid "Keep"
 msgstr ""
 
-#: app/templates/admin_edit_text.html:101
+#: app/templates/admin_edit_text.html:104
 msgid "Add attachments"
 msgstr ""
 
-#: app/templates/admin_edit_text.html:103 app/templates/admin_new.html:145
+#: app/templates/admin_edit_text.html:106 app/templates/admin_new.html:148
 #, python-format
 msgid "%(filename)s: checking playback in this browser…"
 msgstr ""
 
-#: app/templates/admin_edit_text.html:104 app/templates/admin_new.html:146
+#: app/templates/admin_edit_text.html:107 app/templates/admin_new.html:149
 #, python-format
 msgid "%(filename)s: %(details)s — plays in this browser"
 msgstr ""
 
-#: app/templates/admin_edit_text.html:105 app/templates/admin_new.html:147
+#: app/templates/admin_edit_text.html:108 app/templates/admin_new.html:150
 #, python-format
 msgid ""
 "%(filename)s: this browser could not play this file (unsupported "
@@ -365,7 +365,7 @@ msgid ""
 " in an MP4 is the safest bet."
 msgstr ""
 
-#: app/templates/admin_edit_text.html:106 app/templates/admin_new.html:148
+#: app/templates/admin_edit_text.html:109 app/templates/admin_new.html:151
 #, python-format
 msgid ""
 "%(filename)s: couldn't generate a local preview in this browser (this "
@@ -373,12 +373,12 @@ msgid ""
 " has the final say)."
 msgstr ""
 
-#: app/templates/admin_edit_text.html:108 app/templates/admin_new.html:150
+#: app/templates/admin_edit_text.html:111 app/templates/admin_new.html:153
 #, python-format
 msgid "Alt text for %(filename)s"
 msgstr ""
 
-#: app/templates/admin_edit_text.html:111
+#: app/templates/admin_edit_text.html:114
 msgid "Submit"
 msgstr ""
 
@@ -423,106 +423,106 @@ msgid ""
 "showing up in the stream, and their notifications are hidden."
 msgstr ""
 
-#: app/templates/admin_new.html:7
+#: app/templates/admin_new.html:8
 #, python-format
 msgid "%(name)s - New"
 msgstr ""
 
-#: app/templates/admin_new.html:13
+#: app/templates/admin_new.html:14
 msgid "In reply to:"
 msgstr ""
 
-#: app/templates/admin_new.html:18
+#: app/templates/admin_new.html:19
 msgid "Quoting:"
 msgstr ""
 
-#: app/templates/admin_new.html:40 app/templates/components/filters.html:22
+#: app/templates/admin_new.html:41 app/templates/components/filters.html:22
 #: app/templates/object.html:18
 msgid "Note"
 msgstr ""
 
-#: app/templates/admin_new.html:40 app/templates/components/filters.html:22
+#: app/templates/admin_new.html:41 app/templates/components/filters.html:22
 msgid "Article"
 msgstr ""
 
-#: app/templates/admin_new.html:40 app/templates/components/filters.html:22
+#: app/templates/admin_new.html:41 app/templates/components/filters.html:22
 msgid "Question"
 msgstr ""
 
-#: app/templates/admin_new.html:41
+#: app/templates/admin_new.html:42
 msgid "Public - sent to followers and visible on the homepage"
 msgstr ""
 
-#: app/templates/admin_new.html:42
+#: app/templates/admin_new.html:43
 msgid "Unlisted - like public, but hidden from the homepage"
 msgstr ""
 
-#: app/templates/admin_new.html:43
+#: app/templates/admin_new.html:44
 msgid "Followers only"
 msgstr ""
 
-#: app/templates/admin_new.html:44
+#: app/templates/admin_new.html:45
 msgid "Direct - only visible for mentioned actors"
 msgstr ""
 
-#: app/templates/admin_new.html:56
+#: app/templates/admin_new.html:57
 msgid "Visibility"
 msgstr ""
 
-#: app/templates/admin_new.html:86
+#: app/templates/admin_new.html:88
 msgid "Hey!"
 msgstr ""
 
-#: app/templates/admin_new.html:92
+#: app/templates/admin_new.html:95
 msgid "Poll type"
 msgstr ""
 
-#: app/templates/admin_new.html:94
+#: app/templates/admin_new.html:97
 msgid "single choice"
 msgstr ""
 
-#: app/templates/admin_new.html:95
+#: app/templates/admin_new.html:98
 msgid "multiple choices"
 msgstr ""
 
-#: app/templates/admin_new.html:99
+#: app/templates/admin_new.html:102
 msgid "Poll duration"
 msgstr ""
 
-#: app/templates/admin_new.html:101
+#: app/templates/admin_new.html:104
 msgid "ends in 5 minutes"
 msgstr ""
 
-#: app/templates/admin_new.html:102
+#: app/templates/admin_new.html:105
 msgid "ends in 30 minutes"
 msgstr ""
 
-#: app/templates/admin_new.html:103
+#: app/templates/admin_new.html:106
 msgid "ends in 1 hour"
 msgstr ""
 
-#: app/templates/admin_new.html:104
+#: app/templates/admin_new.html:107
 msgid "ends in 6 hours"
 msgstr ""
 
-#: app/templates/admin_new.html:105
+#: app/templates/admin_new.html:108
 msgid "ends in 1 day"
 msgstr ""
 
-#: app/templates/admin_new.html:110
+#: app/templates/admin_new.html:113
 #, python-format
 msgid "Option %(n)s"
 msgstr ""
 
-#: app/templates/admin_new.html:111
+#: app/templates/admin_new.html:114
 msgid "leave empty to disable"
 msgstr ""
 
-#: app/templates/admin_new.html:143
+#: app/templates/admin_new.html:146
 msgid "Attachments"
 msgstr ""
 
-#: app/templates/admin_new.html:152
+#: app/templates/admin_new.html:155
 msgid "Publish"
 msgstr ""
 
@@ -1237,6 +1237,165 @@ msgstr ""
 
 #: app/templates/components/filters.html:22
 msgid "Announce"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:11
+#: app/templates/components/markdown_bar.html:28
+msgid "Markdown formatting"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:12
+msgid "bold text"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:12
+msgid "Bold"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:13
+msgid "italic text"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:13
+msgid "Italic"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:14
+msgid "strikethrough text"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:14
+msgid "Strikethrough"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:15
+msgid "heading"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:15
+msgid "Heading"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:16
+msgid "quoted text"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:16
+msgid "Quote"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:17
+#: app/templates/components/markdown_bar.html:18
+msgid "list item"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:17
+msgid "Bulleted list"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:18
+msgid "Numbered list"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:19
+#: app/templates/components/markdown_bar.html:20
+msgid "code"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:19
+msgid "Inline code"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:20
+msgid "Code block"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:21
+msgid "link text"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:21
+#: app/templates/components/markdown_bar.html:35
+msgid "Link"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:21
+msgid "url"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:22
+msgid "alt text"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:22
+#: app/templates/components/markdown_bar.html:36
+msgid "Image"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:22
+msgid "img"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:30
+msgid "Headings"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:31
+msgid "Emphasis"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:32
+msgid "Code"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:33
+msgid "Blockquote"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:34
+msgid "Lists"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:34
+msgid "indent 2 spaces to nest"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:37
+msgid "Table"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:37
+msgid "then"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:38
+msgid "Horizontal rule"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:39
+msgid "Line break"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:39
+msgid "end a line with two spaces"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:40
+msgid "Autolink"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:40
+msgid "or a bare URL"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:41
+msgid "Fediverse"
+msgstr ""
+
+#: app/templates/components/markdown_bar.html:43
+msgid ""
+"Not supported: task lists (- [ ]) and footnotes ([^1]). Raw HTML is "
+"filtered down to a small set of tags."
 msgstr ""
 
 #~ msgid "Option %(n)s, leave empty to disable"

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-09-02 23:13+0200\n"
+"POT-Creation-Date: 2026-09-03 14:33+0200\n"
 "PO-Revision-Date: 2026-07-17 22:19+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ca\n"
@@ -16,7 +16,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.10.3\n"
+"Generated-By: Babel 2.18.0\n"
 
 #: app/admin.py:134
 msgid "Error: invalid URL alias"
@@ -83,7 +83,7 @@ msgstr "Error: no s'ha pogut crear la publicació"
 msgid "please try again"
 msgstr "torneu-ho a provar"
 
-#: app/config.py:481
+#: app/config.py:482
 #, python-format
 msgid "The security token has expired, %(please_try_again)s"
 msgstr "El testimoni de seguretat ha caducat, %(please_try_again)s"
@@ -237,12 +237,12 @@ msgstr ""
 "per la qual cosa els canvis es mostren en blocs més grans."
 
 #: app/templates/admin_edit_history.html:57
-#: app/templates/admin_edit_text.html:21 app/templates/admin_new.html:66
+#: app/templates/admin_edit_text.html:22 app/templates/admin_new.html:67
 msgid "Title"
 msgstr "Títol"
 
 #: app/templates/admin_edit_history.html:61
-#: app/templates/admin_edit_text.html:46 app/templates/admin_new.html:117
+#: app/templates/admin_edit_text.html:49 app/templates/admin_new.html:120
 msgid "Content warning"
 msgstr "Avís de contingut"
 
@@ -279,95 +279,95 @@ msgstr "anterior"
 msgid "cur"
 msgstr "actual"
 
-#: app/templates/admin_edit_text.html:5
+#: app/templates/admin_edit_text.html:6
 #, python-format
 msgid "%(name)s - Edit"
 msgstr "%(name)s - Edita"
 
-#: app/templates/admin_edit_text.html:27 app/templates/admin_new.html:72
+#: app/templates/admin_edit_text.html:28 app/templates/admin_new.html:73
 msgid "Content"
 msgstr "Contingut"
 
-#: app/templates/admin_edit_text.html:42 app/templates/admin_new.html:87
+#: app/templates/admin_edit_text.html:44 app/templates/admin_new.html:89
 msgid "Markdown is supported. #hashtags, @mentions and :custom_emoji: work too."
 msgstr ""
 "El Markdown és compatible. Les #etiquetes, @mencions i "
 ":emojis_personalitzats: també funcionen."
 
-#: app/templates/admin_edit_text.html:47 app/templates/admin_new.html:118
+#: app/templates/admin_edit_text.html:50 app/templates/admin_new.html:121
 msgid "will mark the post as sensitive"
 msgstr "avís de contingut (marcarà la publicació com a sensible)"
 
-#: app/templates/admin_edit_text.html:51 app/templates/admin_new.html:122
+#: app/templates/admin_edit_text.html:54 app/templates/admin_new.html:125
 msgid "More options"
 msgstr "Més opcions"
 
-#: app/templates/admin_edit_text.html:54 app/templates/admin_new.html:125
+#: app/templates/admin_edit_text.html:57 app/templates/admin_new.html:128
 msgid "URL alias"
 msgstr "Àlies d'URL"
 
-#: app/templates/admin_edit_text.html:55 app/templates/admin_new.html:126
+#: app/templates/admin_edit_text.html:58 app/templates/admin_new.html:129
 msgid "optional"
 msgstr "opcional"
 
-#: app/templates/admin_edit_text.html:56 app/templates/admin_new.html:127
+#: app/templates/admin_edit_text.html:59 app/templates/admin_new.html:130
 msgid "A short custom URL for this post, instead of its permalink."
 msgstr ""
 "Un URL personalitzat i curt per a aquesta publicació, en lloc del seu "
 "enllaç permanent."
 
-#: app/templates/admin_edit_text.html:56
+#: app/templates/admin_edit_text.html:59
 msgid "Leave empty to remove the alias."
 msgstr "Deixeu-ho buit per eliminar l'àlies."
 
-#: app/templates/admin_edit_text.html:59
+#: app/templates/admin_edit_text.html:62
 msgid "Permalink:"
 msgstr "Enllaç permanent:"
 
-#: app/templates/admin_edit_text.html:64 app/templates/admin_new.html:131
+#: app/templates/admin_edit_text.html:67 app/templates/admin_new.html:134
 msgid "Language"
 msgstr "Idioma"
 
-#: app/templates/admin_edit_text.html:65 app/templates/admin_new.html:132
+#: app/templates/admin_edit_text.html:68 app/templates/admin_new.html:135
 #, python-format
 msgid "optional, e.g. %(lang)s"
 msgstr "opcional, p. ex. %(lang)s"
 
-#: app/templates/admin_edit_text.html:65 app/templates/admin_new.html:132
+#: app/templates/admin_edit_text.html:68 app/templates/admin_new.html:135
 msgid "BCP 47 language code, e.g. en or pt-BR"
 msgstr "codi d'idioma BCP 47, p. ex. en o pt-BR"
 
-#: app/templates/admin_edit_text.html:69 app/templates/admin_new.html:136
+#: app/templates/admin_edit_text.html:72 app/templates/admin_new.html:139
 msgid "Mark attachment(s) as sensitive"
 msgstr "Marca els adjunts com a sensibles"
 
-#: app/templates/admin_edit_text.html:75
+#: app/templates/admin_edit_text.html:78
 msgid "Current attachments"
 msgstr "Adjunts actuals"
 
-#: app/templates/admin_edit_text.html:76
+#: app/templates/admin_edit_text.html:79
 msgid "Uncheck an attachment to remove it when you submit."
 msgstr "Desmarqueu un adjunt per eliminar-lo en enviar el formulari."
 
-#: app/templates/admin_edit_text.html:92
+#: app/templates/admin_edit_text.html:95
 msgid "Keep"
 msgstr "Mantén"
 
-#: app/templates/admin_edit_text.html:101
+#: app/templates/admin_edit_text.html:104
 msgid "Add attachments"
 msgstr "Afegeix adjunts"
 
-#: app/templates/admin_edit_text.html:103 app/templates/admin_new.html:145
+#: app/templates/admin_edit_text.html:106 app/templates/admin_new.html:148
 #, python-format
 msgid "%(filename)s: checking playback in this browser…"
 msgstr "%(filename)s: comprovant la reproducció en aquest navegador…"
 
-#: app/templates/admin_edit_text.html:104 app/templates/admin_new.html:146
+#: app/templates/admin_edit_text.html:107 app/templates/admin_new.html:149
 #, python-format
 msgid "%(filename)s: %(details)s — plays in this browser"
 msgstr "%(filename)s: %(details)s — es reprodueix en aquest navegador"
 
-#: app/templates/admin_edit_text.html:105 app/templates/admin_new.html:147
+#: app/templates/admin_edit_text.html:108 app/templates/admin_new.html:150
 #, python-format
 msgid ""
 "%(filename)s: this browser could not play this file (unsupported "
@@ -378,7 +378,7 @@ msgstr ""
 "contenidor no compatible) — és possible que es rebutgi en pujar-lo. "
 "L'opció més segura és tornar-lo a codificar com a H.264/AAC en un MP4."
 
-#: app/templates/admin_edit_text.html:106 app/templates/admin_new.html:148
+#: app/templates/admin_edit_text.html:109 app/templates/admin_new.html:151
 #, python-format
 msgid ""
 "%(filename)s: couldn't generate a local preview in this browser (this "
@@ -389,12 +389,12 @@ msgstr ""
 "navegador (aquesta comprovació no és definitiva — és possible que es pugi"
 " i es reprodueixi correctament; el servidor té la darrera paraula)."
 
-#: app/templates/admin_edit_text.html:108 app/templates/admin_new.html:150
+#: app/templates/admin_edit_text.html:111 app/templates/admin_new.html:153
 #, python-format
 msgid "Alt text for %(filename)s"
 msgstr "Text alternatiu per a %(filename)s"
 
-#: app/templates/admin_edit_text.html:111
+#: app/templates/admin_edit_text.html:114
 msgid "Submit"
 msgstr "Envia"
 
@@ -442,106 +442,106 @@ msgstr ""
 "publicacions deixen d'aparèixer al flux i les seves notificacions "
 "s'amaguen."
 
-#: app/templates/admin_new.html:7
+#: app/templates/admin_new.html:8
 #, python-format
 msgid "%(name)s - New"
 msgstr "%(name)s - Nou"
 
-#: app/templates/admin_new.html:13
+#: app/templates/admin_new.html:14
 msgid "In reply to:"
 msgstr "En resposta a:"
 
-#: app/templates/admin_new.html:18
+#: app/templates/admin_new.html:19
 msgid "Quoting:"
 msgstr "Citant:"
 
-#: app/templates/admin_new.html:40 app/templates/components/filters.html:22
+#: app/templates/admin_new.html:41 app/templates/components/filters.html:22
 #: app/templates/object.html:18
 msgid "Note"
 msgstr "Nota"
 
-#: app/templates/admin_new.html:40 app/templates/components/filters.html:22
+#: app/templates/admin_new.html:41 app/templates/components/filters.html:22
 msgid "Article"
 msgstr "Article"
 
-#: app/templates/admin_new.html:40 app/templates/components/filters.html:22
+#: app/templates/admin_new.html:41 app/templates/components/filters.html:22
 msgid "Question"
 msgstr "Pregunta"
 
-#: app/templates/admin_new.html:41
+#: app/templates/admin_new.html:42
 msgid "Public - sent to followers and visible on the homepage"
 msgstr "Públic - enviat als seguidors i visible a la pàgina d'inici"
 
-#: app/templates/admin_new.html:42
+#: app/templates/admin_new.html:43
 msgid "Unlisted - like public, but hidden from the homepage"
 msgstr "No llistat - com el públic, però amagat de la pàgina d'inici"
 
-#: app/templates/admin_new.html:43
+#: app/templates/admin_new.html:44
 msgid "Followers only"
 msgstr "Seguidors"
 
-#: app/templates/admin_new.html:44
+#: app/templates/admin_new.html:45
 msgid "Direct - only visible for mentioned actors"
 msgstr "Directe - només visible per als actors mencionats"
 
-#: app/templates/admin_new.html:56
+#: app/templates/admin_new.html:57
 msgid "Visibility"
 msgstr "Visibilitat"
 
-#: app/templates/admin_new.html:86
+#: app/templates/admin_new.html:88
 msgid "Hey!"
 msgstr "Ei!"
 
-#: app/templates/admin_new.html:92
+#: app/templates/admin_new.html:95
 msgid "Poll type"
 msgstr "Tipus d'enquesta"
 
-#: app/templates/admin_new.html:94
+#: app/templates/admin_new.html:97
 msgid "single choice"
 msgstr "opció única"
 
-#: app/templates/admin_new.html:95
+#: app/templates/admin_new.html:98
 msgid "multiple choices"
 msgstr "opcions múltiples"
 
-#: app/templates/admin_new.html:99
+#: app/templates/admin_new.html:102
 msgid "Poll duration"
 msgstr "Durada de l'enquesta"
 
-#: app/templates/admin_new.html:101
+#: app/templates/admin_new.html:104
 msgid "ends in 5 minutes"
 msgstr "acaba d'aquí a 5 minuts"
 
-#: app/templates/admin_new.html:102
+#: app/templates/admin_new.html:105
 msgid "ends in 30 minutes"
 msgstr "acaba d'aquí a 30 minuts"
 
-#: app/templates/admin_new.html:103
+#: app/templates/admin_new.html:106
 msgid "ends in 1 hour"
 msgstr "acaba d'aquí a 1 hora"
 
-#: app/templates/admin_new.html:104
+#: app/templates/admin_new.html:107
 msgid "ends in 6 hours"
 msgstr "acaba d'aquí a 6 hores"
 
-#: app/templates/admin_new.html:105
+#: app/templates/admin_new.html:108
 msgid "ends in 1 day"
 msgstr "acaba d'aquí a 1 dia"
 
-#: app/templates/admin_new.html:110
+#: app/templates/admin_new.html:113
 #, python-format
 msgid "Option %(n)s"
 msgstr "Opció %(n)s"
 
-#: app/templates/admin_new.html:111
+#: app/templates/admin_new.html:114
 msgid "leave empty to disable"
 msgstr "deixeu-ho buit per desactivar-la"
 
-#: app/templates/admin_new.html:143
+#: app/templates/admin_new.html:146
 msgid "Attachments"
 msgstr "Adjunts"
 
-#: app/templates/admin_new.html:152
+#: app/templates/admin_new.html:155
 msgid "Publish"
 msgstr "Publica"
 
@@ -1280,6 +1280,165 @@ msgstr "M'agrada"
 #: app/templates/components/filters.html:22
 msgid "Announce"
 msgstr "Compartit"
+
+#: app/templates/components/markdown_bar.html:11
+#: app/templates/components/markdown_bar.html:28
+msgid "Markdown formatting"
+msgstr "Format Markdown"
+
+#: app/templates/components/markdown_bar.html:12
+msgid "bold text"
+msgstr "text en negreta"
+
+#: app/templates/components/markdown_bar.html:12
+msgid "Bold"
+msgstr "Negreta"
+
+#: app/templates/components/markdown_bar.html:13
+msgid "italic text"
+msgstr "text en cursiva"
+
+#: app/templates/components/markdown_bar.html:13
+msgid "Italic"
+msgstr "Cursiva"
+
+#: app/templates/components/markdown_bar.html:14
+msgid "strikethrough text"
+msgstr "text ratllat"
+
+#: app/templates/components/markdown_bar.html:14
+msgid "Strikethrough"
+msgstr "Ratllat"
+
+#: app/templates/components/markdown_bar.html:15
+msgid "heading"
+msgstr "títol"
+
+#: app/templates/components/markdown_bar.html:15
+msgid "Heading"
+msgstr "Títol"
+
+#: app/templates/components/markdown_bar.html:16
+msgid "quoted text"
+msgstr "text citat"
+
+#: app/templates/components/markdown_bar.html:16
+msgid "Quote"
+msgstr "Cita"
+
+#: app/templates/components/markdown_bar.html:17
+#: app/templates/components/markdown_bar.html:18
+msgid "list item"
+msgstr "element de la llista"
+
+#: app/templates/components/markdown_bar.html:17
+msgid "Bulleted list"
+msgstr "Llista amb pics"
+
+#: app/templates/components/markdown_bar.html:18
+msgid "Numbered list"
+msgstr "Llista numerada"
+
+#: app/templates/components/markdown_bar.html:19
+#: app/templates/components/markdown_bar.html:20
+msgid "code"
+msgstr "codi"
+
+#: app/templates/components/markdown_bar.html:19
+msgid "Inline code"
+msgstr "Codi en línia"
+
+#: app/templates/components/markdown_bar.html:20
+msgid "Code block"
+msgstr "Bloc de codi"
+
+#: app/templates/components/markdown_bar.html:21
+msgid "link text"
+msgstr "text de l'enllaç"
+
+#: app/templates/components/markdown_bar.html:21
+#: app/templates/components/markdown_bar.html:35
+msgid "Link"
+msgstr "Enllaç"
+
+#: app/templates/components/markdown_bar.html:21
+msgid "url"
+msgstr "url"
+
+#: app/templates/components/markdown_bar.html:22
+msgid "alt text"
+msgstr "text alternatiu"
+
+#: app/templates/components/markdown_bar.html:22
+#: app/templates/components/markdown_bar.html:36
+msgid "Image"
+msgstr "Imatge"
+
+#: app/templates/components/markdown_bar.html:22
+msgid "img"
+msgstr "img"
+
+#: app/templates/components/markdown_bar.html:30
+msgid "Headings"
+msgstr "Títols"
+
+#: app/templates/components/markdown_bar.html:31
+msgid "Emphasis"
+msgstr "Èmfasi"
+
+#: app/templates/components/markdown_bar.html:32
+msgid "Code"
+msgstr "Codi"
+
+#: app/templates/components/markdown_bar.html:33
+msgid "Blockquote"
+msgstr "Cita en bloc"
+
+#: app/templates/components/markdown_bar.html:34
+msgid "Lists"
+msgstr "Llistes"
+
+#: app/templates/components/markdown_bar.html:34
+msgid "indent 2 spaces to nest"
+msgstr "indenta 2 espais per imbricar"
+
+#: app/templates/components/markdown_bar.html:37
+msgid "Table"
+msgstr "Taula"
+
+#: app/templates/components/markdown_bar.html:37
+msgid "then"
+msgstr "després"
+
+#: app/templates/components/markdown_bar.html:38
+msgid "Horizontal rule"
+msgstr "Regla horitzontal"
+
+#: app/templates/components/markdown_bar.html:39
+msgid "Line break"
+msgstr "Salt de línia"
+
+#: app/templates/components/markdown_bar.html:39
+msgid "end a line with two spaces"
+msgstr "acaba una línia amb dos espais"
+
+#: app/templates/components/markdown_bar.html:40
+msgid "Autolink"
+msgstr "Enllaç automàtic"
+
+#: app/templates/components/markdown_bar.html:40
+msgid "or a bare URL"
+msgstr "o un URL sense format"
+
+#: app/templates/components/markdown_bar.html:41
+msgid "Fediverse"
+msgstr "Fedivers"
+
+#: app/templates/components/markdown_bar.html:43
+msgid ""
+"Not supported: task lists (- [ ]) and footnotes ([^1]). Raw HTML is "
+"filtered down to a small set of tags."
+msgstr "No compatible: llistes de tasques (- [ ]) i notes al peu ([^1]). L'HTML en brut es filtra a un conjunt reduït d'etiquetes."
 
 #~ msgid "%(name)s - New Post"
 #~ msgstr "%(name)s - Publicació nova"
