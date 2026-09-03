@@ -58,7 +58,7 @@
 {{ actor_box(actor, md_author=md_author) }}
 {% if is_admin and metadata %}
 <div>
-    <nav class="flexbox actor-metadata" hx-boost="true" hx-indicator="body">
+    <div class="flexbox actor-metadata" hx-boost="true" hx-indicator="body">
         <ul>
             {% if metadata.has_blocked_local_actor %}
                 <li>{{ _("blocked you") }}</li>
@@ -144,7 +144,7 @@
                 <li><a href="{{ actor.url }}" class="label-btn">{{ _("remote profile") }}</a></li>
             {% endif %}
         </ul>
-    </nav>
+    </div>
 </div>
 {% endif %}
 

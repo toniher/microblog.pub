@@ -12,7 +12,9 @@
 {% block content %}
 {% include "header.html" %}
 
-<div class="box">
+<h2>{{ _("About") }}</h2>
+
+<div class="box prose">
 {% if about_html %}
 {{ about_html | safe }}
 {% else %}
@@ -52,7 +54,7 @@
 {% endif %}
 </div>
 
-<div class="box">
+<div class="box prose">
 {% set mbp_link %}<a href="https://github.com/toniher/microblog.pub">microblog.pub</a> <small class="microblogpub-version"><code>{{ microblogpub_version }}</code></small>{% endset %}
 {% set ap_link %}<a href="https://activitypub.rocks/">ActivityPub</a>{% endset %}
 <p>{% trans mbp=mbp_link|safe, ap=ap_link|safe %}This is a single-user instance running {{ mbp }}, federating over {{ ap }}. It has no other users, and does not accept sign-ups.{% endtrans %}</p>

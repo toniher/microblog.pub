@@ -10,7 +10,7 @@
 <div class="activity-og-meta">
     {% if og_meta.image %}
     <div>
-        <img src="{{ og_meta.image | media_proxy_url }}" loading="lazy">
+        <img src="{{ og_meta.image | media_proxy_url }}" alt="" loading="lazy">
     </div>
     {% endif %}
     <div>
@@ -49,7 +49,7 @@
     </div>
     </div>
 
-    <nav class="flexbox activity-bar margin-top-20" hx-boost="true" hx-indicator="body">
+    <div class="flexbox activity-bar margin-top-20" hx-boost="true" hx-indicator="body">
     <ul>
         <li>
             <div><a href="{{ wm_reply.url }}" rel="nofollow" class="object-permalink u-url u-uid">{{ _("permalink") }}</a></div>
@@ -63,7 +63,7 @@
             </li>
         {% endif %}
     </ul>
-    </nav>
+    </div>
 </div>
 
 {% endblock %}
@@ -161,7 +161,7 @@
             <div class="p-summary"{% if ENABLE_MICRODATA %} itemprop="abstract"{% endif %}>
                 <p>{{ object.summary | clean_html(object) | safe }}</p>
             </div>
-            <span class="show-more-btn" aria-hidden="true"></span>
+            <span class="show-more-btn" aria-hidden="true"><span class="text-closed">{{ _("show more") }}</span><span class="text-open">{{ _("show less") }}</span></span>
         </summary>
     {% endif %}
         <div class="obj-content">
@@ -230,7 +230,7 @@
     {{ attachments.attachments(object) }}
     </div>
 
-    <nav class="flexbox activity-bar" hx-boost="true" hx-indicator="body">
+    <div class="flexbox activity-bar" hx-boost="true" hx-indicator="body">
     <ul>
         <li>
             <div><a href="{{ object.url }}"{% if object.is_from_inbox %} rel="nofollow"{% endif %} class="object-permalink u-url u-uid"{% if ENABLE_MICRODATA %} itemprop="url mainEntityOfPage"{% endif %}>{{ _("permalink") }}</a></div>
@@ -298,10 +298,10 @@
         {% endif %}
 
     </ul>
-    </nav>
+    </div>
 
     {% if is_admin %}
-    <nav class="flexbox activity-bar" hx-boost="true" hx-indicator="body">
+    <div class="flexbox activity-bar" hx-boost="true" hx-indicator="body">
     <ul>
         {% if object.is_from_outbox %}
             <li>
@@ -392,7 +392,7 @@
             </li>
         {% endif %}
     </ul>
-    </nav>
+    </div>
     {% endif %}
 
 

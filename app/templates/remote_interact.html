@@ -19,7 +19,8 @@
 <div class="box">
     <form class="form" action="{{ url_for("post_remote_interaction") }}" method="POST">
         {{ hidden_inputs.embed_csrf_token(csrf_token) }}
-        <input type="text" name="profile" placeholder="you@instance.tld" autofocus>
+        <label for="remote-interact-profile" class="visually-hidden">{{ _("What's your account?") }}</label>
+        <input type="text" name="profile" id="remote-interact-profile" placeholder="you@instance.tld" autofocus>
         <input type="hidden" name="ap_id" value="{{ outbox_object.ap_id }}">
         <input type="submit" value="{{ _("interact from your instance") }}">
     </form>

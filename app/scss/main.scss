@@ -1,11 +1,13 @@
 // ----- Palette -----------------------------------------------------------
 // Light theme defaults. A custom theme (imported below) can override any of
 // these before they are emitted as CSS custom properties.
-$font-stack: Helvetica, sans-serif;
+// Helvetica ships on neither Linux nor Windows, so the previous default
+// silently fell through to an arbitrary sans-serif on most installs.
+$font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 $background: #ddd;
 $light-background: #e6e6e6;
 $text-color: #111;
-$primary-color: #1d781d;
+$primary-color: #1a6b1a; // darkened from #1d781d: the original failed AA (4.12:1) on $background
 $secondary-color: #781D78;
 $form-background-color: #ccc;
 $form-text-color: #333;
@@ -14,10 +16,16 @@ $nav-button-text-color: #333;
 $muted-color: #4a4a4a; // darkened for AA contrast on the default background
 $primary-button-text-color: #fff;
 $code-highlight-background: #f0f0f0;
+// Highlighted code keeps a light background in both themes (see
+// $dark-code-highlight-background below), so its foreground is a fixed dark
+// colour rather than a themed one -- it must stay readable against that
+// fixed background regardless of light/dark mode.
+$code-highlight-text: #111;
 $diff-ins-background: #cdeccd;
 $diff-ins-color: #0b3d0b;
 $diff-del-background: #f7cfcf;
 $diff-del-color: #5c1010;
+$shadow-color: rgba(0, 0, 0, .25);
 
 // Dark theme defaults (applied via prefers-color-scheme below).
 $dark-background: #16181c;
@@ -37,6 +45,7 @@ $dark-diff-ins-background: #1d3a1d;
 $dark-diff-ins-color: #b8e6b8;
 $dark-diff-del-background: #45201f;
 $dark-diff-del-color: #f0b7b5;
+$dark-shadow-color: rgba(0, 0, 0, .6);
 
 // Load custom theme (may override any of the variables above).
 @import "theme.scss";
@@ -63,6 +72,7 @@ $dark-diff-del-color: #f0b7b5;
   --diff-ins-color: #{$diff-ins-color};
   --diff-del-background: #{$diff-del-background};
   --diff-del-color: #{$diff-del-color};
+  --shadow-color: #{$shadow-color};
 }
 
 @media (prefers-color-scheme: dark) {
@@ -83,6 +93,7 @@ $dark-diff-del-color: #f0b7b5;
     --diff-ins-color: #{$dark-diff-ins-color};
     --diff-del-background: #{$dark-diff-del-background};
     --diff-del-color: #{$dark-diff-del-color};
+    --shadow-color: #{$dark-shadow-color};
   }
 }
 
@@ -109,6 +120,18 @@ $diff-ins-background: var(--diff-ins-background);
 $diff-ins-color: var(--diff-ins-color);
 $diff-del-background: var(--diff-del-background);
 $diff-del-color: var(--diff-del-color);
+$shadow-color: var(--shadow-color);
+
+// ----- Type scale ----------------------------------------------------------
+// A small set of named steps, all in rem (so they track a user's browser
+// font-size preference, not just page zoom -- see WCAG 1.4.4). Replaces a
+// dozen ad-hoc em/rem values that had drifted apart with no shared scale.
+$text-size-sm: 1rem; // 16px
+$text-size-md: 1.125rem; // 18px
+$text-size-base: 1.25rem; // 20px -- the body default
+$text-size-lg: 1.375rem; // 22px
+$text-size-xl: 1.5rem; // 24px
+$text-size-2xl: 1.625rem; // 26px
 
 // Accessible focus ring for keyboard users across the whole UI.
 :focus-visible {
@@ -122,7 +145,7 @@ $diff-del-color: var(--diff-del-color);
   left: -9999px;
   top: 0;
   z-index: 100;
-  padding: 8px 16px;
+  padding: 0.5rem 1rem;
   background: $primary-color;
   color: $primary-button-text-color;
 }
@@ -142,12 +165,19 @@ body::after {
   z-index: 200;
   background: $secondary-color;
   opacity: 0;
-  transition: width .3s ease, opacity .3s ease;
 }
 body.htmx-request::after {
   width: 100%;
   opacity: 1;
-  transition: width 10s cubic-bezier(.1, .7, .1, 1);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  body::after {
+    transition: width .3s ease, opacity .3s ease;
+  }
+  body.htmx-request::after {
+    transition: width 10s cubic-bezier(.1, .7, .1, 1);
+  }
 }
 
 .primary-color {
@@ -156,17 +186,17 @@ body.htmx-request::after {
 
 #admin {
   .admin-menu {
-    margin-bottom: 30px;
-    padding: 0 20px;
+    margin-bottom: 1.875rem;
+    padding: 0 1.25rem;
   }
 }
 
 .empty-state {
-  padding: 20px;
+  padding: 1.25rem;
 }
 
 .public-top-menu {
-  margin: 30px 0 0 0;
+  margin: 1.875rem 0 0 0;
 }
 
 .width-95 {
@@ -179,25 +209,25 @@ body.htmx-request::after {
 
 .admin-new {
   textarea {
-    font-size: 1.2em;
+    font-size: $text-size-base;
     width: 95%;
   }
 }
 
 .form-field {
   display: block;
-  margin-bottom: 15px;
+  margin-bottom: 0.9375rem;
 
   label {
     display: block;
-    font-size: 0.9em;
+    font-size: $text-size-md;
     color: $muted-color;
-    margin-bottom: 3px;
+    margin-bottom: 0.1875rem;
   }
 
   .muted {
     display: block;
-    margin-top: 3px;
+    margin-top: 0.1875rem;
   }
 }
 
@@ -208,24 +238,24 @@ body.htmx-request::after {
 .more-options summary {
   cursor: pointer;
   color: $muted-color;
-  margin: 10px 0;
+  margin: 0.625rem 0;
 }
 
 .emoji-picker {
   max-height: 120px;
   overflow-y: auto;
-  margin-bottom: 10px;
+  margin-bottom: 0.625rem;
 }
 
 .ji {
   background: none;
   border: 0;
-  padding: 2px;
+  padding: 0.125rem;
   cursor: pointer;
   border-radius: 4px;
   // Unicode emoji are rendered as text, so this needs a readable size of its
   // own -- `.form { input, select, textarea }` doesn't cover <button>.
-  font-size: 1.3rem;
+  font-size: $text-size-base;
   line-height: 1;
   vertical-align: middle;
 
@@ -239,26 +269,26 @@ body.htmx-request::after {
 // `:not([hidden])` rather than a bare `display: flex`, which would beat the UA
 // stylesheet's `[hidden] { display: none }`.
 .md-bar {
-  margin-bottom: 10px;
+  margin-bottom: 0.625rem;
 
   &:not([hidden]) {
     display: flex;
     flex-wrap: wrap;
-    column-gap: 4px;
-    row-gap: 4px;
+    column-gap: 0.25rem;
+    row-gap: 0.25rem;
   }
 
   button {
     background: none;
     border: 0;
-    padding: 2px 6px;
+    padding: 0.125rem 0.375rem;
     cursor: pointer;
     border-radius: 4px;
     color: $muted-color;
     // `.form { input, select, textarea }` doesn't cover <button>, and buttons
     // don't inherit the page font.
     font-family: $font-stack;
-    font-size: 1rem;
+    font-size: $text-size-sm;
     line-height: 1.4;
     min-width: 2em;
 
@@ -276,21 +306,21 @@ body.htmx-request::after {
 }
 
 .md-help {
-  margin-top: 3px;
+  margin-top: 0.1875rem;
 
   summary {
     cursor: pointer;
     color: $muted-color;
-    font-size: 0.9em;
+    font-size: $text-size-md;
   }
 
   dl {
     display: grid;
     grid-template-columns: max-content 1fr;
-    column-gap: 15px;
-    row-gap: 2px;
-    margin: 5px 0 0 0;
-    font-size: 0.9em;
+    column-gap: 0.9375rem;
+    row-gap: 0.125rem;
+    margin: 0.3125rem 0 0 0;
+    font-size: $text-size-md;
   }
 
   dt { color: $muted-color; }
@@ -315,9 +345,16 @@ body.htmx-request::after {
 .show-more-wrapper {
   .p-summary {
     display: inline-block;
+    // Prose gets an always-visible underline, not just on hover: color alone
+    // isn't enough to distinguish a link from surrounding text.
+    a {
+      text-decoration: underline;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 0.15em;
+    }
   }
   .show-more-btn {
-    margin-left: 5px;
+    margin-left: 0.3125rem;
   }
   summary {
     display: inline-block;
@@ -325,20 +362,27 @@ body.htmx-request::after {
   summary::-webkit-details-marker {
     display: none
   }
-  &:not([open]) .show-more-btn::after {
-    content: 'show more';
+  // The two labels are rendered by the template (so they're translated) and
+  // toggled by the native [open] state -- no JS, no CSS generated content.
+  .show-more-btn .text-open {
+    display: none;
   }
-  &[open] .show-more-btn::after {
-    content: 'show less';
+  &[open] .show-more-btn {
+    .text-closed {
+      display: none;
+    }
+    .text-open {
+      display: inline;
+    }
   }
 }
 .sensitive-attachment {
   display: inline-block;
-  .sensitive-attachment-state {
-    display: none;
+  summary {
+    display: inline-block;
   }
-  .sensitive-attachment-state:checked ~ .sensitive-attachment-box div {
-    display:none;
+  summary::-webkit-details-marker {
+    display: none;
   }
   .sensitive-attachment-box {
     position: relative;
@@ -350,6 +394,9 @@ body.htmx-request::after {
       backdrop-filter: blur(2em);
     }
   }
+  &[open] .sensitive-attachment-box div {
+    display: none;
+  }
 }
 
 
@@ -357,6 +404,12 @@ blockquote {
   border-left: 3px solid $secondary-color;
   margin-left: 0;
   padding-left: 1.5em;
+}
+
+// Cap the measure of running prose -- the 1000px page column is far past a
+// comfortable line length for body text.
+.e-content, .p-summary, .prose {
+  max-width: 68ch;
 }
 
 .muted {
@@ -370,7 +423,7 @@ blockquote {
 
 body {
   font-family: $font-stack;
-  font-size: 1.25rem; // 20px at the default 16px root, but respects user zoom
+  font-size: $text-size-base; // 20px at the default 16px root, but respects user zoom
   line-height: 1.6;
   background: $background;
   color: $text-color;
@@ -386,18 +439,14 @@ a {
 
 dl {
   display: flex;
+  flex-wrap: wrap;
   dt {
-    width: 200px;
+    min-width: 10ch;
     flex: 0 0 auto;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
   dd {
     flex: 1 1 auto;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    min-width: 0;
     p {
       display: inline;
     }
@@ -405,9 +454,9 @@ dl {
 }
 
 .shared-header .actor-action {
-    margin-left: 20px;
-    margin-top: 30px;
-    margin-bottom: -20px;
+    margin-left: 1.25rem;
+    margin-top: 1.875rem;
+    margin-bottom: -1.25rem;
     strong {
         color: $primary-color;
     }
@@ -421,26 +470,34 @@ dl {
 
 div.highlight {
     background: $code-highlight-background;
-    padding: 0 10px;
+    padding: 0 0.625rem;
     overflow: auto;
     display: block;
-    margin: 20px 0;
+    margin: 1.25rem 0;
 }
 
 .box {
-    padding: 0 20px;
+    padding: 0 1.25rem;
 }
 
-code, pre {
-  color: $secondary-color; // #cb4b16; // #268bd2; // #2aa198;
+code {
+  color: $secondary-color;
+  font-family: monospace;
+}
+
+// The highlighted-code background is deliberately kept light in both themes
+// (see $dark-code-highlight-background above), so its foreground stays a
+// fixed dark colour rather than following the theme.
+pre {
+  color: $code-highlight-text;
   font-family: monospace;
 }
 
 .form {
     input, select, textarea {
-        font-size: 1.25rem;
+        font-size: $text-size-base;
         border: 0;
-        padding: 5px;
+        padding: 0.3125rem;
         background: $form-background-color;
         color: $form-text-color;
         &:focus {
@@ -448,22 +505,29 @@ code, pre {
         }
     }
     input[type=submit] {
-        font-size: 1.25rem;
-        outline: none;
+        font-size: $text-size-base;
         background: $primary-color;
         color: $primary-button-text-color;
-        padding: 5px 12px;
+        padding: 0.3125rem 0.75rem;
         cursor: pointer;
     }
 }
 
 header {
-  padding: 0 20px;
+  padding: 0 1.25rem;
+  // The display-name link is the page's <h1> (see header.html); reset the
+  // UA heading styles so it keeps looking like the plain title link it
+  // always was -- sizing/weight continue to come from .title below.
+  h1 {
+    display: inline;
+    margin: 0;
+    font: inherit;
+  }
   .title {
-    font-size: 1.3em;
+    font-size: $text-size-2xl;
     text-decoration: none;
     .handle {
-      font-size: 0.85em;
+      font-size: $text-size-lg;
       color: $muted-color;
     }
   }
@@ -471,8 +535,11 @@ header {
     color: $muted-color;
   }
   .summary {
-    a:hover {
+    max-width: 68ch;
+    a {
       text-decoration: underline;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 0.15em;
     }
   }
 }
@@ -489,7 +556,7 @@ a {
 main {
     width: 100%;
     max-width: 1000px;
-    margin: 30px auto;
+    margin: 1.875rem auto;
 }
 
 .main-flex {
@@ -510,10 +577,17 @@ main {
 footer {
   width: 100%;
   max-width: 1000px;
-  margin: 20px auto;
+  margin: 1.25rem auto;
   color: $muted-color;
   p {
     margin: 0;
+  }
+  // Prose gets an always-visible underline, not just on hover: color alone
+  // isn't enough to distinguish a link from surrounding text.
+  a {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.15em;
   }
 }
 .tiny-actor-icon {
@@ -524,13 +598,13 @@ footer {
 }
 .actor-box {
   display: flex;
-  column-gap: 20px;
-  margin:10px 0;
+  column-gap: 1.25rem;
+  margin: 0.625rem 0;
   .icon-box {
     flex: 0 0 50px;
   }
   .actor-handle {
-    font-size: 0.85em;
+    font-size: $text-size-sm;
     line-height: 1em;
     color: $muted-color;
   }
@@ -540,12 +614,12 @@ footer {
 }
 #articles {
     list-style-type: none;
-    margin: 30px 0;
-    padding: 0 20px;
+    margin: 1.875rem 0;
+    padding: 0 1.25rem;
     li {
         display: block;
         span {
-          padding-right:10px;
+          padding-right: 0.625rem;
         }
     }
 }
@@ -562,15 +636,14 @@ footer {
 }
 
 @mixin admin-button() {
-    font-size: 1.125rem;
+    font-size: $text-size-md;
     font-family: $font-stack;
     background: $nav-button-background-color;
     color: $nav-button-text-color;
     border: 0px;
-    padding: 5px 20px 5px 20px;
+    padding: 0.3125rem 1.25rem;
     cursor: pointer;
-    text-transform: uppercase;
-    box-shadow: #777 0 2px 3px;
+    box-shadow: $shadow-color 0 2px 3px;
 }
 
 .show-sensitive-btn, .show-more-btn, .label-btn, input[type=submit], button[type=submit] {
@@ -595,9 +668,9 @@ ul.poll-items {
   li {
     display: block;
     p {
-      margin: 20px 0 10px 0;
+      margin: 1.25rem 0 0.625rem 0;
       .poll-vote {
-        padding-left: 20px;
+        padding-left: 1.25rem;
       }
     }
 
@@ -614,14 +687,14 @@ ul.poll-items {
 
 .attachment-wrapper {
   .attachment-item {
-    margin-top: 20px;
+    margin-top: 1.25rem;
   }
   img.attachment {
     margin: 0;
   }
   a.attachment {
     display: inline-block;
-    margin-bottom: 15px;
+    margin-bottom: 0.9375rem;
   }
   audio.attachment {
     width: 480px;
@@ -629,13 +702,16 @@ ul.poll-items {
   }
 }
 
-nav {
+// .flexbox also matches the action-button bars in utils.html/actor.html, which
+// use the class on a <div> rather than <nav> -- they're not navigation (see
+// the .flexbox rule below, which keys off the class for the same reason).
+nav, .flexbox {
     form {
-        margin: 10px 0;
+        margin: 0.625rem 0;
     }
 }
 
-nav.flexbox {
+.flexbox {
     ul {
         display: flex;
         flex-wrap: wrap;
@@ -647,7 +723,7 @@ nav.flexbox {
     }
 
     ul li {
-        margin-right: 15px;
+        margin-right: 0.9375rem;
 
         &:last-child {
             margin-right: 0px;
@@ -661,13 +737,15 @@ nav.flexbox {
             text-decoration: underline;
         }
     }
-    a.active:not(.label-btn) {
+    // aria-current is the one-source-of-truth version (see header.html); the
+    // .active class is kept for templates not yet converted (admin pages).
+    a[aria-current="page"]:not(.label-btn), a.active:not(.label-btn) {
         color: $secondary-color;
         font-weight: bold;
     }
 }
 
-// after nav.flexbox to override default behavior
+// after .flexbox to override default behavior
 a.label-btn {
   color: $nav-button-text-color;
   &:hover {
@@ -679,10 +757,10 @@ a.label-btn {
 .edit-history {
     list-style: none;
     padding: 0;
-    margin: 20px 0;
+    margin: 1.25rem 0;
 
     > li {
-        padding: 10px 0;
+        padding: 0.625rem 0;
         border-top: 1px solid $muted-color;
     }
 }
@@ -690,23 +768,23 @@ a.label-btn {
 .revision-meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 0.625rem;
     align-items: baseline;
 }
 
 .revision-radios input[type=radio] {
-    margin-right: 4px;
+    margin-right: 0.25rem;
 }
 
 .revision-links {
     a, span {
-        margin-right: 10px;
+        margin-right: 0.625rem;
     }
 }
 
 .diff-panel {
-    margin: 20px 0;
-    padding: 10px 15px;
+    margin: 1.25rem 0;
+    padding: 0.625rem 0.9375rem;
     background: $light-background;
 
     h3 {
@@ -715,11 +793,11 @@ a.label-btn {
 }
 
 .diff-field {
-    margin: 10px 0;
+    margin: 0.625rem 0;
 
     .diff-field-label {
         color: $muted-color;
-        margin-right: 5px;
+        margin-right: 0.3125rem;
     }
 }
 
@@ -743,8 +821,8 @@ a.label-btn {
 }
 
 .ap-object {
-    margin: 15px 0;
-    padding: 20px;
+    margin: 0.9375rem 0;
+    padding: 1.25rem;
     nav {
         color: $muted-color;
     }
@@ -752,13 +830,22 @@ a.label-btn {
         display: inline;
         color: $muted-color;
     }
-    .e-content, .activity-og-meta {
+    .e-content {
+        // Prose gets an always-visible underline, not just on hover: color
+        // alone isn't enough to distinguish a link from surrounding text.
+        a {
+            text-decoration: underline;
+            text-decoration-thickness: 1px;
+            text-underline-offset: 0.15em;
+        }
+    }
+    .activity-og-meta {
         a:hover {
             text-decoration: underline;
         }
     }
     .activity-attachment {
-        margin: 30px 0 20px 0;
+        margin: 1.875rem 0 1.25rem 0;
         img, audio, video {
             max-width: calc(min(740px, 100%));
         }
@@ -776,8 +863,8 @@ a.label-btn {
 
 .activity-og-meta {
   display: flex;
-  column-gap: 20px;
-  margin: 20px 0;
+  column-gap: 1.25rem;
+  margin: 1.25rem 0;
   img {
     max-width: 200px;
     max-height: 100px;
@@ -792,7 +879,7 @@ a.label-btn {
 }
 
 .quoted-object {
-    margin: 10px 0;
+    margin: 0.625rem 0;
     border: 1px solid $muted-color;
     border-radius: 4px;
     .ap-object {
@@ -813,7 +900,7 @@ a.label-btn {
 
 .indieauth-box {
   display: flex;
-  column-gap: 20px;
+  column-gap: 1.25rem;
 
   .indieauth-logo {
     flex: initial;
@@ -825,9 +912,9 @@ a.label-btn {
   .indieauth-details {
     flex: 1;
     div {
-      padding-left: 20px;
+      padding-left: 1.25rem;
       a {
-        font-size: 1.2em;
+        font-size: $text-size-xl;
         font-weight: 600;
       }
     }
@@ -836,18 +923,18 @@ a.label-btn {
 
 .public-interactions {
   display: flex;
-  column-gap: 20px;
+  column-gap: 1.25rem;
   flex-wrap: wrap;
-  margin-top: 20px;
+  margin-top: 1.25rem;
   .interactions-block {
     flex: 0 1 30%;
     max-width: 50%;
     .facepile-wrapper {
       display: flex;
-      column-gap: 20px;
-      row-gap: 20px;
+      column-gap: 1.25rem;
+      row-gap: 1.25rem;
       flex-wrap: wrap;
-      margin-top: 20px;
+      margin-top: 1.25rem;
       a {
         height: 50px;
         img {
@@ -879,7 +966,7 @@ a.label-btn {
 }
 
 .margin-top-20 {
-  margin-top: 20px;
+  margin-top: 1.25rem;
 }
 
 .video-wrapper {
@@ -907,7 +994,7 @@ audio.u-audio {
     top: 5px;
     left: 5px;
     padding: 0 3px;
-    font-size: 0.8em;
+    font-size: $text-size-sm;
     background: rgba(0,0,0,.5);
     color: #fff;
 }
@@ -917,20 +1004,13 @@ audio.u-audio {
 // pieces need to stack/wrap instead of overflowing.
 @media (max-width: 700px) {
     body {
-        font-size: 1.125rem;
+        font-size: $text-size-md;
     }
     main {
-        margin: 20px auto;
+        margin: 1.25rem auto;
     }
     dl {
         flex-direction: column;
-        dt {
-            width: auto;
-            white-space: normal;
-        }
-        dd {
-            white-space: normal;
-        }
     }
     .activity-og-meta {
         flex-direction: column;
@@ -950,6 +1030,6 @@ audio.u-audio {
         flex-direction: column;
     }
     .actor-box {
-        column-gap: 12px;
+        column-gap: 0.75rem;
     }
 }

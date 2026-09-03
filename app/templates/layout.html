@@ -24,10 +24,10 @@
 <div id="admin">
 {% macro admin_link(url, text) %}
 {% set url_for = BASE_URL + request.app.router.url_path_for(url) %}
-<a href="{{ url_for }}" {% if BASE_URL + request.url.path == url_for %}class="active"{% endif %}>{{ text }}</a>
+<a href="{{ url_for }}" {% if BASE_URL + request.url.path == url_for %}aria-current="page"{% endif %}>{{ text }}</a>
 {% endmacro %}
 <div class="admin-menu">
-<nav class="flexbox" hx-boost="true" hx-indicator="body">
+<nav class="flexbox" aria-label="{{ _("Admin") }}" hx-boost="true" hx-indicator="body">
     <ul>
         <li>{{ admin_link("index", _("Public")) }}</li>
         <li>{{ admin_link("admin_new", _("New")) }}</li>

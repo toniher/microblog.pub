@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-09-03 14:33+0200\n"
+"POT-Creation-Date: 2026-09-03 23:49+0200\n"
 "PO-Revision-Date: 2026-07-17 22:19+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fr\n"
@@ -126,36 +126,43 @@ msgstr "%(name)s a demandé à vous suivre"
 msgid "About %(name)s"
 msgstr "À propos de %(name)s"
 
-#: app/templates/about.html:25
+#: app/templates/about.html:15
+msgid "About"
+msgstr ""
+
+#: app/templates/about.html:27
 msgid "Posts"
 msgstr "Notes"
 
-#: app/templates/about.html:29 app/templates/header.html:54
+#: app/templates/about.html:31 app/templates/articles.html:10
+#: app/templates/header.html:56
 msgid "Articles"
 msgstr "Articles"
 
-#: app/templates/about.html:33 app/templates/header.html:57
+#: app/templates/about.html:35 app/templates/followers.html:11
+#: app/templates/header.html:59
 msgid "Followers"
 msgstr "Abonnés"
 
-#: app/templates/about.html:37 app/templates/header.html:60
+#: app/templates/about.html:39 app/templates/following.html:11
+#: app/templates/header.html:62
 msgid "Following"
 msgstr "Abonnements"
 
-#: app/templates/about.html:44
+#: app/templates/about.html:46
 msgid "Fediverse handle"
 msgstr "Identifiant Fediverse"
 
-#: app/templates/about.html:45 app/templates/components/filters.html:22
-#: app/templates/header.html:9
+#: app/templates/about.html:47 app/templates/components/filters.html:22
+#: app/templates/header.html:11
 msgid "Follow"
 msgstr "Suivre"
 
-#: app/templates/about.html:49
+#: app/templates/about.html:51
 msgid "Contact"
 msgstr "Contact"
 
-#: app/templates/about.html:58
+#: app/templates/about.html:60
 #, python-format
 msgid ""
 "This is a single-user instance running %(mbp)s, federating over %(ap)s. "
@@ -574,11 +581,11 @@ msgstr "Voir plus"
 msgid "%(name)s's articles"
 msgstr "Articles de %(name)s"
 
-#: app/templates/articles.html:22 app/templates/index.html:46
+#: app/templates/articles.html:24 app/templates/index.html:46
 msgid "Previous"
 msgstr "Précédent"
 
-#: app/templates/articles.html:26 app/templates/index.html:50
+#: app/templates/articles.html:28 app/templates/index.html:50
 msgid "Next"
 msgstr "Suivant"
 
@@ -603,14 +610,14 @@ msgstr "Accueil"
 msgid "%(name)s's followers"
 msgstr "Abonnés de %(name)s"
 
-#: app/templates/followers.html:25 app/templates/following.html:25
+#: app/templates/followers.html:26 app/templates/following.html:26
 #, python-format
 msgid "And %(count)s more."
 msgid_plural "And %(count)s more."
 msgstr[0] "Et %(count)s de plus."
 msgstr[1] "Et %(count)s de plus."
 
-#: app/templates/followers.html:31
+#: app/templates/followers.html:32
 msgid "Manage followers"
 msgstr "Gérer les abonnés"
 
@@ -619,11 +626,16 @@ msgstr "Gérer les abonnés"
 msgid "%(name)s's follows"
 msgstr "Abonnements de %(name)s"
 
-#: app/templates/following.html:31
+#: app/templates/following.html:32
 msgid "Manage follows"
 msgstr "Gérer les abonnements"
 
-#: app/templates/header.html:52
+#: app/templates/header.html:49
+#, fuzzy
+msgid "Sections"
+msgstr "mentionner"
+
+#: app/templates/header.html:54
 msgid "Notes"
 msgstr "Notes"
 
@@ -653,13 +665,18 @@ msgstr ""
 msgid "Scopes"
 msgstr "Portées"
 
-#: app/templates/indieauth_flow.html:41 app/templates/login.html:16
+#: app/templates/indieauth_flow.html:41 app/templates/login.html:18
 msgid "login"
 msgstr "connexion"
 
 #: app/templates/layout.html:20
 msgid "Skip to content"
 msgstr "Passer au contenu"
+
+#: app/templates/layout.html:30
+#, fuzzy
+msgid "Admin"
+msgstr "Titre"
 
 #: app/templates/layout.html:32
 msgid "Public"
@@ -714,11 +731,16 @@ msgstr "Déconnexion"
 msgid "Powered by %(mbp)s and %(ap)s."
 msgstr "Propulsé par %(mbp)s et %(ap)s."
 
-#: app/templates/login.html:10
+#: app/templates/login.html:3
+#, fuzzy
+msgid "Login"
+msgstr "connexion"
+
+#: app/templates/login.html:11
 msgid "Invalid password."
 msgstr "Mot de passe invalide."
 
-#: app/templates/login.html:15
+#: app/templates/login.html:16 app/templates/login.html:17
 msgid "password"
 msgstr "mot de passe"
 
@@ -903,7 +925,7 @@ msgstr ""
 "pouvez me suivre\n"
 "pour recevoir mes publications dans votre fil d'accueil."
 
-#: app/templates/remote_follow.html:19
+#: app/templates/remote_follow.html:19 app/templates/remote_interact.html:22
 msgid "What's your account?"
 msgstr "Quel est votre compte ?"
 
@@ -932,7 +954,7 @@ msgstr "Interagir depuis votre instance"
 msgid "Interact with this object"
 msgstr "Interagir avec cet objet"
 
-#: app/templates/remote_interact.html:24 app/templates/utils.html:242
+#: app/templates/remote_interact.html:25 app/templates/utils.html:242
 msgid "interact from your instance"
 msgstr "interagir depuis votre instance"
 
@@ -974,6 +996,16 @@ msgstr ""
 #: app/templates/utils.html:143
 msgid "Location"
 msgstr "Lieu"
+
+#: app/templates/utils.html:164
+#, fuzzy
+msgid "show more"
+msgstr "Voir plus"
+
+#: app/templates/utils.html:164
+#, fuzzy
+msgid "show less"
+msgstr "afficher les partages"
 
 #: app/templates/utils.html:195
 msgid "you voted for this answer"
@@ -1263,8 +1295,9 @@ msgstr "développer"
 msgid "fetch replies"
 msgstr "récupérer les réponses"
 
-#: app/templates/components/attachments.html:4
-msgid "show/hide sensitive content"
+#: app/templates/components/attachments.html:5
+#, fuzzy
+msgid "Sensitive content"
 msgstr "afficher/masquer le contenu sensible"
 
 #: app/templates/components/filters.html:4
@@ -1444,7 +1477,9 @@ msgstr "Fédivers"
 msgid ""
 "Not supported: task lists (- [ ]) and footnotes ([^1]). Raw HTML is "
 "filtered down to a small set of tags."
-msgstr "Non pris en charge : listes de tâches (- [ ]) et notes de bas de page ([^1]). Le HTML brut est filtré vers un petit ensemble de balises."
+msgstr ""
+"Non pris en charge : listes de tâches (- [ ]) et notes de bas de page "
+"([^1]). Le HTML brut est filtré vers un petit ensemble de balises."
 
 #~ msgid "%(name)s - New Post"
 #~ msgstr "%(name)s - Nouvelle publication"

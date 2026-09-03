@@ -1,11 +1,13 @@
 <header id="header">
 
 <div class="h-card p-author">
-<data class="u-photo" value="{{ local_actor.icon_url }}"><img src="{{ local_actor.icon_url }}"></data>
+<data class="u-photo" value="{{ local_actor.icon_url }}"><img src="{{ local_actor.icon_url }}" alt=""></data>
+<h1>
 <a href="{{ local_actor.url }}" class="u-url u-uid no-hover title">
 	<span class="name">{{ local_actor.name }}</span>
 	<span class="p-name handle">{{ local_actor.handle }}</span>
 </a>
+</h1>
 <a class="label-btn follow" href="{{ local_actor.url }}remote_follow">{{ _("Follow") }}</a>
 
 <div class="p-note summary">
@@ -35,16 +37,16 @@
 
 {%- macro header_link(url, text) -%}
 {% set url_for = BASE_URL + request.app.router.url_path_for(url) %}
-<a href="{{ url_for }}" {% if BASE_URL + request.url.path == url_for %}class="active"{% endif %}>{{ text }}</a>
+<a href="{{ url_for }}" {% if BASE_URL + request.url.path == url_for %}aria-current="page"{% endif %}>{{ text }}</a>
 {% endmacro %}
 
 {%- macro navbar_item_link(navbar_item) -%}
 {% set url_for = BASE_URL + navbar_item[0] %}
-<a href="{{ navbar_item[0] }}" {% if BASE_URL + request.url.path == url_for %}class="active"{% endif %}>{{ navbar_item[1] }}</a>
+<a href="{{ navbar_item[0] }}" {% if BASE_URL + request.url.path == url_for %}aria-current="page"{% endif %}>{{ navbar_item[1] }}</a>
 {% endmacro %}
 
 <div class="public-top-menu">
-<nav class="flexbox" hx-boost="true" hx-indicator="body">
+<nav class="flexbox" aria-label="{{ _("Sections") }}" hx-boost="true" hx-indicator="body">
     <ul>
         {% if NAVBAR_ITEMS.INDEX_NAVBAR_ITEM %}
         <li>{{ navbar_item_link(NAVBAR_ITEMS.INDEX_NAVBAR_ITEM) }}</li>

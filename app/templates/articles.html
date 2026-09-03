@@ -7,6 +7,8 @@
 {% block content %}
 {% include "header.html" %}
 
+<h2>{{ _("Articles") }}</h2>
+
 <ul class="h-feed" id="articles" hx-boost="true" hx-indicator="body"{% if ENABLE_MICRODATA %} itemscope itemtype="https://schema.org/Blog"{% endif %}>
 <data class="p-name" value="{{ local_actor.display_name}}'s articles"{% if ENABLE_MICRODATA %} itemprop="name"{% endif %}></data>
 {% for outbox_object in objects %}

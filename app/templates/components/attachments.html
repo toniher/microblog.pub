@@ -1,16 +1,13 @@
 {% macro attachment_wrapper(attachment, is_sensitive) %}
   {% if is_sensitive %}
   <div class="attachment-wrapper">
-      <label for="{{attachment.proxied_url}}" class="label-btn show-hide-sensitive-btn">{{ _("show/hide sensitive content") }}</label>
-      <div>
-          <div class="sensitive-attachment">
-            <input class="sensitive-attachment-state" type="checkbox" id="{{attachment.proxied_url}}" aria-hidden="true">
-            <div class="sensitive-attachment-box attachment-orientation-{{orientation}}">
-                <div></div>
-                {{ caller() }}
-            </div>
+      <details class="sensitive-attachment">
+          <summary class="label-btn show-hide-sensitive-btn">{{ _("Sensitive content") }}</summary>
+          <div class="sensitive-attachment-box attachment-orientation-{{orientation}}">
+              <div></div>
+              {{ caller() }}
           </div>
-      </div>
+      </details>
   </div>
   {% else %}
   <div class="attachment-item attachment-orientation-{{orientation}}">
@@ -30,8 +27,8 @@
             {% call attachment_wrapper(attachment, is_sensitive) %}
                 {% if attachment.type == "Image" or (attachment | has_media_type("image")) %}
                     {% if attachment.url not in object.inlined_images %}
-                    <a class="media-link" href="{{ attachment.proxied_url }}" target="_blank">
-                        <img src="{{ attachment.resized_url or attachment.proxied_url }}"{% if attachment.name %} title="{{ attachment.name }}" alt="{{ attachment.name }}"{% endif %}{% if attachment.width and attachment.height %} width="{{ attachment.width }}" height="{{ attachment.height }}"{% endif %} class="attachment u-photo" loading="lazy"{% if ENABLE_MICRODATA %} itemprop="image"{% endif %}>
+                    <a class="media-link" href="{{ attachment.proxied_url }}" target="_blank" rel="noopener">
+                        <img src="{{ attachment.resized_url or attachment.proxied_url }}" alt="{{ attachment.name or '' }}"{% if attachment.width and attachment.height %} width="{{ attachment.width }}" height="{{ attachment.height }}"{% endif %} class="attachment u-photo" loading="lazy"{% if ENABLE_MICRODATA %} itemprop="image"{% endif %}>
                     </a>
                     {% endif %}
                 {% elif attachment.type == "Video" or (attachment | has_media_type("video")) %}

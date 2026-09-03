@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-09-03 14:33+0200\n"
+"POT-Creation-Date: 2026-09-03 23:49+0200\n"
 "PO-Revision-Date: 2026-07-17 22:20+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ro\n"
@@ -127,36 +127,43 @@ msgstr "%(name)s a solicitat să vă urmărească"
 msgid "About %(name)s"
 msgstr "Despre %(name)s"
 
-#: app/templates/about.html:25
+#: app/templates/about.html:15
+msgid "About"
+msgstr ""
+
+#: app/templates/about.html:27
 msgid "Posts"
 msgstr "Note"
 
-#: app/templates/about.html:29 app/templates/header.html:54
+#: app/templates/about.html:31 app/templates/articles.html:10
+#: app/templates/header.html:56
 msgid "Articles"
 msgstr "Articole"
 
-#: app/templates/about.html:33 app/templates/header.html:57
+#: app/templates/about.html:35 app/templates/followers.html:11
+#: app/templates/header.html:59
 msgid "Followers"
 msgstr "Urmăritori"
 
-#: app/templates/about.html:37 app/templates/header.html:60
+#: app/templates/about.html:39 app/templates/following.html:11
+#: app/templates/header.html:62
 msgid "Following"
 msgstr "Urmăriri"
 
-#: app/templates/about.html:44
+#: app/templates/about.html:46
 msgid "Fediverse handle"
 msgstr "Identificator Fediverse"
 
-#: app/templates/about.html:45 app/templates/components/filters.html:22
-#: app/templates/header.html:9
+#: app/templates/about.html:47 app/templates/components/filters.html:22
+#: app/templates/header.html:11
 msgid "Follow"
 msgstr "Urmărește"
 
-#: app/templates/about.html:49
+#: app/templates/about.html:51
 msgid "Contact"
 msgstr "Contact"
 
-#: app/templates/about.html:58
+#: app/templates/about.html:60
 #, python-format
 msgid ""
 "This is a single-user instance running %(mbp)s, federating over %(ap)s. "
@@ -574,11 +581,11 @@ msgstr "Vezi mai mult"
 msgid "%(name)s's articles"
 msgstr "Articolele lui %(name)s"
 
-#: app/templates/articles.html:22 app/templates/index.html:46
+#: app/templates/articles.html:24 app/templates/index.html:46
 msgid "Previous"
 msgstr "Anterior"
 
-#: app/templates/articles.html:26 app/templates/index.html:50
+#: app/templates/articles.html:28 app/templates/index.html:50
 msgid "Next"
 msgstr "Următor"
 
@@ -603,7 +610,7 @@ msgstr "Pagina principală"
 msgid "%(name)s's followers"
 msgstr "Urmăritorii lui %(name)s"
 
-#: app/templates/followers.html:25 app/templates/following.html:25
+#: app/templates/followers.html:26 app/templates/following.html:26
 #, python-format
 msgid "And %(count)s more."
 msgid_plural "And %(count)s more."
@@ -611,7 +618,7 @@ msgstr[0] "Și încă %(count)s."
 msgstr[1] "Și încă %(count)s."
 msgstr[2] "Și încă %(count)s."
 
-#: app/templates/followers.html:31
+#: app/templates/followers.html:32
 msgid "Manage followers"
 msgstr "Gestionează urmăritorii"
 
@@ -620,11 +627,16 @@ msgstr "Gestionează urmăritorii"
 msgid "%(name)s's follows"
 msgstr "Urmăriri ale lui %(name)s"
 
-#: app/templates/following.html:31
+#: app/templates/following.html:32
 msgid "Manage follows"
 msgstr "Gestionează urmăririle"
 
-#: app/templates/header.html:52
+#: app/templates/header.html:49
+#, fuzzy
+msgid "Sections"
+msgstr "menționează"
+
+#: app/templates/header.html:54
 msgid "Notes"
 msgstr "Note"
 
@@ -654,13 +666,18 @@ msgstr ""
 msgid "Scopes"
 msgstr "Domenii"
 
-#: app/templates/indieauth_flow.html:41 app/templates/login.html:16
+#: app/templates/indieauth_flow.html:41 app/templates/login.html:18
 msgid "login"
 msgstr "autentificare"
 
 #: app/templates/layout.html:20
 msgid "Skip to content"
 msgstr "Sari la conținut"
+
+#: app/templates/layout.html:30
+#, fuzzy
+msgid "Admin"
+msgstr "Titlu"
 
 #: app/templates/layout.html:32
 msgid "Public"
@@ -715,11 +732,16 @@ msgstr "Deconectare"
 msgid "Powered by %(mbp)s and %(ap)s."
 msgstr "Susținut de %(mbp)s și %(ap)s."
 
-#: app/templates/login.html:10
+#: app/templates/login.html:3
+#, fuzzy
+msgid "Login"
+msgstr "autentificare"
+
+#: app/templates/login.html:11
 msgid "Invalid password."
 msgstr "Parolă invalidă."
 
-#: app/templates/login.html:15
+#: app/templates/login.html:16 app/templates/login.html:17
 msgid "password"
 msgstr "parolă"
 
@@ -904,7 +926,7 @@ msgstr ""
 "urmări\n"
 "pentru a primi publicațiile mele în fluxul dvs. principal."
 
-#: app/templates/remote_follow.html:19
+#: app/templates/remote_follow.html:19 app/templates/remote_interact.html:22
 msgid "What's your account?"
 msgstr "Care este contul dvs.?"
 
@@ -933,7 +955,7 @@ msgstr "Interacționează din instanța dvs."
 msgid "Interact with this object"
 msgstr "Interacționează cu acest obiect"
 
-#: app/templates/remote_interact.html:24 app/templates/utils.html:242
+#: app/templates/remote_interact.html:25 app/templates/utils.html:242
 msgid "interact from your instance"
 msgstr "interacționează din instanța dvs."
 
@@ -975,6 +997,16 @@ msgstr ""
 #: app/templates/utils.html:143
 msgid "Location"
 msgstr "Locație"
+
+#: app/templates/utils.html:164
+#, fuzzy
+msgid "show more"
+msgstr "Vezi mai mult"
+
+#: app/templates/utils.html:164
+#, fuzzy
+msgid "show less"
+msgstr "arată distribuirile"
 
 #: app/templates/utils.html:195
 msgid "you voted for this answer"
@@ -1271,8 +1303,9 @@ msgstr "extinde"
 msgid "fetch replies"
 msgstr "recuperează răspunsurile"
 
-#: app/templates/components/attachments.html:4
-msgid "show/hide sensitive content"
+#: app/templates/components/attachments.html:5
+#, fuzzy
+msgid "Sensitive content"
 msgstr "arată/ascunde conținutul sensibil"
 
 #: app/templates/components/filters.html:4
@@ -1452,7 +1485,9 @@ msgstr "Fedivers"
 msgid ""
 "Not supported: task lists (- [ ]) and footnotes ([^1]). Raw HTML is "
 "filtered down to a small set of tags."
-msgstr "Nu este acceptat: liste de sarcini (- [ ]) și note de subsol ([^1]). HTML-ul brut este filtrat la un set restrâns de etichete."
+msgstr ""
+"Nu este acceptat: liste de sarcini (- [ ]) și note de subsol ([^1]). "
+"HTML-ul brut este filtrat la un set restrâns de etichete."
 
 #~ msgid "%(name)s - New Post"
 #~ msgstr "%(name)s - Publicație nouă"
