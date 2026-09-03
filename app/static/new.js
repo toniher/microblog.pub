@@ -1,6 +1,8 @@
 // The new post textarea
 (function () {
-    var ta = document.getElementById("content") || document.getElementsByTagName("textarea")[0];
+    // Not getElementById("content"): layout.html's <main id="content"> landmark
+    // shares that id and sits earlier in the DOM, so it wins the lookup.
+    var ta = document.querySelector(".admin-new textarea");
     if (ta == null) {
         return;
     }
