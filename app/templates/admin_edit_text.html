@@ -27,7 +27,10 @@
     <p class="form-field">
         <label for="content" class="visually-hidden">{{ _("Content") }}</label>
         {% if emojis or custom_emojis %}
-        <div class="emoji-picker">
+        {#- A <span>, not a <div>: this sits inside <p class="form-field">, and a <div> would
+            implicitly close the <p>, which is why the `.muted` hint after the textarea used
+            to render outside .form-field and lose its `display: block` styling. -#}
+        <span class="emoji-picker">
         {# Unicode emoji are rendered as plain characters, not via `emojify`:
            the picker shows exactly what gets inserted, and it keeps working
            when `inv download-twemoji` hasn't populated app/static/twemoji. #}
@@ -37,7 +40,7 @@
         {% for emoji in custom_emojis %}
         <button type="button" class="ji" data-emoji="{{ emoji.name }}" title="{{ emoji.name }}"><img src="{{ emoji.icon.url }}" alt="{{ emoji.name }}" class="custom-emoji" loading="lazy"></button>
         {% endfor %}
-        </div>
+        </span>
         {% endif %}
         {{ markdown_bar.bar() }}
         <textarea id="content" name="content" rows="10" cols="50" autofocus="autofocus">{{ content }}</textarea>
