@@ -427,8 +427,11 @@ blockquote {
 }
 
 // Cap the measure of running prose -- the 1000px page column is far past a
-// comfortable line length for body text.
-.e-content, .p-summary, .prose {
+// comfortable line length for body text. Not applied to .e-content: it
+// shares .obj-content with attachments/poll/action-bar siblings that stay
+// full width, so capping it alone left a dead gap instead of a readable
+// column.
+.p-summary, .prose {
   max-width: 68ch;
 }
 
