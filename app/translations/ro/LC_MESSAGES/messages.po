@@ -129,7 +129,7 @@ msgstr "Despre %(name)s"
 
 #: app/templates/about.html:15
 msgid "About"
-msgstr ""
+msgstr "Despre"
 
 #: app/templates/about.html:27
 msgid "Posts"
@@ -206,7 +206,7 @@ msgstr "Versiunea actuală"
 
 #: app/templates/admin_edit_history.html:15
 msgid "Unknown date"
-msgstr ""
+msgstr "Dată necunoscută"
 
 #: app/templates/admin_edit_history.html:29
 msgid "Edit history"
@@ -218,28 +218,32 @@ msgstr "Înapoi la postare"
 
 #: app/templates/admin_edit_history.html:35
 msgid "This post has never been edited."
-msgstr ""
+msgstr "Această postare nu a fost niciodată editată."
 
 #: app/templates/admin_edit_history.html:41
 msgid "Select two different revisions to compare."
-msgstr ""
+msgstr "Selectează două revizii diferite pentru comparare."
 
 #: app/templates/admin_edit_history.html:46
 #, python-format
 msgid "Changes from %(old)s to %(new)s"
-msgstr ""
+msgstr "Modificări de la %(old)s la %(new)s"
 
 #: app/templates/admin_edit_history.html:49
 msgid ""
 "One of these revisions has no saved Markdown source, so this diff is "
 "approximated from the rendered HTML."
 msgstr ""
+"Una dintre aceste revizii nu are sursă Markdown salvată, așa că această "
+"comparație este aproximată din HTML-ul afișat."
 
 #: app/templates/admin_edit_history.html:53
 msgid ""
 "This post is too long to compare word by word, so changes are shown as "
 "larger blocks."
 msgstr ""
+"Această postare este prea lungă pentru a fi comparată cuvânt cu cuvânt, "
+"așa că modificările sunt afișate în blocuri mai mari."
 
 #: app/templates/admin_edit_history.html:57
 #: app/templates/admin_edit_text.html:22 app/templates/admin_new.html:67
@@ -252,40 +256,37 @@ msgid "Content warning"
 msgstr "Avertisment de conținut"
 
 #: app/templates/admin_edit_history.html:65
-#, fuzzy
 msgid "Now marked as sensitive"
-msgstr "avertisment de conținut (va marca publicația ca sensibilă)"
+msgstr "Acum marcat ca sensibil"
 
 #: app/templates/admin_edit_history.html:65
-#, fuzzy
 msgid "No longer marked as sensitive"
-msgstr "avertisment de conținut (va marca publicația ca sensibilă)"
+msgstr "Nu mai este marcat ca sensibil"
 
 #: app/templates/admin_edit_history.html:71
 msgid "No changes to the post body."
-msgstr ""
+msgstr "Nicio modificare în corpul postării."
 
 #: app/templates/admin_edit_history.html:77
 msgid "Compare selected revisions"
-msgstr ""
+msgstr "Compară reviziile selectate"
 
 #: app/templates/admin_edit_history.html:83
 msgid "Compare from this revision"
-msgstr ""
+msgstr "Compară de la această revizie"
 
 #: app/templates/admin_edit_history.html:84
 msgid "Compare to this revision"
-msgstr ""
+msgstr "Compară până la această revizie"
 
 #: app/templates/admin_edit_history.html:89
 #: app/templates/admin_edit_history.html:91
-#, fuzzy
 msgid "prev"
-msgstr "Anterior"
+msgstr "anterior"
 
 #: app/templates/admin_edit_history.html:94
 msgid "cur"
-msgstr ""
+msgstr "curent"
 
 #: app/templates/admin_edit_text.html:6
 #, python-format
@@ -350,22 +351,21 @@ msgid "Mark attachment(s) as sensitive"
 msgstr "Marchează atașamentele ca fiind sensibile"
 
 #: app/templates/admin_edit_text.html:78
-#, fuzzy
 msgid "Current attachments"
-msgstr "Atașamente"
+msgstr "Atașamente actuale"
 
 #: app/templates/admin_edit_text.html:79
 msgid "Uncheck an attachment to remove it when you submit."
 msgstr ""
+"Debifează un atașament pentru a-l elimina la trimiterea formularului."
 
 #: app/templates/admin_edit_text.html:95
 msgid "Keep"
-msgstr ""
+msgstr "Păstrează"
 
 #: app/templates/admin_edit_text.html:104
-#, fuzzy
 msgid "Add attachments"
-msgstr "Atașamente"
+msgstr "Adaugă atașamente"
 
 #: app/templates/admin_edit_text.html:106 app/templates/admin_new.html:148
 #, python-format
@@ -632,9 +632,8 @@ msgid "Manage follows"
 msgstr "Gestionează urmăririle"
 
 #: app/templates/header.html:49
-#, fuzzy
 msgid "Sections"
-msgstr "menționează"
+msgstr "Secțiuni"
 
 #: app/templates/header.html:54
 msgid "Notes"
@@ -675,9 +674,8 @@ msgid "Skip to content"
 msgstr "Sari la conținut"
 
 #: app/templates/layout.html:30
-#, fuzzy
 msgid "Admin"
-msgstr "Titlu"
+msgstr "Administrare"
 
 #: app/templates/layout.html:32
 msgid "Public"
@@ -733,9 +731,8 @@ msgid "Powered by %(mbp)s and %(ap)s."
 msgstr "Susținut de %(mbp)s și %(ap)s."
 
 #: app/templates/login.html:3
-#, fuzzy
 msgid "Login"
-msgstr "autentificare"
+msgstr "Autentificare"
 
 #: app/templates/login.html:11
 msgid "Invalid password."
@@ -999,14 +996,12 @@ msgid "Location"
 msgstr "Locație"
 
 #: app/templates/utils.html:164
-#, fuzzy
 msgid "show more"
-msgstr "Vezi mai mult"
+msgstr "arată mai mult"
 
 #: app/templates/utils.html:164
-#, fuzzy
 msgid "show less"
-msgstr "arată distribuirile"
+msgstr "arată mai puțin"
 
 #: app/templates/utils.html:195
 msgid "you voted for this answer"
@@ -1304,9 +1299,8 @@ msgid "fetch replies"
 msgstr "recuperează răspunsurile"
 
 #: app/templates/components/attachments.html:5
-#, fuzzy
 msgid "Sensitive content"
-msgstr "arată/ascunde conținutul sensibil"
+msgstr "Conținut sensibil"
 
 #: app/templates/components/filters.html:4
 msgid "Filter by"

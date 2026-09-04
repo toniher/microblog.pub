@@ -133,6 +133,20 @@ $text-size-lg: 1.375rem; // 22px
 $text-size-xl: 1.5rem; // 24px
 $text-size-2xl: 1.625rem; // 26px
 
+// ----- Spacing scale -------------------------------------------------------
+// Same idea as the type scale: a handful of named rem steps, so padding and
+// margins track a user's browser font-size preference (WCAG 1.4.4) instead of
+// being pinned to px. Every ad-hoc spacing value in the file maps to its
+// nearest step here; px is kept only for hairline borders, the pill radius,
+// media/preview size caps and the breakpoints.
+$space-3xs: 0.125rem; // 2px
+$space-2xs: 0.25rem; // 4px
+$space-xs: 0.3125rem; // 5px
+$space-sm: 0.625rem; // 10px
+$space-md: 0.9375rem; // 15px
+$space-base: 1.25rem; // 20px
+$space-lg: 1.875rem; // 30px
+
 // Accessible focus ring for keyboard users across the whole UI.
 :focus-visible {
   outline: 2px solid $secondary-color;
@@ -145,7 +159,7 @@ $text-size-2xl: 1.625rem; // 26px
   left: -9999px;
   top: 0;
   z-index: 100;
-  padding: 0.5rem 1rem;
+  padding: $space-sm $space-md;
   background: $primary-color;
   color: $primary-button-text-color;
 }
@@ -186,17 +200,17 @@ body.htmx-request::after {
 
 #admin {
   .admin-menu {
-    margin-bottom: 1.875rem;
-    padding: 0 1.25rem;
+    margin-bottom: $space-lg;
+    padding: 0 $space-base;
   }
 }
 
 .empty-state {
-  padding: 1.25rem;
+  padding: $space-base;
 }
 
 .public-top-menu {
-  margin: 1.875rem 0 0 0;
+  margin: $space-lg 0 0 0;
 }
 
 .width-95 {
@@ -216,18 +230,18 @@ body.htmx-request::after {
 
 .form-field {
   display: block;
-  margin-bottom: 0.9375rem;
+  margin-bottom: $space-md;
 
   label {
     display: block;
     font-size: $text-size-md;
     color: $muted-color;
-    margin-bottom: 0.1875rem;
+    margin-bottom: $space-2xs;
   }
 
   .muted {
     display: block;
-    margin-top: 0.1875rem;
+    margin-top: $space-2xs;
   }
 }
 
@@ -238,20 +252,20 @@ body.htmx-request::after {
 .more-options summary {
   cursor: pointer;
   color: $muted-color;
-  margin: 0.625rem 0;
+  margin: $space-sm 0;
 }
 
 .emoji-picker {
   display: block;
   max-height: 120px;
   overflow-y: auto;
-  margin-bottom: 0.625rem;
+  margin-bottom: $space-sm;
 }
 
 .ji {
   background: none;
   border: 0;
-  padding: 0.125rem;
+  padding: $space-3xs;
   cursor: pointer;
   border-radius: 4px;
   // Unicode emoji are rendered as text, so this needs a readable size of its
@@ -270,19 +284,19 @@ body.htmx-request::after {
 // `:not([hidden])` rather than a bare `display: flex`, which would beat the UA
 // stylesheet's `[hidden] { display: none }`.
 .md-bar {
-  margin-bottom: 0.625rem;
+  margin-bottom: $space-sm;
 
   &:not([hidden]) {
     display: flex;
     flex-wrap: wrap;
-    column-gap: 0.25rem;
-    row-gap: 0.25rem;
+    column-gap: $space-2xs;
+    row-gap: $space-2xs;
   }
 
   button {
     background: none;
     border: 0;
-    padding: 0.125rem 0.375rem;
+    padding: $space-3xs $space-xs;
     cursor: pointer;
     border-radius: 4px;
     color: $muted-color;
@@ -307,7 +321,7 @@ body.htmx-request::after {
 }
 
 .md-help {
-  margin-top: 0.1875rem;
+  margin-top: $space-2xs;
 
   summary {
     cursor: pointer;
@@ -318,9 +332,9 @@ body.htmx-request::after {
   dl {
     display: grid;
     grid-template-columns: max-content 1fr;
-    column-gap: 0.9375rem;
-    row-gap: 0.125rem;
-    margin: 0.3125rem 0 0 0;
+    column-gap: $space-md;
+    row-gap: $space-3xs;
+    margin: $space-xs 0 0 0;
     font-size: $text-size-md;
   }
 
@@ -330,7 +344,7 @@ body.htmx-request::after {
 
   .muted {
     display: block;
-    margin-top: 5px;
+    margin-top: $space-xs;
   }
 }
 
@@ -360,7 +374,7 @@ body.htmx-request::after {
     }
   }
   .show-more-btn {
-    margin-left: 0.3125rem;
+    margin-left: $space-xs;
   }
   summary {
     display: inline-block;
@@ -409,7 +423,7 @@ body.htmx-request::after {
 blockquote {
   border-left: 3px solid $secondary-color;
   margin-left: 0;
-  padding-left: 1.5em;
+  padding-left: $space-lg;
 }
 
 // Cap the measure of running prose -- the 1000px page column is far past a
@@ -460,9 +474,9 @@ dl {
 }
 
 .shared-header .actor-action {
-    margin-left: 1.25rem;
-    margin-top: 1.875rem;
-    margin-bottom: -1.25rem;
+    margin-left: $space-base;
+    margin-top: $space-lg;
+    margin-bottom: -$space-base;
     strong {
         color: $primary-color;
     }
@@ -476,14 +490,14 @@ dl {
 
 div.highlight {
     background: $code-highlight-background;
-    padding: 0 0.625rem;
+    padding: 0 $space-sm;
     overflow: auto;
     display: block;
-    margin: 1.25rem 0;
+    margin: $space-base 0;
 }
 
 .box {
-    padding: 0 1.25rem;
+    padding: 0 $space-base;
 }
 
 code {
@@ -503,7 +517,7 @@ pre {
     input, select, textarea {
         font-size: $text-size-base;
         border: 0;
-        padding: 0.3125rem;
+        padding: $space-xs;
         background: $form-background-color;
         color: $form-text-color;
         &:focus {
@@ -514,13 +528,13 @@ pre {
         font-size: $text-size-base;
         background: $primary-color;
         color: $primary-button-text-color;
-        padding: 0.3125rem 0.75rem;
+        padding: $space-xs $space-md;
         cursor: pointer;
     }
 }
 
 header {
-  padding: 0 1.25rem;
+  padding: 0 $space-base;
   // The display-name link is the page's <h1> (see header.html); reset the
   // UA heading styles so it keeps looking like the plain title link it
   // always was -- sizing/weight continue to come from .title below.
@@ -562,7 +576,7 @@ a {
 main {
     width: 100%;
     max-width: 1000px;
-    margin: 1.875rem auto;
+    margin: $space-lg auto;
 }
 
 .main-flex {
@@ -583,7 +597,7 @@ main {
 footer {
   width: 100%;
   max-width: 1000px;
-  margin: 1.25rem auto;
+  margin: $space-base auto;
   color: $muted-color;
   p {
     margin: 0;
@@ -600,12 +614,12 @@ footer {
   max-width: 24px;
   max-height: 24px;
   position: relative;
-  top: 5px;
+  top: $space-xs;
 }
 .actor-box {
   display: flex;
-  column-gap: 1.25rem;
-  margin: 0.625rem 0;
+  column-gap: $space-base;
+  margin: $space-sm 0;
   .icon-box {
     flex: 0 0 50px;
   }
@@ -620,12 +634,12 @@ footer {
 }
 #articles {
     list-style-type: none;
-    margin: 1.875rem 0;
-    padding: 0 1.25rem;
+    margin: $space-lg 0;
+    padding: 0 $space-base;
     li {
         display: block;
         span {
-          padding-right: 0.625rem;
+          padding-right: $space-sm;
         }
     }
 }
@@ -646,8 +660,8 @@ footer {
     font-family: $font-stack;
     background: $nav-button-background-color;
     color: $nav-button-text-color;
-    border: 0px;
-    padding: 0.3125rem 1.25rem;
+    border: 0;
+    padding: $space-xs $space-base;
     cursor: pointer;
     box-shadow: $shadow-color 0 2px 3px;
 }
@@ -674,9 +688,9 @@ ul.poll-items {
   li {
     display: block;
     p {
-      margin: 1.25rem 0 0.625rem 0;
+      margin: $space-base 0 $space-sm 0;
       .poll-vote {
-        padding-left: 1.25rem;
+        padding-left: $space-base;
       }
     }
 
@@ -693,14 +707,14 @@ ul.poll-items {
 
 .attachment-wrapper {
   .attachment-item {
-    margin-top: 1.25rem;
+    margin-top: $space-base;
   }
   img.attachment {
     margin: 0;
   }
   a.attachment {
     display: inline-block;
-    margin-bottom: 0.9375rem;
+    margin-bottom: $space-md;
   }
   audio.attachment {
     width: 480px;
@@ -713,7 +727,7 @@ ul.poll-items {
 // the .flexbox rule below, which keys off the class for the same reason).
 nav, .flexbox {
     form {
-        margin: 0.625rem 0;
+        margin: $space-sm 0;
     }
 }
 
@@ -729,10 +743,10 @@ nav, .flexbox {
     }
 
     ul li {
-        margin-right: 0.9375rem;
+        margin-right: $space-md;
 
         &:last-child {
-            margin-right: 0px;
+            margin-right: 0;
         }
     }
     a:not(.label-btn) {
@@ -763,10 +777,10 @@ a.label-btn {
 .edit-history {
     list-style: none;
     padding: 0;
-    margin: 1.25rem 0;
+    margin: $space-base 0;
 
     > li {
-        padding: 0.625rem 0;
+        padding: $space-sm 0;
         border-top: 1px solid $muted-color;
     }
 }
@@ -774,23 +788,23 @@ a.label-btn {
 .revision-meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.625rem;
+    gap: $space-sm;
     align-items: baseline;
 }
 
 .revision-radios input[type=radio] {
-    margin-right: 0.25rem;
+    margin-right: $space-2xs;
 }
 
 .revision-links {
     a, span {
-        margin-right: 0.625rem;
+        margin-right: $space-sm;
     }
 }
 
 .diff-panel {
-    margin: 1.25rem 0;
-    padding: 0.625rem 0.9375rem;
+    margin: $space-base 0;
+    padding: $space-sm $space-md;
     background: $light-background;
 
     h3 {
@@ -799,11 +813,11 @@ a.label-btn {
 }
 
 .diff-field {
-    margin: 0.625rem 0;
+    margin: $space-sm 0;
 
     .diff-field-label {
         color: $muted-color;
-        margin-right: 0.3125rem;
+        margin-right: $space-xs;
     }
 }
 
@@ -827,8 +841,8 @@ a.label-btn {
 }
 
 .ap-object {
-    margin: 0.9375rem 0;
-    padding: 1.25rem;
+    margin: $space-md 0;
+    padding: $space-base;
     nav {
         color: $muted-color;
     }
@@ -851,7 +865,7 @@ a.label-btn {
         }
     }
     .activity-attachment {
-        margin: 1.875rem 0 1.25rem 0;
+        margin: $space-lg 0 $space-base 0;
         img, audio, video {
             max-width: calc(min(740px, 100%));
         }
@@ -869,8 +883,8 @@ a.label-btn {
 
 .activity-og-meta {
   display: flex;
-  column-gap: 1.25rem;
-  margin: 1.25rem 0;
+  column-gap: $space-base;
+  margin: $space-base 0;
   img {
     max-width: 200px;
     max-height: 100px;
@@ -885,7 +899,7 @@ a.label-btn {
 }
 
 .quoted-object {
-    margin: 0.625rem 0;
+    margin: $space-sm 0;
     border: 1px solid $muted-color;
     border-radius: 4px;
     .ap-object {
@@ -906,7 +920,7 @@ a.label-btn {
 
 .indieauth-box {
   display: flex;
-  column-gap: 1.25rem;
+  column-gap: $space-base;
 
   .indieauth-logo {
     flex: initial;
@@ -918,7 +932,7 @@ a.label-btn {
   .indieauth-details {
     flex: 1;
     div {
-      padding-left: 1.25rem;
+      padding-left: $space-base;
       a {
         font-size: $text-size-xl;
         font-weight: 600;
@@ -929,18 +943,18 @@ a.label-btn {
 
 .public-interactions {
   display: flex;
-  column-gap: 1.25rem;
+  column-gap: $space-base;
   flex-wrap: wrap;
-  margin-top: 1.25rem;
+  margin-top: $space-base;
   .interactions-block {
     flex: 0 1 30%;
     max-width: 50%;
     .facepile-wrapper {
       display: flex;
-      column-gap: 1.25rem;
-      row-gap: 1.25rem;
+      column-gap: $space-base;
+      row-gap: $space-base;
       flex-wrap: wrap;
-      margin-top: 1.25rem;
+      margin-top: $space-base;
       a {
         height: 50px;
         img {
@@ -972,7 +986,7 @@ a.label-btn {
 }
 
 .margin-top-20 {
-  margin-top: 1.25rem;
+  margin-top: $space-base;
 }
 
 .video-wrapper {
@@ -997,9 +1011,9 @@ audio.u-audio {
 .video-gif-mode + .video-gif-overlay {
     display: block;
     position: absolute;
-    top: 5px;
-    left: 5px;
-    padding: 0 3px;
+    top: $space-xs;
+    left: $space-xs;
+    padding: 0 $space-2xs;
     font-size: $text-size-sm;
     background: rgba(0,0,0,.5);
     color: #fff;
@@ -1013,7 +1027,7 @@ audio.u-audio {
         font-size: $text-size-md;
     }
     main {
-        margin: 1.25rem auto;
+        margin: $space-base auto;
     }
     dl {
         flex-direction: column;
@@ -1036,6 +1050,6 @@ audio.u-audio {
         flex-direction: column;
     }
     .actor-box {
-        column-gap: 0.75rem;
+        column-gap: $space-md;
     }
 }

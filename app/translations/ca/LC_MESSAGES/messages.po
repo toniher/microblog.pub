@@ -128,7 +128,7 @@ msgstr "Quant a %(name)s"
 
 #: app/templates/about.html:15
 msgid "About"
-msgstr ""
+msgstr "Quant a"
 
 #: app/templates/about.html:27
 msgid "Posts"
@@ -629,9 +629,8 @@ msgid "Manage follows"
 msgstr "Gestiona els seguits"
 
 #: app/templates/header.html:49
-#, fuzzy
 msgid "Sections"
-msgstr "menciona"
+msgstr "Seccions"
 
 #: app/templates/header.html:54
 msgid "Notes"
@@ -672,9 +671,8 @@ msgid "Skip to content"
 msgstr "Vés al contingut"
 
 #: app/templates/layout.html:30
-#, fuzzy
 msgid "Admin"
-msgstr "Títol"
+msgstr "Administració"
 
 #: app/templates/layout.html:32
 msgid "Public"
@@ -730,9 +728,8 @@ msgid "Powered by %(mbp)s and %(ap)s."
 msgstr "Funciona amb %(mbp)s i %(ap)s."
 
 #: app/templates/login.html:3
-#, fuzzy
 msgid "Login"
-msgstr "inicia sessió"
+msgstr "Inici de sessió"
 
 #: app/templates/login.html:11
 msgid "Invalid password."
@@ -992,14 +989,12 @@ msgid "Location"
 msgstr "Ubicació"
 
 #: app/templates/utils.html:164
-#, fuzzy
 msgid "show more"
-msgstr "Veure'n més"
+msgstr "mostra'n més"
 
 #: app/templates/utils.html:164
-#, fuzzy
 msgid "show less"
-msgstr "mostra les comparticions"
+msgstr "mostra'n menys"
 
 #: app/templates/utils.html:195
 msgid "you voted for this answer"
@@ -1290,9 +1285,8 @@ msgid "fetch replies"
 msgstr "recupera les respostes"
 
 #: app/templates/components/attachments.html:5
-#, fuzzy
 msgid "Sensitive content"
-msgstr "mostra/amaga el contingut sensible"
+msgstr "Contingut sensible"
 
 #: app/templates/components/filters.html:4
 msgid "Filter by"

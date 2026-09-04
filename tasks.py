@@ -92,7 +92,11 @@ def update_translations(ctx):
 @task
 def compile_translations(ctx):
     # type: (Context) -> None
-    run("pybabel compile -d app/translations -f", echo=True)
+    # No --use-fuzzy: `pybabel update` guesses a msgstr for every new msgid from
+    # the nearest existing one and flags it fuzzy, and those guesses are usually
+    # unrelated strings. Compiling them in ships confidently wrong text; leaving
+    # them out falls back to the English msgid until a translator fills them in.
+    run("pybabel compile -d app/translations", echo=True)
 
 
 @task

@@ -128,7 +128,7 @@ msgstr "Acerca de %(name)s"
 
 #: app/templates/about.html:15
 msgid "About"
-msgstr ""
+msgstr "Acerca de"
 
 #: app/templates/about.html:27
 msgid "Posts"
@@ -204,7 +204,7 @@ msgstr "Versión actual"
 
 #: app/templates/admin_edit_history.html:15
 msgid "Unknown date"
-msgstr ""
+msgstr "Fecha desconocida"
 
 #: app/templates/admin_edit_history.html:29
 msgid "Edit history"
@@ -216,28 +216,32 @@ msgstr "Volver a la publicación"
 
 #: app/templates/admin_edit_history.html:35
 msgid "This post has never been edited."
-msgstr ""
+msgstr "Esta publicación nunca se ha editado."
 
 #: app/templates/admin_edit_history.html:41
 msgid "Select two different revisions to compare."
-msgstr ""
+msgstr "Selecciona dos revisiones diferentes para compararlas."
 
 #: app/templates/admin_edit_history.html:46
 #, python-format
 msgid "Changes from %(old)s to %(new)s"
-msgstr ""
+msgstr "Cambios de %(old)s a %(new)s"
 
 #: app/templates/admin_edit_history.html:49
 msgid ""
 "One of these revisions has no saved Markdown source, so this diff is "
 "approximated from the rendered HTML."
 msgstr ""
+"Una de estas revisiones no tiene código fuente Markdown guardado, por lo "
+"que esta comparación se aproxima a partir del HTML renderizado."
 
 #: app/templates/admin_edit_history.html:53
 msgid ""
 "This post is too long to compare word by word, so changes are shown as "
 "larger blocks."
 msgstr ""
+"Esta publicación es demasiado larga para compararla palabra por palabra, "
+"por lo que los cambios se muestran en bloques más grandes."
 
 #: app/templates/admin_edit_history.html:57
 #: app/templates/admin_edit_text.html:22 app/templates/admin_new.html:67
@@ -250,40 +254,37 @@ msgid "Content warning"
 msgstr "Aviso de contenido"
 
 #: app/templates/admin_edit_history.html:65
-#, fuzzy
 msgid "Now marked as sensitive"
-msgstr "aviso de contenido (marcará la publicación como sensible)"
+msgstr "Ahora marcado como sensible"
 
 #: app/templates/admin_edit_history.html:65
-#, fuzzy
 msgid "No longer marked as sensitive"
-msgstr "aviso de contenido (marcará la publicación como sensible)"
+msgstr "Ya no está marcado como sensible"
 
 #: app/templates/admin_edit_history.html:71
 msgid "No changes to the post body."
-msgstr ""
+msgstr "Sin cambios en el cuerpo de la publicación."
 
 #: app/templates/admin_edit_history.html:77
 msgid "Compare selected revisions"
-msgstr ""
+msgstr "Comparar las revisiones seleccionadas"
 
 #: app/templates/admin_edit_history.html:83
 msgid "Compare from this revision"
-msgstr ""
+msgstr "Comparar desde esta revisión"
 
 #: app/templates/admin_edit_history.html:84
 msgid "Compare to this revision"
-msgstr ""
+msgstr "Comparar hasta esta revisión"
 
 #: app/templates/admin_edit_history.html:89
 #: app/templates/admin_edit_history.html:91
-#, fuzzy
 msgid "prev"
-msgstr "Anterior"
+msgstr "anterior"
 
 #: app/templates/admin_edit_history.html:94
 msgid "cur"
-msgstr ""
+msgstr "actual"
 
 #: app/templates/admin_edit_text.html:6
 #, python-format
@@ -348,22 +349,20 @@ msgid "Mark attachment(s) as sensitive"
 msgstr "Marcar los adjuntos como sensibles"
 
 #: app/templates/admin_edit_text.html:78
-#, fuzzy
 msgid "Current attachments"
-msgstr "Adjuntos"
+msgstr "Adjuntos actuales"
 
 #: app/templates/admin_edit_text.html:79
 msgid "Uncheck an attachment to remove it when you submit."
-msgstr ""
+msgstr "Desmarca un adjunto para eliminarlo al enviar el formulario."
 
 #: app/templates/admin_edit_text.html:95
 msgid "Keep"
-msgstr ""
+msgstr "Mantener"
 
 #: app/templates/admin_edit_text.html:104
-#, fuzzy
 msgid "Add attachments"
-msgstr "Adjuntos"
+msgstr "Añadir adjuntos"
 
 #: app/templates/admin_edit_text.html:106 app/templates/admin_new.html:148
 #, python-format
@@ -630,9 +629,8 @@ msgid "Manage follows"
 msgstr "Gestionar seguidos"
 
 #: app/templates/header.html:49
-#, fuzzy
 msgid "Sections"
-msgstr "mencionar"
+msgstr "Secciones"
 
 #: app/templates/header.html:54
 msgid "Notes"
@@ -673,9 +671,8 @@ msgid "Skip to content"
 msgstr "Saltar al contenido"
 
 #: app/templates/layout.html:30
-#, fuzzy
 msgid "Admin"
-msgstr "Título"
+msgstr "Administración"
 
 #: app/templates/layout.html:32
 msgid "Public"
@@ -731,9 +728,8 @@ msgid "Powered by %(mbp)s and %(ap)s."
 msgstr "Con la tecnología de %(mbp)s y %(ap)s."
 
 #: app/templates/login.html:3
-#, fuzzy
 msgid "Login"
-msgstr "iniciar sesión"
+msgstr "Iniciar sesión"
 
 #: app/templates/login.html:11
 msgid "Invalid password."
@@ -998,14 +994,12 @@ msgid "Location"
 msgstr "Ubicación"
 
 #: app/templates/utils.html:164
-#, fuzzy
 msgid "show more"
-msgstr "Ver más"
+msgstr "mostrar más"
 
 #: app/templates/utils.html:164
-#, fuzzy
 msgid "show less"
-msgstr "mostrar comparticiones"
+msgstr "mostrar menos"
 
 #: app/templates/utils.html:195
 msgid "you voted for this answer"
@@ -1296,9 +1290,8 @@ msgid "fetch replies"
 msgstr "obtener respuestas"
 
 #: app/templates/components/attachments.html:5
-#, fuzzy
 msgid "Sensitive content"
-msgstr "mostrar/ocultar contenido sensible"
+msgstr "Contenido sensible"
 
 #: app/templates/components/filters.html:4
 msgid "Filter by"
