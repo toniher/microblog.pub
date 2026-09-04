@@ -911,7 +911,7 @@ a.label-btn {
     .activity-attachment {
         margin: $space-lg 0 $space-base 0;
         img, audio, video {
-            max-width: calc(min($media-width, 100%));
+            max-width: calc(min(#{$media-width}, 100%));
         }
         // Preserve aspect ratio now that <img> carries width/height attributes.
         img {
@@ -920,7 +920,7 @@ a.label-btn {
     }
     img.inline-img {
         display: block;
-        max-width: calc(min($media-width, 100%));
+        max-width: calc(min(#{$media-width}, 100%));
         height: auto;
     }
 }
