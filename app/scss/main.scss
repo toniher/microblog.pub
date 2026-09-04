@@ -132,6 +132,7 @@ $text-size-base: 1.25rem; // 20px -- the body default
 $text-size-lg: 1.375rem; // 22px
 $text-size-xl: 1.5rem; // 24px
 $text-size-2xl: 1.625rem; // 26px
+$text-size-3xl: 2rem; // 32px
 
 // ----- Spacing scale -------------------------------------------------------
 // Same idea as the type scale: a handful of named rem steps, so padding and
@@ -146,6 +147,32 @@ $space-sm: 0.625rem; // 10px
 $space-md: 0.9375rem; // 15px
 $space-base: 1.25rem; // 20px
 $space-lg: 1.875rem; // 30px
+
+// ----- Layout constants -----------------------------------------------------
+// Named once instead of repeated as literals: the page column width, the
+// prose measure, the inline-media size cap, the small-radius used on pills
+// and cards, and the actor avatar size.
+$page-width: 1000px;
+$measure: 68ch;
+$media-width: 740px;
+$radius: 4px;
+$avatar-size: 50px;
+
+// Shared centered column, applied to every top-level section of the page
+// (admin bar, site header, main content, footer) so they all line up.
+%page-column {
+  width: 100%;
+  max-width: $page-width;
+  margin-inline: auto;
+}
+
+// Prose gets an always-visible underline, not just on hover: color alone
+// isn't enough to distinguish a link from surrounding text.
+@mixin prose-link() {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.15em;
+}
 
 // Accessible focus ring for keyboard users across the whole UI.
 :focus-visible {
@@ -199,6 +226,7 @@ body.htmx-request::after {
 }
 
 #admin {
+  @extend %page-column;
   .admin-menu {
     margin-bottom: $space-lg;
     padding: 0 $space-base;
@@ -231,12 +259,15 @@ body.htmx-request::after {
 .form-field {
   display: block;
   margin-bottom: $space-md;
+  border: 0;
+  padding: 0;
 
-  label {
+  label, legend {
     display: block;
     font-size: $text-size-md;
     color: $muted-color;
     margin-bottom: $space-2xs;
+    padding: 0;
   }
 
   .muted {
@@ -267,15 +298,15 @@ body.htmx-request::after {
   border: 0;
   padding: $space-3xs;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: $radius;
   // Unicode emoji are rendered as text, so this needs a readable size of its
   // own -- `.form { input, select, textarea }` doesn't cover <button>.
   font-size: $text-size-base;
   line-height: 1;
   vertical-align: middle;
 
-  &:hover, &:focus-visible {
-    outline: 1px solid $secondary-color;
+  &:hover {
+    background: $light-background;
   }
 }
 
@@ -298,7 +329,7 @@ body.htmx-request::after {
     border: 0;
     padding: $space-3xs $space-xs;
     cursor: pointer;
-    border-radius: 4px;
+    border-radius: $radius;
     color: $muted-color;
     // `.form { input, select, textarea }` doesn't cover <button>, and buttons
     // don't inherit the page font.
@@ -307,8 +338,8 @@ body.htmx-request::after {
     line-height: 1.4;
     min-width: 2em;
 
-    &:hover, &:focus-visible {
-      outline: 1px solid $secondary-color;
+    &:hover {
+      background: $light-background;
       color: $text-color;
     }
   }
@@ -365,12 +396,8 @@ body.htmx-request::after {
 .show-more-wrapper {
   .p-summary {
     display: inline-block;
-    // Prose gets an always-visible underline, not just on hover: color alone
-    // isn't enough to distinguish a link from surrounding text.
     a {
-      text-decoration: underline;
-      text-decoration-thickness: 1px;
-      text-underline-offset: 0.15em;
+      @include prose-link;
     }
   }
   .show-more-btn {
@@ -432,7 +459,7 @@ blockquote {
 // full width, so capping it alone left a dead gap instead of a readable
 // column.
 .p-summary, .prose {
-  max-width: 68ch;
+  max-width: $measure;
 }
 
 .muted {
@@ -455,6 +482,27 @@ body {
   display: flex;
   min-height: 100vh;
   flex-direction: column;
+}
+
+// Post bodies are user Markdown, so any of h1-h6 can appear. No heading is
+// smaller than body text -- h5/h6 are distinguished by weight/colour rather
+// than by shrinking below the paragraph they head.
+h1, h2, h3, h4, h5, h6 {
+  font-family: $font-stack;
+  margin-block: 1.5em 0.5em;
+}
+h1 { font-size: $text-size-3xl; line-height: 1.15; font-weight: 700; }
+h2 { font-size: $text-size-2xl; line-height: 1.2; font-weight: 700; }
+h3 { font-size: $text-size-xl; line-height: 1.25; font-weight: 700; }
+h4 { font-size: $text-size-lg; line-height: 1.3; font-weight: 700; }
+h5 { font-size: $text-size-base; line-height: 1.4; font-weight: 700; }
+h6 { font-size: $text-size-base; line-height: 1.4; font-weight: 600; color: $muted-color; }
+
+// Reproduces the page's former top offset (previously main's own margin-top)
+// now that the admin bar, site header and #main are separate flex items --
+// whichever of them renders first gets the gap.
+body > .skip-link + * {
+  margin-block-start: $space-lg;
 }
 a {
     text-decoration: none;
@@ -523,9 +571,6 @@ pre {
         padding: $space-xs;
         background: $form-background-color;
         color: $form-text-color;
-        &:focus {
-            outline: 1px solid $secondary-color;
-        }
     }
     input[type=submit] {
         font-size: $text-size-base;
@@ -537,6 +582,7 @@ pre {
 }
 
 header {
+  @extend %page-column;
   padding: 0 $space-base;
   // The display-name link is the page's <h1> (see header.html); reset the
   // UA heading styles so it keeps looking like the plain title link it
@@ -558,11 +604,9 @@ header {
     color: $muted-color;
   }
   .summary {
-    max-width: 68ch;
+    max-width: $measure;
     a {
-      text-decoration: underline;
-      text-decoration-thickness: 1px;
-      text-underline-offset: 0.15em;
+      @include prose-link;
     }
   }
 }
@@ -577,9 +621,7 @@ a {
     flex: 1;
 }
 main {
-    width: 100%;
-    max-width: 1000px;
-    margin: $space-lg auto;
+    @extend %page-column;
 }
 
 .main-flex {
@@ -598,19 +640,14 @@ main {
 }
 
 footer {
-  width: 100%;
-  max-width: 1000px;
-  margin: $space-base auto;
+  @extend %page-column;
+  margin-block: $space-base;
   color: $muted-color;
   p {
     margin: 0;
   }
-  // Prose gets an always-visible underline, not just on hover: color alone
-  // isn't enough to distinguish a link from surrounding text.
   a {
-    text-decoration: underline;
-    text-decoration-thickness: 1px;
-    text-underline-offset: 0.15em;
+    @include prose-link;
   }
 }
 .tiny-actor-icon {
@@ -624,15 +661,15 @@ footer {
   column-gap: $space-base;
   margin: $space-sm 0;
   .icon-box {
-    flex: 0 0 50px;
+    flex: 0 0 $avatar-size;
   }
   .actor-handle {
     font-size: $text-size-sm;
-    line-height: 1em;
+    line-height: 1.2;
     color: $muted-color;
   }
   .actor-icon {
-    max-width: 50px;
+    max-width: $avatar-size;
   }
 }
 #articles {
@@ -853,13 +890,17 @@ a.label-btn {
         display: inline;
         color: $muted-color;
     }
+    .obj-content {
+        > :first-child, .e-content > :first-child {
+            margin-block-start: 0;
+        }
+        > :last-child, .e-content > :last-child {
+            margin-block-end: 0;
+        }
+    }
     .e-content {
-        // Prose gets an always-visible underline, not just on hover: color
-        // alone isn't enough to distinguish a link from surrounding text.
         a {
-            text-decoration: underline;
-            text-decoration-thickness: 1px;
-            text-underline-offset: 0.15em;
+            @include prose-link;
         }
     }
     .activity-og-meta {
@@ -870,7 +911,7 @@ a.label-btn {
     .activity-attachment {
         margin: $space-lg 0 $space-base 0;
         img, audio, video {
-            max-width: calc(min(740px, 100%));
+            max-width: calc(min($media-width, 100%));
         }
         // Preserve aspect ratio now that <img> carries width/height attributes.
         img {
@@ -879,7 +920,7 @@ a.label-btn {
     }
     img.inline-img {
         display: block;
-        max-width: calc(min(740px, 100%));
+        max-width: calc(min($media-width, 100%));
         height: auto;
     }
 }
@@ -904,7 +945,7 @@ a.label-btn {
 .quoted-object {
     margin: $space-sm 0;
     border: 1px solid $muted-color;
-    border-radius: 4px;
+    border-radius: $radius;
     .ap-object {
         margin: 0;
     }
@@ -959,9 +1000,9 @@ a.label-btn {
       flex-wrap: wrap;
       margin-top: $space-base;
       a {
-        height: 50px;
+        height: $avatar-size;
         img {
-          max-width: 50px;
+          max-width: $avatar-size;
         }
       }
       .and-x-more {
@@ -988,7 +1029,7 @@ a.label-btn {
   }
 }
 
-.margin-top-20 {
+.spaced-top {
   margin-top: $space-base;
 }
 
@@ -1018,7 +1059,10 @@ audio.u-audio {
     left: $space-xs;
     padding: 0 $space-2xs;
     font-size: $text-size-sm;
-    background: rgba(0,0,0,.5);
+    // Sits over arbitrary video frames rather than the page background, so
+    // (like $code-highlight-text above) it keeps a fixed contrast pair
+    // instead of following light/dark mode.
+    background: rgba(0, 0, 0, .5);
     color: #fff;
 }
 
@@ -1029,8 +1073,8 @@ audio.u-audio {
     body {
         font-size: $text-size-md;
     }
-    main {
-        margin: $space-base auto;
+    body > .skip-link + * {
+        margin-block-start: $space-base;
     }
     dl {
         flex-direction: column;

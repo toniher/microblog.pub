@@ -44,6 +44,26 @@ def test_index__html(db: Session, client: TestClient):
     assert response.headers["content-type"].startswith("text/html")
 
 
+def test_index__html_landmark_structure(db: Session, client: TestClient) -> None:
+    """Regression test: the site header/nav used to render inside <main>,
+    leaving the page with no top-level banner landmark."""
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+
+    assert re.search(r'<html lang="[a-z-]+"', html)
+
+    body_start = html.index("<body>")
+    skip_link_pos = html.index('class="skip-link"', body_start)
+    header_pos = html.index('<header id="header"', body_start)
+    main_pos = html.index('<main id="content"', body_start)
+
+    # Skip link first, then the site header, then <main> -- <header> must not
+    # be nested inside <main>.
+    assert body_start < skip_link_pos < header_pos < main_pos
+    assert html.index("</header>") < main_pos
+
+
 def test_index__html_has_next_page_when_more_than_a_page_of_notes(
     db: Session, client: TestClient
 ) -> None:

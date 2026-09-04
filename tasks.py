@@ -45,14 +45,29 @@ def compile_scss(ctx, watch=False):
     # type: (Context, bool) -> None
     from app.utils.favicon import build_favicon
 
+    # app/scss/_theme.scss is a symlink to this file; on a fresh checkout it
+    # doesn't exist yet, so it must be created before build_favicon() (below)
+    # compiles app/scss/main.scss and resolves that symlink.
+    theme_file = Path("data/_theme.scss")
+    if not theme_file.exists():
+        theme_file.write_text(
+            "// Override any variable from app/scss/main.scss here, e.g.:\n"
+            "// $font-stack: ...;\n"
+            "// $background: #...; $light-background: #...; $text-color: #...;\n"
+            "// $primary-color: #...; $secondary-color: #...;\n"
+            "// $form-background-color: #...; $form-text-color: #...;\n"
+            "// $nav-button-background-color: #...; $nav-button-text-color: #...;\n"
+            "// $muted-color: #...; $primary-button-text-color: #...;\n"
+            "//\n"
+            "// Each also has a $dark-... counterpart (e.g. $dark-background) applied\n"
+            "// under prefers-color-scheme: dark -- override those too if you want a\n"
+            "// custom dark palette; otherwise dark mode keeps the stock colors.\n"
+        )
+
     # Regenerate the themed default favicon (app/static/favicon.ico). A
     # user-provided data/favicon.ico overrides it at serve time (see the /img
     # route in app/main.py), so it no longer needs to be copied here.
     build_favicon()
-
-    theme_file = Path("data/_theme.scss")
-    if not theme_file.exists():
-        theme_file.write_text("// override vars for theming here")
 
     if watch:
         run("boussole watch", echo=True)

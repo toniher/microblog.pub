@@ -8,10 +8,12 @@
 
 {% block content %}
 
+<h1>{{ _("Edit") }}</h1>
+
 <div class="box">
 
 {% if error %}
-<p class="error-box">{{ error }}</p>
+<p class="error-box" role="alert">{{ error }}</p>
 {% endif %}
 
 <form class="form admin-new" action="{{ request.url_for("admin_actions_edit_text", public_id=public_id) }}" enctype="multipart/form-data" method="POST">
@@ -77,15 +79,15 @@
     </details>
 
     {% if existing_attachments %}
-    <p class="form-field">
-        <label>{{ _("Current attachments") }}</label>
+    <fieldset class="form-field">
+        <legend>{{ _("Current attachments") }}</legend>
         <span class="muted">{{ _("Uncheck an attachment to remove it when you submit.") }}</span>
         <div class="edit-attachments">
         {% for item in existing_attachments %}
         {% set attachment = item.attachment %}
         <div class="edit-attachment-item">
             {% if attachment | has_media_type("image") %}
-            <img src="{{ attachment.resized_url or attachment.proxied_url }}" alt="{{ attachment.name or "" }}" loading="lazy" class="attachment" style="max-width:150px;max-height:150px;">
+            <img src="{{ attachment.resized_url or attachment.proxied_url }}" alt="{{ attachment.name or _('Image') }}" loading="lazy" class="attachment" style="max-width:150px;max-height:150px;">
             {% elif attachment | has_media_type("video") %}
             <video src="{{ attachment.proxied_url }}" controls preload="metadata" class="attachment" style="max-width:150px;max-height:150px;"></video>
             {% elif attachment | has_media_type("audio") %}
@@ -100,7 +102,7 @@
         </div>
         {% endfor %}
         </div>
-    </p>
+    </fieldset>
     {% endif %}
 
     <p class="form-field">

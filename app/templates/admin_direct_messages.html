@@ -8,6 +8,8 @@
 
 {% block content %}
 
+<h1>{{ _("Direct messages") }}</h1>
+
 {% for anybox_object, convo, actors in threads %}
     <div class="h-entry" id="{{ anybox_object.permalink_id }}">
         {% set actor_links %}{% for actor in actors %}<a href="{{ url_for("admin_profile") }}?actor_id={{ actor.ap_id }}">{{ actor.handle }}</a>{% endfor %}{% endset %}

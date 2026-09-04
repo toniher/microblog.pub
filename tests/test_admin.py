@@ -248,6 +248,67 @@ def test_admin_actions_new_rejects_poll_with_one_answer(client: TestClient) -> N
     assert "a poll" in response.text
 
 
+def test_admin_inbox__poll_option_ids_survive_option_names_with_spaces(
+    db: Session, client: TestClient, respx_mock: respx.MockRouter
+) -> None:
+    """Regression test: the poll option `id`/`for` pair used to interpolate
+    the (remote, free-text) option name verbatim, so an option containing a
+    space produced a broken id/for association."""
+    ra = setup_remote_actor(respx_mock)
+    remote_actor = factories.ActorFactory.from_remote_actor(ra)
+
+    published = now().replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    end_time = (
+        (now() + timedelta(hours=1))
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
+    question_id = ra.ap_id + "/poll/" + uuid4().hex
+    raw_question = {
+        "@context": ap.AS_EXTENDED_CTX,
+        "type": "Question",
+        "id": question_id,
+        "attributedTo": ra.ap_id,
+        "content": "Pick one",
+        "to": [ap.AS_PUBLIC],
+        "cc": [],
+        "published": published,
+        "url": question_id,
+        "oneOf": [
+            {
+                "type": "Note",
+                "name": "option one",
+                "replies": {"type": "Collection", "totalItems": 0},
+            },
+            {
+                "type": "Note",
+                "name": "option two",
+                "replies": {"type": "Collection", "totalItems": 0},
+            },
+        ],
+        "endTime": end_time,
+    }
+    question = RemoteObject(raw_question, remote_actor)
+    factories.InboxObjectFactory.from_remote_object(question, remote_actor)
+    db.commit()
+
+    response = client.get("/admin/inbox", cookies=generate_admin_session_cookies())
+    assert response.status_code == 200
+    html = response.text
+
+    permalink_id = (
+        "permalink-"
+        + hashlib.md5(question_id.encode(), usedforsecurity=False).hexdigest()
+    )
+    for i in [1, 2]:
+        option_id = f"{permalink_id}-poll-{i}"
+        assert f'id="{option_id}"' in html
+        assert f'for="{option_id}"' in html
+    # The old bug: the option name leaked straight into the id/for value.
+    assert f"{permalink_id}-option two" not in html
+
+
 def test_admin_actions_new_rejects_unknown_in_reply_to(client: TestClient) -> None:
     """Regression test: an unresolvable `in_reply_to` used to reach
     `send_create` and raise an uncaught `ValueError` (500)."""

@@ -22,11 +22,9 @@
 {% endif %}
 {% endblock %}
 
-{% block content %}
+{% block site_header %}{% if outbox_object %}{% include "header.html" %}{% endif %}{% endblock %}
 
-{% if outbox_object %}
-{% include "header.html" %}
-{% endif %}
+{% block content %}
 
 {% macro display_replies_tree(replies_tree_node) %}
 

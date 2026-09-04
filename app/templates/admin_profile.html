@@ -8,6 +8,7 @@
 
 {% extends "layout.html" %}
 {% block content %}
+    <h1>{{ actor.display_name }}</h1>
     <div class="ap-object">
       {{ actor_component.display_actor(request, csrf_token, is_admin, actor, actors_metadata, with_details=True) }}
     </div>

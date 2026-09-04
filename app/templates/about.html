@@ -9,9 +9,9 @@
 <meta content="{{ ICON_URL }}" property="og:image" />
 {% endblock %}
 
-{% block content %}
-{% include "header.html" %}
+{% block site_header %}{% include "header.html" %}{% endblock %}
 
+{% block content %}
 <h2>{{ _("About") }}</h2>
 
 <div class="box prose">

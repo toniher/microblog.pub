@@ -18,8 +18,6 @@
 </head>
 <body>
 <a href="#content" class="skip-link">{{ _("Skip to content") }}</a>
-<div id="main">
-<main id="content" tabindex="-1"{%- block main_tag %}{%- endblock %}>
 {% if is_admin %}
 <div id="admin">
 {% macro admin_link(url, text) %}
@@ -34,7 +32,7 @@
         <li>{{ admin_link("admin_stream", _("Stream")) }}</li>
         <li>{{ admin_link("admin_inbox", _("Inbox")) }} / {{ admin_link("admin_outbox", _("Outbox")) }}</li>
         <li>{{ admin_link("admin_direct_messages", _("DMs")) }}</li>
-        <li>{{ admin_link("get_notifications", _("Notifications")) }} {% if notifications_count %}({{ notifications_count }}){% endif %}</li>
+        <li>{{ admin_link("get_notifications", _("Notifications")) }} {% if notifications_count %}({% trans count=notifications_count %}{{ count }} unread{% pluralize %}{{ count }} unread{% endtrans %}){% endif %}</li>
         <li>{{ admin_link("get_lookup", _("Lookup")) }}</li>
         <li>{{ admin_link("admin_bookmarks", _("Bookmarks")) }}</li>
         <li>{{ admin_link("admin_blocks", _("Blocks")) }}</li>
@@ -46,6 +44,9 @@
 
 </div>
 {% endif %}
+{% block site_header %}{% endblock %}
+<div id="main">
+<main id="content" tabindex="-1"{%- block main_tag %}{%- endblock %}>
 {% block content %}{% endblock %}
 </main>
 </div>

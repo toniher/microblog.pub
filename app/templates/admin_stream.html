@@ -8,6 +8,8 @@
 
 {% block content %}
 
+<h1>{{ _("Stream") }}</h1>
+
 {% for inbox_object in stream %}
 {% if inbox_object.ap_type == "Announce" %}
     {{ utils.display_object(inbox_object.relates_to_anybox_object) }}

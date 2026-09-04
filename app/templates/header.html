@@ -18,7 +18,7 @@
     {% for prop in local_actor.attachments %}
         <dl>
             {% if prop.type == "PropertyValue" %}
-            <dt class="muted" title="{{ prop.name }}">{{ prop.name }}</dt>
+            <dt class="muted">{{ prop.name }}</dt>
             <dd>{{ prop.value | clean_html(local_actor) | safe }}</dd>
             {% endif %}
         </dl>
@@ -35,9 +35,9 @@
 
 </div>
 
-{%- macro header_link(url, text) -%}
+{%- macro header_link(url, text, count=none) -%}
 {% set url_for = BASE_URL + request.app.router.url_path_for(url) %}
-<a href="{{ url_for }}" {% if BASE_URL + request.url.path == url_for %}aria-current="page"{% endif %}>{{ text }}</a>
+<a href="{{ url_for }}" {% if BASE_URL + request.url.path == url_for %}aria-current="page"{% endif %}>{{ text }}{% if count is not none %} <span class="counter">{{ count }}</span>{% endif %}</a>
 {% endmacro %}
 
 {%- macro navbar_item_link(navbar_item) -%}
@@ -53,13 +53,13 @@
         {% endif %}
         <li>{{ header_link("index", _("Notes")) }}</li>
         {% if articles_count %}
-        <li>{{ header_link("articles", _("Articles")) }} <span class="counter">{{ articles_count }}</span></li>
+        <li>{{ header_link("articles", _("Articles"), articles_count) }}</li>
         {% endif %}
         {% if not HIDES_FOLLOWERS or is_admin %}
-        <li>{{ header_link("followers", _("Followers")) }} <span class="counter">{{ followers_count }}</span></li>
+        <li>{{ header_link("followers", _("Followers"), followers_count) }}</li>
         {% endif %}
         {% if not HIDES_FOLLOWING or is_admin %}
-        <li>{{ header_link("following", _("Following")) }} <span class="counter">{{ following_count }}</span></li>
+        <li>{{ header_link("following", _("Following"), following_count) }}</li>
         {% endif %}
         {% for navbar_item in NAVBAR_ITEMS.EXTRA_NAVBAR_ITEMS %}
             {{ navbar_item_link(navbar_item) }}

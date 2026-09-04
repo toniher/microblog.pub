@@ -19,9 +19,9 @@
 {% endif %}
 {% endblock %}
 
-{% block content %}
-{% include "header.html" %}
+{% block site_header %}{% include "header.html" %}{% endblock %}
 
+{% block content %}
 <div class="box">
     {{ page_content | safe }}
 </div>

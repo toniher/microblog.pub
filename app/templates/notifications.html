@@ -9,10 +9,11 @@
 {% endblock %}
 
 {% block content %}
+    <h1>{{ _("Notifications") }}</h1>
     <div id="notifications">
     {%- for notif in notifications %}
     <div>
-        <div class="h-entry"">
+        <div class="h-entry">
             {%- if notif.notification_type.value == "new_follower" %}
                 {{ actor_component.actor_action(url_for("admin_profile"), notif, _("followed you"), new_flag=notif.is_new) }}
                 {{ actor_component.display_actor(request, csrf_token, is_admin, notif.actor, actors_metadata) }}

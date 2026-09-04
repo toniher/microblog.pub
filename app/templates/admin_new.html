@@ -10,6 +10,8 @@
 
 {% block content %}
 
+<h1>{{ _("New") }}</h1>
+
 {% if in_reply_to_object %}
 <div class="actor-action">{{ _("In reply to:") }}</div>
 {{ utils.display_object(in_reply_to_object) }}
@@ -46,7 +48,7 @@
 {% endif %}
 
 {% if error %}
-<p class="error-box">{{ error }}</p>
+<p class="error-box" role="alert">{{ error }}</p>
 {% endif %}
 
 <form class="form admin-new" action="{{ request.url_for("admin_actions_new") }}" enctype="multipart/form-data" method="POST">

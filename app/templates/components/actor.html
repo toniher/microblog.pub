@@ -13,7 +13,7 @@
         <a href="{{ admin_profile_url }}?actor_id={{ inbox_object.actor.ap_id }}">
             {% if with_icon %}{{ tiny_actor_icon(inbox_object.actor) }}{% endif %} {{ inbox_object.actor.display_name | clean_html(inbox_object.actor) | safe }}
         </a> {{ text }}
-        <span title="{{ timestamp.isoformat() }}">{{ timestamp | timeago }}</span>
+        <time datetime="{{ timestamp.replace(microsecond=0).isoformat() }}" title="{{ timestamp.replace(microsecond=0).isoformat() }}">{{ timestamp | timeago }}</time>
         {% if new_flag %}
             <span class="new">{{ _("new") }}</span>
         {% endif %}
@@ -44,7 +44,7 @@
     {% for prop in actor.attachments %}
         <dl>
             {% if prop.type == "PropertyValue" %}
-            <dt class="muted" title="{{ prop.name }}">{{ prop.name }}</dt>
+            <dt class="muted">{{ prop.name }}</dt>
             <dd>{{ prop.value | clean_html(actor) | safe }}</dd>
             {% endif %}
         </dl>

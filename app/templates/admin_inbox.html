@@ -11,6 +11,8 @@
 
 {% block content %}
 
+<h1>{{ _("Inbox") }}</h1>
+
 {% if show_filters %}
     {{ filters.filters(url_for("admin_inbox"), request.query_params.filter_by) }}
 {% endif %}

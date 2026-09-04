@@ -7,14 +7,15 @@
 {% block content %}
 <div class="centered">
     <div>
+        <h1>{{ _("Login") }}</h1>
         {% if error %}
-            <p class="primary-color">{{ _("Invalid password.") }}</p>
+            <p class="primary-color" id="password-error" role="alert">{{ _("Invalid password.") }}</p>
         {% endif %}
         <form class="form" action="{{ BASE_URL }}/admin/login" method="POST">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="hidden" name="redirect" value="{{ redirect }}">
             <label for="password" class="visually-hidden">{{ _("password") }}</label>
-            <input type="password" placeholder="{{ _("password") }}" name="password" id="password" autofocus>
+            <input type="password" placeholder="{{ _("password") }}" name="password" id="password" autofocus{% if error %} aria-invalid="true" aria-describedby="password-error"{% endif %}>
             <input type="submit" value="{{ _("login") }}">
         </form>
     </div>

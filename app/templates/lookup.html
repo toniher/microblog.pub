@@ -8,11 +8,14 @@
 
 {% block content %}
 
+    <h1>{{ _("Lookup") }}</h1>
+
     <div class="box">
     <p>{% trans %}Interact with an ActivityPub object via its URL or look for a user using <i>@user@domain.tld</i>{% endtrans %}</p>
 
     <form class="form" action="{{ url_for("get_lookup") }}" method="GET">
-        <input type="text" list="actor-recommendations" name="query" value="{{ query if query else "" }}" autofocus>
+        <label for="lookup-query" class="visually-hidden">{{ _("URL or fediverse handle") }}</label>
+        <input type="text" id="lookup-query" list="actor-recommendations" name="query" value="{{ query if query else "" }}" autofocus>
         <input type="submit" value="{{ _("Lookup") }}">
         <datalist id="actor-recommendations">
             {% for actor in actor_recommendations %}
@@ -23,7 +26,7 @@
     </div>
 
     {% if error %}
-    <div class="box error-box">
+    <div class="box error-box" role="alert">
         {% if error.value == "NOT_FOUND" %}
         <p>{{ _("The remote object is unavailable.") }}</p>
         {% elif error.value == "UNAUTHORIZED" %}

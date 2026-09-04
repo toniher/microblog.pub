@@ -6,9 +6,9 @@
 <meta name="robots" content="noindex, nofollow">
 {% endblock %}
 
-{% block content %}
-{% include "header.html" %}
+{% block site_header %}{% include "header.html" %}{% endblock %}
 
+{% block content %}
 <div class="box">
 <h2>{{ _("Follow %(name)s", name=local_actor.display_name) }}</h2>
 

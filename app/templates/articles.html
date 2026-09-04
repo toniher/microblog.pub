@@ -4,9 +4,9 @@
 <title>{{ _("%(name)s's articles", name=local_actor.display_name) }}</title>
 {% endblock %}
 
-{% block content %}
-{% include "header.html" %}
+{% block site_header %}{% include "header.html" %}{% endblock %}
 
+{% block content %}
 <h2>{{ _("Articles") }}</h2>
 
 <ul class="h-feed" id="articles" hx-boost="true" hx-indicator="body"{% if ENABLE_MICRODATA %} itemscope itemtype="https://schema.org/Blog"{% endif %}>

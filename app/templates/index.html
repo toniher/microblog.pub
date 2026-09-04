@@ -19,9 +19,9 @@
 <meta content="{{ local_actor.handle }}" property="profile:username" />
 {% endblock %}
 
-{% block content %}
-{% include "header.html" %}
+{% block site_header %}{% include "header.html" %}{% endblock %}
 
+{% block content %}
 {% if objects %}
 
     <div class="h-feed"{% if ENABLE_MICRODATA %} itemscope itemtype="https://schema.org/Blog"{% endif %}>
@@ -31,7 +31,7 @@
     {{ utils.display_object(outbox_object, md_container_prop="blogPost") }}
     {% elif outbox_object.ap_type == "Announce" %}
     <div class="h-entry" id="{{ outbox_object.permalink_id }}">
-        <div class="shared-header"><strong><a class="p-author h-card" href="{{ local_actor.url }}">{{ actor_component.tiny_actor_icon(local_actor) }}  {{ local_actor.display_name | clean_html(local_actor) | safe }}</a></strong> {{ _("shared") }} <span title="{{ outbox_object.ap_published_at.isoformat() }}">{{ outbox_object.ap_published_at | timeago }}</span></div>
+        <div class="shared-header"><strong><a class="p-author h-card" href="{{ local_actor.url }}">{{ actor_component.tiny_actor_icon(local_actor) }}  {{ local_actor.display_name | clean_html(local_actor) | safe }}</a></strong> {{ _("shared") }} <time datetime="{{ outbox_object.ap_published_at.replace(microsecond=0).isoformat() }}" title="{{ outbox_object.ap_published_at.replace(microsecond=0).isoformat() }}">{{ outbox_object.ap_published_at | timeago }}</time></div>
         <div class="h-cite u-repost-of">
             {{ utils.display_object(outbox_object.relates_to_anybox_object, is_h_entry=False) }}
         </div>

@@ -43,13 +43,13 @@
         this object
     </a>{% endtrans %}</p>
 
-    <div class="obj-content margin-top-20">
+    <div class="obj-content spaced-top">
     <div class="e-content">
         {{ wm_reply.content | clean_html_wm | safe }}
     </div>
     </div>
 
-    <div class="flexbox activity-bar margin-top-20" hx-boost="true" hx-indicator="body">
+    <div class="flexbox activity-bar spaced-top" hx-boost="true" hx-indicator="body">
     <ul>
         <li>
             <div><a href="{{ wm_reply.url }}" rel="nofollow" class="object-permalink u-url u-uid">{{ _("permalink") }}</a></div>
@@ -185,8 +185,8 @@
                 {% set pct = item | poll_item_pct(object.poll_voters_count) %}
                 <p>
                     {% if can_vote %}
-                    <input type="{% if object.is_one_of_poll %}radio{% else %}checkbox{% endif %}" name="name" value="{{ item.name }}" id="{{object.permalink_id}}-{{item.name}}">
-                    <label for="{{object.permalink_id}}-{{item.name}}">
+                    <input type="{% if object.is_one_of_poll %}radio{% else %}checkbox{% endif %}" name="name" value="{{ item.name }}" id="{{ object.permalink_id }}-poll-{{ loop.index }}">
+                    <label for="{{ object.permalink_id }}-poll-{{ loop.index }}">
                     {% endif %}
 
                     {{ item.name | clean_html(object) | safe }}
@@ -201,7 +201,7 @@
 
                     <span class="float-right">{{ pct }}% <span class="muted">({% trans count=item.replies.totalItems %}{{ count }} vote{% pluralize %}{{ count }} votes{% endtrans %})</span></span>
                 </p>
-                <svg class="poll-bar">
+                <svg class="poll-bar" aria-hidden="true">
                     <line x1="0" y1="10px" x2="{{ pct or 1 }}%" y2="10px"></line>
                 </svg>
             </li>
@@ -254,7 +254,7 @@
             {% if object.poll_end_time %}
                 <li>
                     {% if object.is_poll_ended %}{{ _("ended") }}{% else %}{{ _("ends") }}{% endif %}
-                    <time title="{{ object.poll_end_time.replace(microsecond=0).isoformat() }}">
+                    <time datetime="{{ object.poll_end_time.replace(microsecond=0).isoformat() }}" title="{{ object.poll_end_time.replace(microsecond=0).isoformat() }}">
                         {{ object.poll_end_time | timeago }}
                     </time>
                 </li>
@@ -402,7 +402,7 @@
             <div class="interactions-block">{{ _("Likes") }}
                 <div class="facepile-wrapper">
                 {% for like in likes %}
-                    <a href="{% if is_admin and like.ap_actor_id %}{{ url_for("admin_profile") }}?actor_id={{ like.ap_actor_id }}{% else %}{{ like.url }}{% endif %}" title="{{ like.name }}" rel="noreferrer">
+                    <a href="{% if is_admin and like.ap_actor_id %}{{ url_for("admin_profile") }}?actor_id={{ like.ap_actor_id }}{% else %}{{ like.url }}{% endif %}" rel="noreferrer">
                         <img src="{{ like.picture_url }}" alt="{{ like.name }}" loading="lazy">
                     </a>
                 {% endfor %}
@@ -419,7 +419,7 @@
             <div class="interactions-block">{{ _("Shares") }}
                 <div class="facepile-wrapper">
                 {% for share in shares %}
-                    <a href="{% if is_admin and share.ap_actor_id %}{{ url_for("admin_profile") }}?actor_id={{ share.ap_actor_id }}{% else %}{{ share.url }}{% endif %}" title="{{ share.name }}" rel="noreferrer">
+                    <a href="{% if is_admin and share.ap_actor_id %}{{ url_for("admin_profile") }}?actor_id={{ share.ap_actor_id }}{% else %}{{ share.url }}{% endif %}" rel="noreferrer">
                         <img src="{{ share.picture_url }}" alt="{{ share.name }}" loading="lazy">
                     </a>
                 {% endfor %}
@@ -438,7 +438,7 @@
                 {% for webmention in webmentions %}
                     {% set wm = webmention.as_facepile_item %}
                     {% if wm %}
-                        <a href="{{ wm.url }}" title="{{ wm.actor_name }}" rel="noreferrer">
+                        <a href="{{ wm.url }}" rel="noreferrer">
                             <img src="{{ wm.actor_icon_url | media_proxy_url }}" alt="{{ wm.actor_name }}" loading="lazy">
                         </a>
                     {% endif %}

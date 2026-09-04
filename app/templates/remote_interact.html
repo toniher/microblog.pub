@@ -7,9 +7,9 @@
 <meta name="robots" content="noindex, nofollow">
 {% endblock %}
 
-{% block content %}
-{% include "header.html" %}
+{% block site_header %}{% include "header.html" %}{% endblock %}
 
+{% block content %}
 <div class="box">
     <h2>{{ _("Interact with this object") }}</h2>
 </div>

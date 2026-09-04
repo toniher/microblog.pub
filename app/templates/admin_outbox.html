@@ -12,6 +12,8 @@
 
 {% block content %}
 
+<h1>{{ _("Outbox") }}</h1>
+
 {{ filters.filters(url_for("admin_outbox"), request.query_params.filter_by) }}
 
 {% for outbox_object in outbox %}
