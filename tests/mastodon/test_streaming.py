@@ -145,12 +145,88 @@ def test_subscribe_to_unknown_stream_returns_error_frame(
         assert "error" in frame
 
 
-def test_subscribe_to_list_returns_explicit_error(client: TestClient, db) -> None:
+def test_subscribe_to_unknown_list_returns_error_frame(client: TestClient, db) -> None:
     token = _make_access_token(db, "read write follow push")
     with client.websocket_connect(f"/api/v1/streaming?access_token={token}") as ws:
-        ws.send_json({"type": "subscribe", "stream": "list", "list": "1"})
+        ws.send_json({"type": "subscribe", "stream": "list", "list": "404"})
         frame = _recv_json(ws)
-        assert frame["error"] == "Lists are not supported by this server"
+        assert frame["error"] == "Unknown list"
+
+
+def test_subscribe_to_list_requires_scope(client: TestClient, db) -> None:
+    token = _make_access_token(db, "read:statuses")
+    with SessionLocal() as session:
+        mastodon_list = models.MastodonList(title="Friends")
+        session.add(mastodon_list)
+        session.commit()
+        list_id = str(mastodon_list.id)
+
+    with client.websocket_connect(f"/api/v1/streaming?access_token={token}") as ws:
+        ws.send_json({"type": "subscribe", "stream": "list", "list": list_id})
+        frame = _recv_json(ws)
+        assert frame["error"] == "This stream requires the read:lists scope"
+
+
+def test_end_to_end_list_member_post_delivers_update_frame(
+    client: TestClient, db
+) -> None:
+    token = _make_access_token(db, "read write follow push")
+
+    with SessionLocal() as session:
+        mastodon_list = models.MastodonList(title="Friends")
+        session.add(mastodon_list)
+        session.flush()
+        actor = activitypub.models.Actor(
+            ap_id="https://example.test/list-member",
+            ap_actor={
+                "id": "https://example.test/list-member",
+                "type": "Person",
+                "preferredUsername": "member",
+                "inbox": "https://example.test/inbox",
+            },
+            ap_type="Person",
+        )
+        session.add(actor)
+        session.flush()
+        session.add(
+            models.MastodonListMember(list_id=mastodon_list.id, actor_id=actor.id)
+        )
+        session.commit()
+        list_id = str(mastodon_list.id)
+        actor_ap_id = actor.ap_id
+
+    with client.websocket_connect(f"/api/v1/streaming?access_token={token}") as ws:
+        ws.send_json({"type": "subscribe", "stream": "list", "list": list_id})
+
+        with SessionLocal() as session:
+            actor = (
+                session.query(activitypub.models.Actor)
+                .filter(activitypub.models.Actor.ap_id == actor_ap_id)
+                .one()
+            )
+            obj = activitypub.models.InboxObject(
+                actor_id=actor.id,
+                server="example.test",
+                ap_actor_id=actor.ap_id,
+                ap_type="Note",
+                ap_id="https://example.test/objects/list-note",
+                ap_object={
+                    "id": "https://example.test/objects/list-note",
+                    "type": "Note",
+                    "content": "hello list",
+                    "attributedTo": actor.ap_id,
+                },
+                ap_published_at=now(),
+                visibility=ap.VisibilityEnum.PUBLIC,
+            )
+            session.add(obj)
+            session.commit()
+
+        frame = _recv_json(ws)
+        assert frame["stream"] == ["list", list_id]
+        assert frame["event"] == "update"
+        payload = json.loads(frame["payload"])
+        assert payload["content"] == "hello list"
 
 
 def test_subscribe_to_user_notification_requires_scope(client: TestClient, db) -> None:

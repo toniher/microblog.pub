@@ -223,3 +223,16 @@ async def get_upload_by_mastodon_id(
     if internal_id is None:
         return None
     return await db_session.get(Upload, internal_id)
+
+
+# Lists are a single table too — the Mastodon id is just the row's own PK.
+# Shared by `app.mastodon.router` (REST CRUD) and `app.mastodon.streaming`
+# (the `list` stream's subscribe-time validation), which can't import each
+# other (`router.py` imports `streaming.py` to mount its routes).
+
+
+def decode_list_id(mastodon_id: str) -> int | None:
+    try:
+        return int(mastodon_id)
+    except ValueError:
+        return None

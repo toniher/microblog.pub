@@ -7,18 +7,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app import models
 
 _SCOPE_GATED_ENDPOINTS = [
-    "/api/v1/lists",
     "/api/v1/filters",
     "/api/v2/filters",
     "/api/v1/suggestions",
     "/api/v2/suggestions",
     "/api/v1/follow_requests",
-    # These four used to 404, which clients surface as an error dialog rather
+    # These three used to 404, which clients surface as an error dialog rather
     # than an empty section — the official Mastodon app hits all of them on
     # its profile and hashtag screens.
     "/api/v1/endorsements",
     "/api/v1/followed_tags",
-    "/api/v1/accounts/0/lists",
 ]
 
 _DELIBERATELY_ABSENT = [
@@ -30,7 +28,10 @@ _DELIBERATELY_ABSENT = [
 
 # /api/v1/mutes and /api/v1/blocks used to live in the list above; they're
 # real lists now (tests/mastodon/test_social.py), empty only when nothing is
-# muted/blocked.
+# muted/blocked. /api/v1/lists moved the same way (tests/mastodon/test_lists.py) —
+# empty only when no list has been created. /api/v1/accounts/0/lists moved too,
+# but can't simply join this list: it now 404s (there is no account "0"),
+# see test_accounts_lists_404s_for_the_local_actor there.
 
 _PUBLIC_ENDPOINTS = [
     "/api/v1/directory",

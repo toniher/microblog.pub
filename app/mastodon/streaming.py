@@ -57,6 +57,7 @@ _VALID_STREAM_KINDS = {
     "public:remote",
     "hashtag",
     "direct",
+    "list",
 }
 
 # Backpressure: drop the oldest frame rather than close the socket. A client
@@ -144,6 +145,10 @@ def _classify_streams(obj: AnyboxObject, active_hashtags: set[str]) -> frozenset
     """Which streams `obj` belongs to, mirroring the REST timeline filters
     exactly: `public` is precisely `user ∩ {visibility == PUBLIC}`, the same
     relationship `timelines_public`'s non-local branch has to `timelines_home`.
+
+    Deliberately excludes `list`/`exclusive`: both need a DB round-trip
+    (list membership, the exclusive-member set) that a pure sync classifier
+    can't make, so `_apply_list_and_exclusive` widens the result afterwards.
     """
     keys: set[StreamKey] = {("user", None)}
     if obj.visibility == ap.VisibilityEnum.PUBLIC:
@@ -159,6 +164,35 @@ def _classify_streams(obj: AnyboxObject, active_hashtags: set[str]) -> frozenset
         for tag in timelines.tag_names(obj) & active_hashtags:
             keys.add(("hashtag", tag))
     return frozenset(keys)
+
+
+def _apply_list_and_exclusive(
+    obj: AnyboxObject,
+    keys: frozenset,
+    list_hits: dict[int, set[str]],
+    exclusive_actor_ids: set[int],
+) -> frozenset | None:
+    """Union in `("list", …)` keys for the lists `obj` belongs to (from
+    `list_hits`, keyed by `InboxObject.id`), and drop `("user", None)` when
+    `obj`'s author is a member of an `exclusive` list — `exclusive` has to
+    reach the `user` stream too, or it drifts from REST home, since
+    `_classify_streams`'s own contract is that `user` mirrors the home
+    timeline. `public*`/`hashtag` keys are unaffected, matching Mastodon.
+
+    Both belong here rather than in `_classify_streams` because a list
+    timeline (unlike `public`) must carry followers-only posts too, and
+    because both need `list_hits`/`exclusive_actor_ids`, which the pure sync
+    classifier has no DB access to compute. Returns `None` when nothing is
+    left to publish (a followers-only post from an exclusive member has no
+    `public*` key to fall back to).
+    """
+    if not isinstance(obj, activitypub.models.InboxObject):
+        return keys
+    assert obj.id is not None
+    widened = set(keys) | {("list", lid) for lid in list_hits.get(obj.id, ())}
+    if obj.actor_id in exclusive_actor_ids:
+        widened.discard(("user", None))
+    return frozenset(widened) if widened else None
 
 
 class EventPump:
@@ -294,6 +328,56 @@ class EventPump:
 
         return new_inbox_ids, new_outbox_ids, behind
 
+    async def _active_list_policies(self, db_session: AsyncSession) -> dict[int, str]:
+        """`{list_id: replies_policy}` for every list currently subscribed to
+        by at least one socket. Resolved fresh each call (never cached)
+        since a `PUT` can change `replies_policy` between ticks.
+        """
+        active = self._hub.active_lists()
+        if not active:
+            return {}
+        list_ids = {
+            internal_id
+            for lid in active
+            if (internal_id := ids.decode_list_id(lid)) is not None
+        }
+        if not list_ids:
+            return {}
+        rows = (
+            await db_session.execute(
+                select(
+                    models.MastodonList.id, models.MastodonList.replies_policy
+                ).where(models.MastodonList.id.in_(list_ids))
+            )
+        ).all()
+        return {row[0]: row[1] for row in rows}
+
+    async def _list_hits(
+        self,
+        db_session: AsyncSession,
+        active_lists: dict[int, str],
+        inbox_ids: list[int],
+    ) -> dict[int, set[str]]:
+        """Which of `active_lists` each of `inbox_ids` belongs to, one query
+        per subscribed list reusing `models.list_timeline_where` verbatim —
+        the REST timeline and the stream can't drift apart this way, exactly
+        why `_direct_events` re-runs `dm_threads()` instead of reimplementing
+        its filter.
+        """
+        hits: dict[int, set[str]] = {}
+        if not active_lists or not inbox_ids:
+            return hits
+        for list_id, replies_policy in active_lists.items():
+            matched_ids = await db_session.scalars(
+                select(activitypub.models.InboxObject.id).where(
+                    activitypub.models.InboxObject.id.in_(inbox_ids),
+                    *models.list_timeline_where(list_id, replies_policy),
+                )
+            )
+            for inbox_id in matched_ids:
+                hits.setdefault(inbox_id, set()).add(str(list_id))
+        return hits
+
     async def _status_events(
         self,
         db_session: AsyncSession,
@@ -304,6 +388,11 @@ class EventPump:
             return []
 
         active_hashtags = self._hub.active_hashtags()
+        active_lists = await self._active_list_policies(db_session)
+        list_hits = await self._list_hits(db_session, active_lists, new_inbox_ids)
+        exclusive_actor_ids = set(
+            await db_session.scalars(models.exclusive_list_member_actor_ids())
+        )
         events: list[Event] = []
 
         inbox_rows: list[AnyboxObject] = []
@@ -336,9 +425,12 @@ class EventPump:
             await serializers.prefetch_status_relations(db_session, rows)
 
         for obj in rows:
-            streams = _classify_streams(obj, active_hashtags)
-            payload = json.dumps(await serializers.serialize_status(db_session, obj))
-            events.append(Event("update", payload, streams))
+            streams = _apply_list_and_exclusive(
+                obj,
+                _classify_streams(obj, active_hashtags),
+                list_hits,
+                exclusive_actor_ids,
+            )
 
             status_id = (
                 ids.encode_outbox_id(obj)
@@ -360,6 +452,15 @@ class EventPump:
                     obj.id,
                     _Tracked(status_id, False, obj.updated_at),
                 )
+
+            if streams is None:
+                # A followers-only post from an exclusive-list member: no
+                # `public*` key to fall back to, so there is nothing to
+                # publish, but the row above is still tracked for a later
+                # edit/delete.
+                continue
+            payload = json.dumps(await serializers.serialize_status(db_session, obj))
+            events.append(Event("update", payload, streams))
 
         return events
 
@@ -473,6 +574,11 @@ class EventPump:
         if not subscribed:
             return []
 
+        active_lists = await self._active_list_policies(db_session)
+        exclusive_actor_ids = set(
+            await db_session.scalars(models.exclusive_list_member_actor_ids())
+        )
+
         events: list[Event] = []
 
         if self._tracked_inbox:
@@ -487,6 +593,7 @@ class EventPump:
                 )
             ).all()
             seen = set()
+            updated: list[tuple[int, AnyboxObject, dict]] = []
             for row_id, is_deleted, updated_at in rows:
                 seen.add(row_id)
                 tracked = self._tracked_inbox[row_id]
@@ -509,19 +616,31 @@ class EventPump:
                         extra_where=(activitypub.models.InboxObject.id == row_id,),
                     )
                     if inbox_obj_rows:
+                        obj = inbox_obj_rows[0]
                         await serializers.prefetch_status_relations(
                             db_session, inbox_obj_rows
                         )
-                        entity = await serializers.serialize_status(
-                            db_session, inbox_obj_rows[0]
-                        )
-                        streams = _classify_streams(
-                            inbox_obj_rows[0], self._hub.active_hashtags()
-                        )
-                        events.append(
-                            Event("status.update", json.dumps(entity), streams)
-                        )
+                        entity = await serializers.serialize_status(db_session, obj)
+                        updated.append((row_id, obj, entity))
                     tracked.signal = updated_at
+
+            # One `_list_hits` call for the whole batch of edited rows, not
+            # one per row: a burst of edits (e.g. a worker rewriting many
+            # `updated_at`s in one pass) would otherwise multiply list
+            # queries by row count instead of by subscribed-list count.
+            list_hits = await self._list_hits(
+                db_session, active_lists, [row_id for row_id, _, _ in updated]
+            )
+            active_hashtags = self._hub.active_hashtags()
+            for row_id, updated_obj, entity in updated:
+                streams = _apply_list_and_exclusive(
+                    updated_obj,
+                    _classify_streams(updated_obj, active_hashtags),
+                    list_hits,
+                    exclusive_actor_ids,
+                )
+                if streams is not None:
+                    events.append(Event("status.update", json.dumps(entity), streams))
             # Rows the WHERE clause never returned (hard-pruned by
             # app/prune.py) are silently dropped: they're never rows a live
             # client still holds, so a `delete` frame would be wrong.
@@ -694,6 +813,14 @@ class Hub:
             if key[0] == "hashtag" and key[1]
         }
 
+    def active_lists(self) -> set[str]:
+        return {
+            key[1]
+            for sub in self._subscribers
+            for key in sub.streams
+            if key[0] == "list" and key[1]
+        }
+
     def all_subscribed_stream_keys(self) -> frozenset:
         keys: set[StreamKey] = set()
         for sub in self._subscribers:
@@ -718,13 +845,19 @@ class Hub:
 hub = Hub()
 
 
-def _parse_stream_key(stream: object, tag: object) -> StreamKey | None:
+def _parse_stream_key(
+    stream: object, tag: object, list_id: object = None
+) -> StreamKey | None:
     if not isinstance(stream, str) or stream not in _VALID_STREAM_KINDS:
         return None
     if stream == "hashtag":
         if not isinstance(tag, str) or not tag:
             return None
         return ("hashtag", tag.lstrip("#").lower())
+    if stream == "list":
+        if not isinstance(list_id, str) or not list_id:
+            return None
+        return ("list", list_id)
     return (stream, None)
 
 
@@ -800,11 +933,8 @@ async def _reader_loop(
             continue
 
         stream = message.get("stream")
-        if stream == "list":
-            await _send_error(websocket, "Lists are not supported by this server")
-            continue
 
-        key = _parse_stream_key(stream, message.get("tag"))
+        key = _parse_stream_key(stream, message.get("tag"), message.get("list"))
         if key is None:
             await _send_error(websocket, "Unknown stream")
             continue
@@ -815,8 +945,27 @@ async def _reader_loop(
                 websocket, "This stream requires the read:notifications scope"
             )
             continue
+        if key[0] == "list" and not has_scope(token_info, "read:lists"):
+            await _send_error(websocket, "This stream requires the read:lists scope")
+            continue
 
         if msg_type == "subscribe":
+            if key[0] == "list":
+                # Bounds the pump's per-tick list work by the number of lists
+                # that actually exist rather than by client-supplied ids —
+                # strictly better than the hashtag case
+                # `_MAX_STREAMS_PER_SUBSCRIBER` exists to contain.
+                internal_id = ids.decode_list_id(key[1] or "")
+                exists = False
+                if internal_id is not None:
+                    async with async_session() as db_session:
+                        exists = (
+                            await db_session.get(models.MastodonList, internal_id)
+                            is not None
+                        )
+                if not exists:
+                    await _send_error(websocket, "Unknown list")
+                    continue
             if (
                 key not in sub.streams
                 and len(sub.streams) >= _MAX_STREAMS_PER_SUBSCRIBER
@@ -850,12 +999,18 @@ def _initial_stream_key(
     stream = websocket.query_params.get("stream")
     if not stream:
         return None
-    key = _parse_stream_key(stream, websocket.query_params.get("tag"))
+    key = _parse_stream_key(
+        stream,
+        websocket.query_params.get("tag"),
+        websocket.query_params.get("list"),
+    )
     if key is None:
         return None
     if key[0] == "user:notification" and not has_scope(
         token_info, "read:notifications"
     ):
+        return None
+    if key[0] == "list" and not has_scope(token_info, "read:lists"):
         return None
     return key
 

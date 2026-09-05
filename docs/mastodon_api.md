@@ -194,25 +194,36 @@ forgotten on the device.
   disappearing — rescheduling it with `PUT` gives it a fresh set of attempts.
 - **Streaming API** (`wss://…/api/v1/streaming`, WebSocket only — no SSE) —
   `user`, `user:notification`, `public`, `public:local`, `public:remote`,
-  `hashtag` and `direct` streams, delivering `update`, `status.update`,
+  `hashtag`, `direct` and `list` streams, delivering `update`, `status.update`,
   `delete`, `notification` and `conversation` events. Unlike Web Push, this
   needs **no separate process**: the server runs as a single process/event
   loop, so a small in-process task polls committed rows (~1s interval,
   `streaming_poll_interval`) and fans out over the open sockets — the same
-  filtering (mutes, visibility) the REST timelines apply, since it re-queries
-  through the same functions rather than duplicating the logic. `delete` and
-  `status.update` are best-effort over a bounded window (the newest ~500
-  statuses per table plus anything streamed since connecting) — a much older
-  status, deleted, produces no frame; the client's own list still updates on
-  its next REST fetch. **Not supported**: `list` streams (Lists are an empty
-  stub, see below) and the `public:*:media` variants. One socket may hold at
-  most 64 subscriptions (`hashtag` streams carry a client-supplied tag, so the
-  set needs a bound); a 65th `subscribe` gets an error frame and is ignored.
+  filtering (mutes, visibility, list membership, `exclusive`) the REST
+  timelines apply, since it re-queries through the same functions rather than
+  duplicating the logic. `delete` and `status.update` are best-effort over a
+  bounded window (the newest ~500 statuses per table plus anything streamed
+  since connecting) — a much older status, deleted, produces no frame; the
+  client's own list still updates on its next REST fetch. Subscribing to an
+  unknown `list` id gets an error frame. **Not supported**: the
+  `public:*:media` variants. One socket may hold at most 64 subscriptions
+  (`hashtag` streams carry a client-supplied tag, so the set needs a bound); a
+  65th `subscribe` gets an error frame and is ignored.
   **Deployment note**:
   the reverse proxy must forward the WebSocket upgrade on this path
   specifically — see the `location /api/v1/streaming` block in
   `docs/install.md`'s nginx snippet. `streaming_enabled = false` in
   `data/profile.toml` disables the endpoint and removes the advertisement.
+- **Lists** (`/api/v1/lists` CRUD, `lists/{id}/accounts`, and the
+  `/api/v1/timelines/list/:id` timeline) — a purely local, curated view over
+  who you follow; nothing here is federated. `replies_policy`
+  (`followed`/`list`/`none`) and `exclusive` are both genuinely enforced, not
+  just stored: `replies_policy` filters which replies a list's own timeline
+  shows (matching Mastodon's own semantics — a reply always shows if it's a
+  self-reply or a reply to you, `list` additionally shows a reply to another
+  list member), and `exclusive` removes a list's members from the home
+  timeline (their own list, and your own posts, are unaffected). Adding an
+  account requires already following it, same restriction real Mastodon has.
 
 ## What doesn't (single-user degradations)
 
@@ -221,7 +232,7 @@ things a single-user server has no data for. These degrade gracefully (an empty
 list, or a harmless no-op) rather than erroring, so clients render an empty state
 instead of crashing:
 
-- **Lists, filters, suggestions, the directory, trends, and familiar
+- **Filters, suggestions, the directory, trends, and familiar
   followers** — always empty.
 - **Federated peers** (`/api/v1/instance/peers`) — always empty. This one's a
   deliberate privacy choice rather than a missing feature: the data exists,

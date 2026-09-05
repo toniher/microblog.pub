@@ -878,13 +878,23 @@ async def _paginated_actor_list(
     request: Request,
     db_session: AsyncSession,
     *,
-    model: type[activitypub.models.Follower] | type[activitypub.models.Following],
+    model: (
+        type[activitypub.models.Follower]
+        | type[activitypub.models.Following]
+        | type[models.MastodonListMember]
+    ),
     join_column,
+    extra_where: tuple = (),
+    default_limit: int = pagination.DEFAULT_LIMIT,
+    max_limit: int = pagination.MAX_LIMIT,
 ) -> JSONResponse:
-    params = pagination.parse_pagination(request)
+    params = pagination.parse_pagination(
+        request, default_limit=default_limit, max_limit=max_limit
+    )
     query = _apply_account_cursor(
         select(model)
         .join(activitypub.models.Actor, join_column == activitypub.models.Actor.id)
+        .where(*extra_where)
         .options(joinedload(model.actor))
         .order_by(activitypub.models.Actor.id.desc())
         .limit(params.limit),
@@ -972,13 +982,33 @@ async def accounts_endorsements(
 @router.get("/api/v1/accounts/{account_id}/lists", response_model=None)
 async def accounts_lists(
     account_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
     token_info: AccessTokenInfo = Depends(require_scope("read:lists")),
 ) -> JSONResponse:
-    # Which of the owner's lists this account is in. Lists are an empty stub
-    # (`lists_index`), so this is empty for the same reason — but it has to
-    # *exist*: clients call it when opening a profile, and a 404 there is an
-    # error dialog rather than an absent section.
-    return JSONResponse(content=[], status_code=200)
+    """Which of the owner's lists this account is a member of.
+
+    `account_id == ids.LOCAL_ACTOR_ID` ("0") 404s here like any other unknown
+    account id: the owner is never a row in `Actor`, so there is nothing to
+    resolve — same as `accounts_statuses` et al.
+    """
+    actor = await ids.get_account_by_mastodon_id(db_session, account_id)
+    if actor is None:
+        raise MastodonError(404, "not_found", "account not found")
+
+    rows = (
+        await db_session.scalars(
+            select(models.MastodonList)
+            .join(
+                models.MastodonListMember,
+                models.MastodonListMember.list_id == models.MastodonList.id,
+            )
+            .where(models.MastodonListMember.actor_id == actor.id)
+            .order_by(models.MastodonList.id)
+        )
+    ).all()
+    return JSONResponse(
+        content=[serializers.serialize_list(row) for row in rows], status_code=200
+    )
 
 
 # --- Statuses ----------------------------------------------------------------
@@ -1253,7 +1283,17 @@ async def timelines_home(
     # top-`limit` is correct even if every recent post came from just one
     # side.
     inbox_items = await timelines.fetch_inbox_timeline_page(
-        db_session, before=before, after=after, limit=params.limit
+        db_session,
+        before=before,
+        after=after,
+        limit=params.limit,
+        # `exclusive` never hides the owner's own posts, so this only ever
+        # applies to the inbox leg — the outbox leg below is exactly that.
+        extra_where=(
+            activitypub.models.InboxObject.actor_id.not_in(
+                models.exclusive_list_member_actor_ids()
+            ),
+        ),
     )
     outbox_items = await timelines.fetch_outbox_timeline_page(
         db_session, before=before, after=after, limit=params.limit
@@ -2285,13 +2325,6 @@ async def conversations_read(
 # client can't yet act on.
 
 
-@router.get("/api/v1/lists", response_model=None)
-async def lists_index(
-    token_info: AccessTokenInfo = Depends(require_scope("read")),
-) -> JSONResponse:
-    return JSONResponse(content=[], status_code=200)
-
-
 @router.get("/api/v1/filters", response_model=None)
 async def filters_v1_index(
     token_info: AccessTokenInfo = Depends(require_scope("read")),
@@ -3225,6 +3258,317 @@ async def scheduled_statuses_delete(
     await db_session.delete(scheduled_status)
     await db_session.commit()
     return JSONResponse(content={}, status_code=200)
+
+
+# --- Lists ---------------------------------------------------------------------
+# A purely local, curated view over `Following` (Mastodon's `POST /api/v1/lists`
+# family) — nothing here is federated, the same shape as `Actor.is_muted`.
+
+
+_VALID_REPLIES_POLICIES = {"followed", "list", "none"}
+# Mastodon's own cap (`app/models/list.rb`'s `LIMIT`). Without one, the
+# streaming pump's `Hub.active_lists()` would run one DB query per active
+# list per poll tick with no upper bound.
+_MAX_LISTS = 50
+
+
+async def _resolve_list_or_404(
+    db_session: AsyncSession,
+    list_id: str,
+) -> models.MastodonList:
+    internal_id = ids.decode_list_id(list_id)
+    mastodon_list = (
+        await db_session.get(models.MastodonList, internal_id)
+        if internal_id is not None
+        else None
+    )
+    if mastodon_list is None:
+        raise MastodonError(404, "not_found", "list not found")
+    return mastodon_list
+
+
+def _validate_list_params(params: _StatusParams) -> tuple[str, str, bool]:
+    title = (params.get("title") or "").strip()
+    if not title:
+        raise MastodonError(422, "validation_failed", "title is required")
+
+    replies_policy = params.get("replies_policy") or "list"
+    if replies_policy not in _VALID_REPLIES_POLICIES:
+        raise MastodonError(
+            422,
+            "validation_failed",
+            "replies_policy must be one of followed, list, none",
+        )
+
+    return title, replies_policy, params.get_bool("exclusive")
+
+
+@router.get("/api/v1/lists", response_model=None)
+async def lists_index(
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:lists")),
+) -> JSONResponse:
+    rows = (
+        await db_session.scalars(
+            select(models.MastodonList).order_by(models.MastodonList.id)
+        )
+    ).all()
+    return JSONResponse(
+        content=[serializers.serialize_list(row) for row in rows], status_code=200
+    )
+
+
+@router.post("/api/v1/lists", response_model=None)
+async def lists_create(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:lists")),
+) -> JSONResponse:
+    params = await _body_params(request)
+    title, replies_policy, exclusive = _validate_list_params(params)
+
+    list_count = await db_session.scalar(select(func.count(models.MastodonList.id)))
+    if list_count is not None and list_count >= _MAX_LISTS:
+        raise MastodonError(
+            422, "validation_failed", f"cannot exceed {_MAX_LISTS} lists"
+        )
+
+    mastodon_list = models.MastodonList(
+        title=title, replies_policy=replies_policy, exclusive=exclusive
+    )
+    db_session.add(mastodon_list)
+    await db_session.commit()
+    return JSONResponse(
+        content=serializers.serialize_list(mastodon_list), status_code=200
+    )
+
+
+@router.get("/api/v1/lists/{list_id}", response_model=None)
+async def lists_show(
+    list_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:lists")),
+) -> JSONResponse:
+    mastodon_list = await _resolve_list_or_404(db_session, list_id)
+    return JSONResponse(
+        content=serializers.serialize_list(mastodon_list), status_code=200
+    )
+
+
+@router.put("/api/v1/lists/{list_id}", response_model=None)
+async def lists_update(
+    list_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:lists")),
+) -> JSONResponse:
+    """Only the fields actually sent are touched — same "partial write" shape
+    `POST /follow`'s `reblogs`/`notify` flags use — so toggling `exclusive`
+    alone doesn't require resending `title`.
+    """
+    mastodon_list = await _resolve_list_or_404(db_session, list_id)
+    params = await _body_params(request)
+
+    if params.has("title"):
+        title = (params.get("title") or "").strip()
+        if not title:
+            raise MastodonError(422, "validation_failed", "title is required")
+        mastodon_list.title = title
+    if params.has("replies_policy"):
+        replies_policy = params.get("replies_policy")
+        if replies_policy not in _VALID_REPLIES_POLICIES:
+            raise MastodonError(
+                422,
+                "validation_failed",
+                "replies_policy must be one of followed, list, none",
+            )
+        mastodon_list.replies_policy = replies_policy
+    if params.has("exclusive"):
+        mastodon_list.exclusive = params.get_bool("exclusive")
+
+    mastodon_list.updated_at = now()
+    await db_session.commit()
+    return JSONResponse(
+        content=serializers.serialize_list(mastodon_list), status_code=200
+    )
+
+
+@router.delete("/api/v1/lists/{list_id}", response_model=None)
+async def lists_delete(
+    list_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:lists")),
+) -> JSONResponse:
+    mastodon_list = await _resolve_list_or_404(db_session, list_id)
+    await db_session.execute(
+        delete(models.MastodonListMember).where(
+            models.MastodonListMember.list_id == mastodon_list.id
+        )
+    )
+    await db_session.delete(mastodon_list)
+    await db_session.commit()
+    return JSONResponse(content={}, status_code=200)
+
+
+@router.get("/api/v1/lists/{list_id}/accounts", response_model=None)
+async def lists_accounts_index(
+    list_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:lists")),
+) -> JSONResponse:
+    mastodon_list = await _resolve_list_or_404(db_session, list_id)
+
+    # `0` means "all, unpaginated". Outside `parse_pagination`'s clamp: `"0"`
+    # is truthy, so it would otherwise enter the parse branch and
+    # `max(1, min(0, 80))` silently clamps it to `1`.
+    if request.query_params.get("limit") == "0":
+        rows = (
+            (
+                await db_session.scalars(
+                    select(models.MastodonListMember)
+                    .join(
+                        activitypub.models.Actor,
+                        models.MastodonListMember.actor_id
+                        == activitypub.models.Actor.id,
+                    )
+                    .where(models.MastodonListMember.list_id == mastodon_list.id)
+                    .options(joinedload(models.MastodonListMember.actor))
+                    .order_by(activitypub.models.Actor.id.desc())
+                )
+            )
+            .unique()
+            .all()
+        )
+        accounts = [
+            await serializers.serialize_account(db_session, row.actor) for row in rows
+        ]
+        return JSONResponse(content=accounts, status_code=200)
+
+    return await _paginated_actor_list(
+        request,
+        db_session,
+        model=models.MastodonListMember,
+        join_column=models.MastodonListMember.actor_id,
+        extra_where=(models.MastodonListMember.list_id == mastodon_list.id,),
+        default_limit=40,
+        max_limit=80,
+    )
+
+
+@router.post("/api/v1/lists/{list_id}/accounts", response_model=None)
+async def lists_accounts_add(
+    list_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:lists")),
+) -> JSONResponse:
+    mastodon_list = await _resolve_list_or_404(db_session, list_id)
+    params = await _body_params(request)
+    account_ids = params.get_list("account_ids")
+
+    actors = []
+    for account_id in account_ids:
+        actor = await ids.get_account_by_mastodon_id(db_session, str(account_id))
+        if actor is None:
+            raise MastodonError(404, "not_found", "account not found")
+        # `Following.ap_actor_id` is the house existence check (see `follow`);
+        # the local owner (`LOCAL_ACTOR_ID`) is never a `Following` row, so it
+        # 404s here for free, matching the spec's "not following" case.
+        is_followed = await db_session.scalar(
+            select(activitypub.models.Following.id).where(
+                activitypub.models.Following.ap_actor_id == actor.ap_id
+            )
+        )
+        if is_followed is None:
+            raise MastodonError(404, "not_found", "you are not following this account")
+        already_member = await db_session.scalar(
+            select(models.MastodonListMember.id).where(
+                models.MastodonListMember.list_id == mastodon_list.id,
+                models.MastodonListMember.actor_id == actor.id,
+            )
+        )
+        if already_member is not None:
+            raise MastodonError(
+                422, "validation_failed", "account is already a list member"
+            )
+        actors.append(actor)
+
+    for actor in actors:
+        db_session.add(
+            models.MastodonListMember(list_id=mastodon_list.id, actor_id=actor.id)
+        )
+    await db_session.commit()
+    return JSONResponse(content={}, status_code=200)
+
+
+@router.delete("/api/v1/lists/{list_id}/accounts", response_model=None)
+async def lists_accounts_remove(
+    list_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:lists")),
+) -> JSONResponse:
+    mastodon_list = await _resolve_list_or_404(db_session, list_id)
+    params = await _body_params(request)
+    account_ids = params.get_list("account_ids")
+
+    internal_ids = {
+        ids.decode_account_id(str(account_id)) for account_id in account_ids
+    }
+    internal_ids.discard(None)
+    if internal_ids:
+        await db_session.execute(
+            delete(models.MastodonListMember).where(
+                models.MastodonListMember.list_id == mastodon_list.id,
+                models.MastodonListMember.actor_id.in_(internal_ids),
+            )
+        )
+        await db_session.commit()
+    return JSONResponse(content={}, status_code=200)
+
+
+@router.get("/api/v1/timelines/list/{list_id}", response_model=None)
+async def timelines_list(
+    list_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:lists")),
+) -> JSONResponse:
+    mastodon_list = await _resolve_list_or_404(db_session, list_id)
+    assert mastodon_list.id is not None
+    assert mastodon_list.replies_policy is not None
+
+    # Skip the query entirely for a list with no members yet (the state a
+    # client sees right after `POST /api/v1/lists`, before adding anyone):
+    # membership is otherwise a post-filter over the whole inbox even when
+    # it can never match.
+    has_members = await db_session.scalar(
+        select(models.list_member_actor_ids(mastodon_list.id).exists())
+    )
+    if not has_members:
+        return await _respond_with_status_list(request, db_session, [])
+
+    params = pagination.parse_pagination(request)
+    before = await _resolve_cursor_published_at(db_session, params.max_id)
+    after = await _resolve_cursor_published_at(
+        db_session, params.min_id or params.since_id
+    )
+
+    items = await timelines.fetch_inbox_timeline_page(
+        db_session,
+        before=before,
+        after=after,
+        limit=params.limit,
+        extra_where=tuple(
+            models.list_timeline_where(mastodon_list.id, mastodon_list.replies_policy)
+        ),
+        # Membership narrows to a handful of actor_ids; without this,
+        # SQLite drives off the publish-order index and scans the whole
+        # inbox for a quiet list (see `fetch_inbox_timeline_page`'s docstring).
+        force_actor_index=True,
+    )
+    return await _respond_with_status_list(request, db_session, items)
 
 
 @router.post("/api/v1/statuses/{status_id}/favourite", response_model=None)

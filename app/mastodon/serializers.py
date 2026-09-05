@@ -1078,6 +1078,15 @@ async def prefetch_scheduled_status_uploads(
     )
 
 
+def serialize_list(mastodon_list: models.MastodonList) -> dict:
+    return {
+        "id": str(mastodon_list.id),
+        "title": mastodon_list.title,
+        "replies_policy": mastodon_list.replies_policy,
+        "exclusive": bool(mastodon_list.exclusive),
+    }
+
+
 async def serialize_scheduled_status(
     db_session: AsyncSession,
     scheduled_status: models.ScheduledStatus,

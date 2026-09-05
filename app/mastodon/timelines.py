@@ -11,6 +11,7 @@ from collections.abc import Collection
 from datetime import datetime
 
 from sqlalchemy import select
+from sqlalchemy.dialects.sqlite.base import SQLiteCompiler
 from sqlalchemy.orm import joinedload
 
 import activitypub.models
@@ -21,6 +22,21 @@ from app.database import AsyncSession
 from app.mastodon import ids
 
 TIMELINE_OBJECT_TYPES = ["Announce", "Article", "Note", "Page", "Question", "Video"]
+
+
+def _sqlite_from_hint_text(self: SQLiteCompiler, table: object, hint_text: str) -> str:
+    """SQLAlchemy ships `get_from_hint_text` overrides for MySQL/Oracle/MSSQL
+    but not SQLite, so `.with_hint(..., dialect_name="sqlite")` compiles away
+    to nothing without this -- `fetch_inbox_timeline_page`'s
+    `force_actor_index` relies on it actually reaching the compiled SQL as an
+    `INDEXED BY` clause. Scoped to fire only for a query that opts in via
+    `with_hint(dialect_name="sqlite")`; this is the only such call in the
+    codebase (`grep -r with_hint`), so no other query is affected.
+    """
+    return hint_text
+
+
+SQLiteCompiler.get_from_hint_text = _sqlite_from_hint_text  # type: ignore[assignment]
 
 
 def status_id_int(obj: AnyboxObject) -> int:
@@ -47,7 +63,19 @@ async def fetch_inbox_timeline_page(
     after: datetime | None,
     limit: int,
     extra_where: tuple = (),
+    force_actor_index: bool = False,
 ) -> list[activitypub.models.InboxObject]:
+    """`force_actor_index` makes SQLite drive the query off
+    `ix_inbox_actor_id_ap_published_at` instead of `ix_inbox_stream`.
+
+    Only the list timeline (`extra_where` narrowed to a handful of member
+    `actor_id`s) should set it: SQLite's planner keeps preferring the
+    publish-order index there and evaluates membership per candidate row,
+    which is an O(inbox size) scan for a quiet or empty list instead of
+    O(member posts). Every other caller filters by `actor_id` rarely or not
+    at all, so forcing this index for them would make their common case
+    worse, not better.
+    """
     query = (
         select(activitypub.models.InboxObject)
         .where(
@@ -66,6 +94,12 @@ async def fetch_inbox_timeline_page(
         .order_by(activitypub.models.InboxObject.ap_published_at.desc())
         .limit(limit)
     )
+    if force_actor_index:
+        query = query.with_hint(
+            activitypub.models.InboxObject,
+            "INDEXED BY ix_inbox_actor_id_ap_published_at",
+            dialect_name="sqlite",
+        )
     if before:
         query = query.where(activitypub.models.InboxObject.ap_published_at < before)
     if after:

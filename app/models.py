@@ -18,12 +18,15 @@ from sqlalchemy import and_
 from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy.orm import Mapped
+from sqlalchemy.orm import aliased
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import Select
 
 from activitypub import activitypub as ap
 from activitypub.models import Actor
 from activitypub.models import InboxObject
 from activitypub.models import OutboxObject
+from activitypub.models import in_reply_to_expr
 from activitypub.models import muted_actor_ids
 from app.database import Base
 from app.database import metadata_obj
@@ -256,6 +259,111 @@ class MutedConversation(Base):
     id = Column(Integer, primary_key=True, index=True)
     conversation = Column(String, nullable=False, unique=True, index=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=now)
+
+
+class MastodonList(Base):
+    """A Mastodon list (`POST /api/v1/lists`) — a purely local, curated view
+    over `Following`; nothing here is federated. Single-user instance, so
+    there is no owner column — every list belongs to the one actor, the same
+    reasoning `Marker`'s docstring gives.
+    """
+
+    __tablename__ = "mastodon_list"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=now)
+
+    title = Column(String, nullable=False)
+    replies_policy = Column(
+        String, nullable=False, default="list", server_default="list"
+    )
+    exclusive = Column(Boolean, nullable=False, default=False, server_default="0")
+
+
+class MastodonListMember(Base):
+    """One actor's membership in a `MastodonList`.
+
+    `actor_id` must stay `nullable=False`: `exclusive_list_member_actor_ids()`
+    feeds a `NOT IN` subquery on the home timeline, and a single NULL in a
+    `NOT IN` set makes the whole predicate match no rows.
+    """
+
+    __tablename__ = "mastodon_list_member"
+    __table_args__ = (
+        UniqueConstraint("list_id", "actor_id", name="uix_mastodon_list_member"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
+
+    list_id = Column(
+        Integer,
+        ForeignKey("mastodon_list.id", name="fk_mastodon_list_member_list_id"),
+        nullable=False,
+    )
+    actor_id = Column(
+        Integer,
+        ForeignKey("actor.id", name="fk_mastodon_list_member_actor_id"),
+        nullable=False,
+    )
+    actor: Mapped[Actor] = relationship(Actor, uselist=False)
+
+
+def list_member_actor_ids(list_id: int) -> Select:
+    """Ids of the actors who are members of `list_id`."""
+    return select(MastodonListMember.actor_id).where(
+        MastodonListMember.list_id == list_id
+    )
+
+
+def exclusive_list_member_actor_ids() -> Select:
+    """Ids of the actors who are members of at least one `exclusive` list."""
+    return (
+        select(MastodonListMember.actor_id)
+        .join(MastodonList, MastodonList.id == MastodonListMember.list_id)
+        .where(MastodonList.exclusive.is_(True))
+    )
+
+
+def list_timeline_where(list_id: int, replies_policy: str) -> list[Any]:
+    """Where-clauses for a list's timeline: membership, plus Mastodon's
+    `filter_from_list?` reply policy (`app/lib/feed_manager.rb`).
+
+    `followed` shows every reply, same as today's home timeline — no filter
+    beyond membership. Otherwise a reply only passes if it isn't a reply, is a
+    self-reply (the parent's author is the same actor), or replies to one of
+    the owner's own posts; `list` additionally passes a reply whose parent's
+    author is itself a list member.
+    """
+    where: list[Any] = [InboxObject.actor_id.in_(list_member_actor_ids(list_id))]
+    if replies_policy == "followed":
+        return where
+
+    in_reply_to = in_reply_to_expr(InboxObject.ap_object)
+    reply_target = aliased(InboxObject)
+
+    passes = [
+        in_reply_to.is_(None),
+        select(reply_target.id)
+        .where(
+            reply_target.ap_id == in_reply_to,
+            reply_target.actor_id == InboxObject.actor_id,
+        )
+        .exists(),
+        select(OutboxObject.id).where(OutboxObject.ap_id == in_reply_to).exists(),
+    ]
+    if replies_policy == "list":
+        passes.append(
+            select(reply_target.id)
+            .where(
+                reply_target.ap_id == in_reply_to,
+                reply_target.actor_id.in_(list_member_actor_ids(list_id)),
+            )
+            .exists()
+        )
+    where.append(or_(*passes))
+    return where
 
 
 class ScheduledStatus(Base):

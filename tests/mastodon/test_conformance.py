@@ -94,6 +94,15 @@ _NOTIFICATION_GROUP_SPEC = {
     "sample_account_ids": (list, False),
 }
 
+# All four keys are non-optional, and `id` is a String like every other
+# Mastodon entity id here — pinned so it isn't re-litigated.
+_LIST_SPEC = {
+    "id": (str, False),
+    "title": (str, False),
+    "replies_policy": (str, False),
+    "exclusive": (bool, False),
+}
+
 
 def _check_entity(entity: dict, spec: dict, label: str) -> list[str]:
     errors = []
@@ -329,3 +338,18 @@ async def test_notification_group_entity_conforms_to_spec(
     assert not errors, "conformance violations:\n" + "\n".join(errors)
     assert isinstance(group["most_recent_notification_id"], int)
     assert not isinstance(group["most_recent_notification_id"], bool)
+
+
+@pytest.mark.asyncio
+async def test_list_entity_conforms_to_spec(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    token = await _make_access_token(async_db_session, "write:lists")
+    response = client.post(
+        "/api/v1/lists",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"title": "Friends"},
+    )
+    assert response.status_code == 200
+    errors = _check_entity(response.json(), _LIST_SPEC, "list")
+    assert not errors, "conformance violations:\n" + "\n".join(errors)
