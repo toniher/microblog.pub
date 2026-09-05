@@ -138,7 +138,10 @@ forgotten on the device.
   mirrors the config file, so there's no `POST`/`DELETE` to add or remove one from
   a client. The same list is federated as the actor's `toot:featuredTags`
   collection.
-- **Search** (`/api/v2/search`) — accounts, statuses, and hashtags.
+- **Search** (`/api/v2/search`) — accounts, statuses, and hashtags. The older
+  `/api/v1/accounts/search` is also implemented, including its `following=true`
+  filter, since some clients (e.g. Tusky's "add account to list" picker) call it
+  directly instead of `/api/v2/search`.
 - **Media uploads**, including descriptions/alt text — images, video and audio.
   Video/audio gets a real duration, a poster frame (extracted with `ffmpeg`,
   reused as `preview_url` and the AP `icon`), and a blurhash, the same as

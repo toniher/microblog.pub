@@ -647,6 +647,37 @@ async def accounts_familiar_followers(
     )
 
 
+@router.get("/api/v1/accounts/search", response_model=None)
+async def accounts_search(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:accounts")),
+) -> JSONResponse:
+    # Must be registered before /api/v1/accounts/{account_id} for the same
+    # reason as familiar_followers above, or this 404s instead of searching.
+    #
+    # Superseded by /api/v2/search for the general search box, but Tusky (and
+    # other clients) still call this one specifically -- with
+    # following=true -- for the "add account to list" picker, since Mastodon
+    # only allows followed accounts as list members.
+    query = (request.query_params.get("q") or "").strip()
+    if not query:
+        raise MastodonError(422, "validation_failed", "q is required")
+
+    try:
+        limit = min(max(int(request.query_params.get("limit", "40")), 1), 40)
+    except ValueError:
+        limit = 40
+
+    accounts = await _search_accounts(
+        db_session,
+        query,
+        limit,
+        only_following=request.query_params.get("following") == "true",
+    )
+    return JSONResponse(content=accounts, status_code=200)
+
+
 @router.get("/api/v1/accounts/{account_id}", response_model=None)
 async def accounts_show(
     account_id: str,
@@ -4276,7 +4307,7 @@ def _query_pattern(query: str) -> str:
 
 
 async def _search_accounts(
-    db_session: AsyncSession, query: str, limit: int
+    db_session: AsyncSession, query: str, limit: int, *, only_following: bool = False
 ) -> list[dict]:
     # Matched through the `actor_search` FTS5 trigram index rather than
     # loading every cached actor to scan it here: that used to decode each
@@ -4287,18 +4318,21 @@ async def _search_accounts(
     # stalls overlapped and the instance stopped responding altogether.
     pattern = _query_pattern(query.lstrip("@"))
     model = activitypub.models.Actor
+    conditions = [
+        model.id.in_(
+            select(activitypub.models.ACTOR_SEARCH.c.rowid).where(
+                activitypub.models.matches_search(
+                    activitypub.models.ACTOR_SEARCH, pattern
+                )
+            )
+        )
+    ]
+    if only_following:
+        conditions.append(model.id.in_(select(activitypub.models.Following.actor_id)))
     matches = (
         await db_session.scalars(
             select(model)
-            .where(
-                model.id.in_(
-                    select(activitypub.models.ACTOR_SEARCH.c.rowid).where(
-                        activitypub.models.matches_search(
-                            activitypub.models.ACTOR_SEARCH, pattern
-                        )
-                    )
-                )
-            )
+            .where(*conditions)
             # Insertion order, which is what `matches[:limit]` off an unordered
             # scan effectively returned before.
             .order_by(model.id)

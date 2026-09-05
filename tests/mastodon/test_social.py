@@ -21,6 +21,7 @@ from app.mastodon import ids
 from app.utils.datetime import now
 from tests.utils import setup_remote_actor
 from tests.utils import setup_remote_actor_as_follower
+from tests.utils import setup_remote_actor_as_following
 
 
 async def _make_access_token(db_session: AsyncSession, scope: str) -> str:
@@ -910,6 +911,73 @@ async def test_search_hashtags_stub(
             "following": False,
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_accounts_search_requires_query(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    token = await _make_access_token(async_db_session, "read:accounts")
+    response = client.get(
+        "/api/v1/accounts/search", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_accounts_search_local(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    actor = factories.ActorFactory.from_remote_actor(ra)
+
+    token = await _make_access_token(async_db_session, "read:accounts")
+    response = client.get(
+        "/api/v1/accounts/search?q=toto",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert ids.encode_account_id(actor) in {a["id"] for a in data}
+
+
+@pytest.mark.asyncio
+async def test_accounts_search_following_true_excludes_non_followed(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    # Tusky (and other clients) call this endpoint with `following=true` for
+    # the "add account to list" picker, since Mastodon only allows followed
+    # accounts as list members.
+    followed_ra = setup_remote_actor(
+        respx_mock, base_url="https://followed.example.com"
+    )
+    followed = setup_remote_actor_as_following(followed_ra)
+    assert followed.actor is not None
+
+    stranger_ra = setup_remote_actor(
+        respx_mock, base_url="https://stranger.example.com"
+    )
+    factories.ActorFactory.from_remote_actor(stranger_ra)
+
+    # Same username ("toto") on both, so a plain query matches both accounts
+    # -- `following=true` is what must narrow it down to just the one
+    # actually followed.
+    token = await _make_access_token(async_db_session, "read:accounts")
+    response = client.get(
+        "/api/v1/accounts/search?q=toto&following=true",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    account_ids = {a["id"] for a in data}
+    assert ids.encode_account_id(followed.actor) in account_ids
+    assert len(account_ids) == 1
 
 
 @pytest.mark.asyncio
