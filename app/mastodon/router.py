@@ -72,6 +72,7 @@ from app.mastodon import serializers
 from app.mastodon import streaming
 from app.mastodon import timelines
 from app.mastodon.errors import MastodonError
+from app.mastodon.http import is_json_request
 from app.mastodon.scopes import require_scope
 from app.uploads import IncompatibleMediaError
 from app.uploads import UploadTooLargeError
@@ -874,13 +875,13 @@ def _should_refresh_counts(actor: activitypub.models.Actor) -> bool:
 def _apply_account_cursor(query, params: pagination.PaginationParams):
     """Apply max_id/since_id/min_id to a query ordered by `Actor.id` desc."""
     if params.max_id:
-        decoded = ids.decode_account_id(params.max_id)
+        decoded = ids.safe_int_id(params.max_id)
         if decoded is not None:
             query = query.where(activitypub.models.Actor.id < decoded)
 
     cursor = params.min_id or params.since_id
     if cursor:
-        decoded = ids.decode_account_id(cursor)
+        decoded = ids.safe_int_id(cursor)
         if decoded is not None:
             query = query.where(activitypub.models.Actor.id > decoded)
 
@@ -1493,15 +1494,6 @@ async def timelines_tag(
 # --- Notifications -------------------------------------------------------------
 
 
-def _decode_notification_id(mastodon_id: str) -> int | None:
-    # Notifications are a single table (unlike statuses/accounts), so the
-    # Mastodon id is just the row's own PK — no dual-table encoding needed.
-    try:
-        return int(mastodon_id)
-    except ValueError:
-        return None
-
-
 def _allowed_notification_types(request: Request) -> list[models.NotificationType]:
     include_types = set(request.query_params.getlist("types[]"))
     exclude_types = set(request.query_params.getlist("exclude_types[]"))
@@ -1537,7 +1529,7 @@ def _notification_filters(
         models.notification_target_present(),
     ]
     if account_id := request.query_params.get("account_id"):
-        decoded = ids.decode_account_id(account_id)
+        decoded = ids.safe_int_id(account_id)
         if decoded is not None:
             where.append(models.Notification.actor_id == decoded)
     return where
@@ -1567,12 +1559,12 @@ async def notifications_list(
         .limit(params.limit)
     )
     if params.max_id:
-        decoded = _decode_notification_id(params.max_id)
+        decoded = ids.safe_int_id(params.max_id)
         if decoded is not None:
             query = query.where(models.Notification.id < decoded)
     cursor = params.min_id or params.since_id
     if cursor:
-        decoded = _decode_notification_id(cursor)
+        decoded = ids.safe_int_id(cursor)
         if decoded is not None:
             query = query.where(models.Notification.id > decoded)
 
@@ -1971,7 +1963,7 @@ async def notifications_show(
     db_session: AsyncSession = Depends(get_db_session),
     token_info: AccessTokenInfo = Depends(require_scope("read:notifications")),
 ) -> JSONResponse:
-    internal_id = _decode_notification_id(notification_id)
+    internal_id = ids.safe_int_id(notification_id)
     notification = (
         await db_session.get(
             models.Notification, internal_id, options=serializers.NOTIFICATION_OPTIONS
@@ -2006,7 +1998,7 @@ async def notifications_dismiss(
     db_session: AsyncSession = Depends(get_db_session),
     token_info: AccessTokenInfo = Depends(require_scope("write:notifications")),
 ) -> JSONResponse:
-    internal_id = _decode_notification_id(notification_id)
+    internal_id = ids.safe_int_id(notification_id)
     if internal_id is not None:
         await db_session.execute(
             delete(models.Notification).where(models.Notification.id == internal_id)
@@ -2051,8 +2043,7 @@ def _unflatten_form(form_data: Any) -> dict[str, Any]:
 
 
 async def _parse_push_body(request: Request) -> dict[str, Any]:
-    content_type, _, _ = request.headers.get("Content-Type", "").partition(";")
-    if content_type.strip().lower() == "application/json":
+    if is_json_request(request):
         body = await request.json()
         return body if isinstance(body, dict) else {}
     return _unflatten_form(await request.form())
@@ -2270,15 +2261,6 @@ async def push_subscription_delete(
 # / `app.mastodon.serializers` — the streaming event pump needs them too.
 
 
-def _safe_id_int(mastodon_id: str | None) -> int | None:
-    if not mastodon_id:
-        return None
-    try:
-        return int(mastodon_id)
-    except ValueError:
-        return None
-
-
 @router.get("/api/v1/conversations", response_model=None)
 async def conversations_list(
     request: Request,
@@ -2288,9 +2270,9 @@ async def conversations_list(
     params = pagination.parse_pagination(request)
     threads = await timelines.dm_threads(db_session)
 
-    if (max_int := _safe_id_int(params.max_id)) is not None:
+    if (max_int := ids.safe_int_id(params.max_id)) is not None:
         threads = [t for t in threads if timelines.status_id_int(t[0]) < max_int]
-    if (cursor_int := _safe_id_int(params.min_id or params.since_id)) is not None:
+    if (cursor_int := ids.safe_int_id(params.min_id or params.since_id)) is not None:
         threads = [t for t in threads if timelines.status_id_int(t[0]) > cursor_int]
     threads = threads[: params.limit]
     await serializers.prefetch_status_relations(
@@ -2791,8 +2773,7 @@ async def _body_params(request: Request) -> _StatusParams:
     Mastodon (Rails) makes no distinction between the two.
     """
     query = request.query_params
-    content_type, _, _ = request.headers.get("Content-Type", "").partition(";")
-    if content_type.strip().lower() == "application/json":
+    if is_json_request(request):
         try:
             return _StatusParams(await request.json(), None, query)
         except ValueError:
@@ -3054,8 +3035,7 @@ async def statuses_update(
     if obj is None or not isinstance(obj, activitypub.models.OutboxObject):
         raise MastodonError(404, "not_found", "status not found")
 
-    content_type, _, _ = request.headers.get("Content-Type", "").partition(";")
-    if content_type.strip().lower() == "application/json":
+    if is_json_request(request):
         params = _StatusParams(await request.json(), None)
     else:
         params = _StatusParams(None, await request.form())
@@ -3159,20 +3139,11 @@ async def statuses_delete(
 # queue.
 
 
-def _decode_scheduled_status_id(mastodon_id: str) -> int | None:
-    # A single table, so the Mastodon id is just the row's own PK — no
-    # dual-table encoding needed (same as notifications).
-    try:
-        return int(mastodon_id)
-    except ValueError:
-        return None
-
-
 async def _resolve_scheduled_status_or_404(
     db_session: AsyncSession,
     scheduled_status_id: str,
 ) -> models.ScheduledStatus:
-    internal_id = _decode_scheduled_status_id(scheduled_status_id)
+    internal_id = ids.safe_int_id(scheduled_status_id)
     scheduled_status = (
         await db_session.get(models.ScheduledStatus, internal_id)
         if internal_id is not None
@@ -3203,12 +3174,12 @@ async def scheduled_statuses_index(
         .limit(params.limit)
     )
     if params.max_id:
-        decoded = _decode_scheduled_status_id(params.max_id)
+        decoded = ids.safe_int_id(params.max_id)
         if decoded is not None:
             query = query.where(models.ScheduledStatus.id < decoded)
     cursor = params.min_id or params.since_id
     if cursor:
-        decoded = _decode_scheduled_status_id(cursor)
+        decoded = ids.safe_int_id(cursor)
         if decoded is not None:
             query = query.where(models.ScheduledStatus.id > decoded)
 
@@ -3307,7 +3278,7 @@ async def _resolve_list_or_404(
     db_session: AsyncSession,
     list_id: str,
 ) -> models.MastodonList:
-    internal_id = ids.decode_list_id(list_id)
+    internal_id = ids.safe_int_id(list_id)
     mastodon_list = (
         await db_session.get(models.MastodonList, internal_id)
         if internal_id is not None
@@ -3544,9 +3515,7 @@ async def lists_accounts_remove(
     params = await _body_params(request)
     account_ids = params.get_list("account_ids")
 
-    internal_ids = {
-        ids.decode_account_id(str(account_id)) for account_id in account_ids
-    }
+    internal_ids = {ids.safe_int_id(str(account_id)) for account_id in account_ids}
     internal_ids.discard(None)
     if internal_ids:
         await db_session.execute(

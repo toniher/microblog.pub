@@ -339,7 +339,7 @@ class EventPump:
         list_ids = {
             internal_id
             for lid in active
-            if (internal_id := ids.decode_list_id(lid)) is not None
+            if (internal_id := ids.safe_int_id(lid)) is not None
         }
         if not list_ids:
             return {}
@@ -955,7 +955,7 @@ async def _reader_loop(
                 # that actually exist rather than by client-supplied ids —
                 # strictly better than the hashtag case
                 # `_MAX_STREAMS_PER_SUBSCRIBER` exists to contain.
-                internal_id = ids.decode_list_id(key[1] or "")
+                internal_id = ids.safe_int_id(key[1] or "")
                 exists = False
                 if internal_id is not None:
                     async with async_session() as db_session:

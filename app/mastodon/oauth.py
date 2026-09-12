@@ -27,6 +27,7 @@ from app.indieauth import indieauth_authorization_endpoint
 from app.indieauth import issue_access_token
 from app.mastodon.entities import Application
 from app.mastodon.errors import MastodonError
+from app.mastodon.http import is_json_request
 from app.webpush import vapid_public_key_b64
 
 router = APIRouter()
@@ -42,8 +43,7 @@ async def apps_create(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
 ) -> JSONResponse:
-    content_type, _, _ = request.headers.get("Content-Type", "").partition(";")
-    if content_type.strip().lower() == "application/json":
+    if is_json_request(request):
         form_data = await request.json()
     else:
         form_data = await request.form()
@@ -135,8 +135,7 @@ async def oauth_token(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
 ) -> JSONResponse:
-    content_type, _, _ = request.headers.get("Content-Type", "").partition(";")
-    if content_type.strip().lower() == "application/json":
+    if is_json_request(request):
         form_data = await request.json()
     else:
         form_data = await request.form()
@@ -181,8 +180,7 @@ async def oauth_revoke(
 ) -> JSONResponse:
     """Log-out support: clients call this so the token is dead server-side,
     not just forgotten locally."""
-    content_type, _, _ = request.headers.get("Content-Type", "").partition(";")
-    if content_type.strip().lower() == "application/json":
+    if is_json_request(request):
         form_data = await request.json()
     else:
         form_data = await request.form()

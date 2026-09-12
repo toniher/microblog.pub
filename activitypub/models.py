@@ -1,3 +1,5 @@
+from datetime import datetime
+from datetime import timedelta
 from typing import Any
 from typing import Optional
 from typing import Union
@@ -813,6 +815,28 @@ class OutgoingActivity(Base):
             return self.inbox_object  # type: ignore
         else:
             raise ValueError("Should never happen")
+
+
+def exp_backoff(tries: int) -> datetime:
+    seconds = 2 * (2 ** (tries - 1))
+    return now() + timedelta(seconds=seconds)
+
+
+def set_next_try(
+    activity: IncomingActivity | OutgoingActivity,
+    max_retries: int,
+    next_try: datetime | None = None,
+) -> None:
+    """Schedule the next attempt for a queued activity, giving up past
+    `max_retries` (the two workers retry a different number of times)."""
+    if not activity.tries:
+        raise ValueError("Should never happen")
+
+    if activity.tries >= max_retries:
+        activity.is_errored = True
+        activity.next_try = None
+    else:
+        activity.next_try = next_try or exp_backoff(activity.tries)
 
 
 class TaggedOutboxObject(Base):

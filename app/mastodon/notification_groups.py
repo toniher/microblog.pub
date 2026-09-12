@@ -21,6 +21,7 @@ from sqlalchemy import select
 from activitypub.boxes import AnyboxObject
 from app import models
 from app.database import AsyncSession
+from app.mastodon import ids
 
 # Mastodon groups exactly these three types by default; `grouped_types[]`
 # narrows the set further. Keys are explicitly opaque (Mastodon's own spec
@@ -36,13 +37,6 @@ _ASSEMBLY_WINDOW_CAP = 200
 
 _FOLLOW_KEY_RE = re.compile(r"^follow-(\d{8})$")
 _UNGROUPED_KEY_RE = re.compile(r"^ungrouped-(\d+)$")
-
-
-def _decode_id(value: str) -> int | None:
-    try:
-        return int(value)
-    except ValueError:
-        return None
 
 
 def _target_id(notification: models.Notification) -> int | None:
@@ -136,7 +130,7 @@ def group_key_where_clause(group_key: str) -> Any | None:
     for mastodon_type in ("favourite", "reblog"):
         prefix = f"{mastodon_type}-"
         if group_key.startswith(prefix):
-            target_id = _decode_id(group_key[len(prefix) :])
+            target_id = ids.safe_int_id(group_key[len(prefix) :])
             if target_id is None:
                 return None
             internal_types = [
@@ -287,9 +281,9 @@ async def fetch_notification_group_page(
         .order_by(models.Notification.id.desc())
         .limit(window)
     )
-    if max_id and (decoded := _decode_id(max_id)) is not None:
+    if max_id and (decoded := ids.safe_int_id(max_id)) is not None:
         query = query.where(models.Notification.id < decoded)
-    if cursor and (decoded := _decode_id(cursor)) is not None:
+    if cursor and (decoded := ids.safe_int_id(cursor)) is not None:
         query = query.where(models.Notification.id > decoded)
 
     rows = list((await db_session.scalars(query)).unique().all())

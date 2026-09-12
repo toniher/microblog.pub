@@ -1,9 +1,6 @@
-import base64
 from pathlib import Path
-from typing import Any
 
 from Crypto.PublicKey import RSA
-from Crypto.Util import number
 
 
 def generate_key(key_path: Path) -> None:
@@ -47,29 +44,3 @@ class Key(object):
 
     def key_id(self) -> str:
         return self.id_ or f"{self.owner}#main-key"
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "id": self.key_id(),
-            "owner": self.owner,
-            "publicKeyPem": self.pubkey_pem,
-            "type": "Key",
-        }
-
-    @classmethod
-    def from_dict(cls, data):
-        try:
-            k = cls(data["owner"], data["id"])
-            k.load_pub(data["publicKeyPem"])
-        except KeyError:
-            raise ValueError(f"bad key data {data!r}")
-        return k
-
-    def to_magic_key(self) -> str:
-        mod = base64.urlsafe_b64encode(
-            number.long_to_bytes(self.privkey.n)  # type: ignore
-        ).decode("utf-8")
-        pubexp = base64.urlsafe_b64encode(
-            number.long_to_bytes(self.privkey.e)  # type: ignore
-        ).decode("utf-8")
-        return f"data:application/magic-public-key,RSA.{mod}.{pubexp}"

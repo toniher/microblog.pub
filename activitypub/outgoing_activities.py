@@ -3,7 +3,6 @@ import dataclasses
 import time
 import traceback
 from datetime import datetime
-from datetime import timedelta
 from typing import MutableMapping
 from urllib.parse import urlparse
 
@@ -126,25 +125,6 @@ async def new_outgoing_activity(
     await db_session.flush()
     await db_session.refresh(outgoing_activity)
     return outgoing_activity
-
-
-def _exp_backoff(tries: int) -> datetime:
-    seconds = 2 * (2 ** (tries - 1))
-    return now() + timedelta(seconds=seconds)
-
-
-def _set_next_try(
-    outgoing_activity: activitypub.models.OutgoingActivity,
-    next_try: datetime | None = None,
-) -> None:
-    if not outgoing_activity.tries:
-        raise ValueError("Should never happen")
-
-    if outgoing_activity.tries >= _MAX_RETRIES:
-        outgoing_activity.is_errored = True
-        outgoing_activity.next_try = None
-    else:
-        outgoing_activity.next_try = next_try or _exp_backoff(outgoing_activity.tries)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -384,7 +364,7 @@ def _apply_delivery_outcome(
 ) -> None:
     if outcome.skip_reason is not None:
         activity.error = outcome.skip_reason
-        _set_next_try(activity, outcome.retry_after)
+        activitypub.models.set_next_try(activity, _MAX_RETRIES, outcome.retry_after)
     elif outcome.exception is not None:
         exc = outcome.exception
         if isinstance(exc, httpx.HTTPStatusError):
@@ -393,18 +373,20 @@ def _apply_delivery_outcome(
             activity.error = outcome.formatted_traceback
 
             if exc.response.status_code in [429, 503]:
-                _set_next_try(activity, outcome.retry_after)
+                activitypub.models.set_next_try(
+                    activity, _MAX_RETRIES, outcome.retry_after
+                )
             elif exc.response.status_code == 401:
-                _set_next_try(activity)
+                activitypub.models.set_next_try(activity, _MAX_RETRIES)
             elif 400 <= exc.response.status_code < 500:
                 logger.info(f"status_code={exc.response.status_code} not retrying")
                 activity.is_errored = True
                 activity.next_try = None
             else:
-                _set_next_try(activity)
+                activitypub.models.set_next_try(activity, _MAX_RETRIES)
         else:
             activity.error = outcome.formatted_traceback
-            _set_next_try(activity)
+            activitypub.models.set_next_try(activity, _MAX_RETRIES)
     else:
         resp = outcome.response
         if resp is None:
@@ -464,7 +446,7 @@ async def process_outgoing_activities_batch(
             and (activity.next_try is None or activity.next_try <= now())
         ):
             logger.warning(f"Activity {activity.id} made no progress, forcing backoff")
-            _set_next_try(activity)
+            activitypub.models.set_next_try(activity, _MAX_RETRIES)
 
     try:
         await db_session.commit()

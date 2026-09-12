@@ -158,16 +158,6 @@ def tests(ctx, k=None):
 
 
 @task
-def generate_requirements_txt(ctx, where="requirements.txt"):
-    # type: (Context, str) -> None
-    run(
-        f"poetry export -f requirements.txt --without-hashes > {where}",
-        pty=True,
-        echo=True,
-    )
-
-
-@task
 def build_docs(ctx):
     # type: (Context) -> None
     run("make -C docs html", pty=True, echo=True)
@@ -202,12 +192,6 @@ def configuration_wizard(ctx):
         pty=True,
         echo=True,
     )
-
-
-@task
-def install_deps(ctx):
-    # type: (Context) -> None
-    run("poetry install", pty=True, echo=True)
 
 
 @task(pre=[compile_scss, compile_translations], post=[migrate_db])
