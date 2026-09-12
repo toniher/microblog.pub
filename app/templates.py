@@ -122,7 +122,6 @@ async def render_template(
     if template_args is None:
         template_args = {}
 
-    is_admin = False
     is_admin = is_current_user_admin(request)
 
     locale = i18n.resolve_locale(request)

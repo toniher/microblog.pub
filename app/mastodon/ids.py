@@ -26,6 +26,20 @@ class ObjectSource(enum.IntEnum):
     INBOX = 1
 
 
+def safe_int_id(mastodon_id: str | None) -> int | None:
+    """Decode a Mastodon id that is just a row's own PK.
+
+    Everything but statuses (accounts, uploads, lists, notifications,
+    scheduled statuses) lives in a single table, so no dual-table encoding is
+    needed -- see `encode_object_id` for the one that does. A client-supplied
+    id that isn't an integer decodes to `None`, which callers turn into a 404.
+    """
+    try:
+        return int(mastodon_id)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+
+
 # The server's single owner (`activitypub.actor.LOCAL_ACTOR`) isn't a row in
 # the `actor` table (it wraps the local profile directly), so it has no
 # integer PK to encode. Reserve "0" for it: real `Actor` row ids are
@@ -130,13 +144,6 @@ def account_id_for_actor(actor: object) -> str:
     return LOCAL_ACTOR_ID
 
 
-def decode_account_id(mastodon_id: str) -> int | None:
-    try:
-        return int(mastodon_id)
-    except ValueError:
-        return None
-
-
 # Eager-load what the Mastodon Status serializer needs off an object so nothing
 # lazy-loads later — lazy loading isn't available in an async session and would
 # crash. OutboxObject.actor is a plain property (always LOCAL_ACTOR, no query),
@@ -193,7 +200,7 @@ async def get_object_by_mastodon_id(
 async def get_account_by_mastodon_id(
     db_session: AsyncSession, mastodon_id: str
 ) -> Actor | None:
-    internal_id = decode_account_id(mastodon_id)
+    internal_id = safe_int_id(mastodon_id)
     if internal_id is None:
         return None
     return await db_session.get(Actor, internal_id)
@@ -209,30 +216,10 @@ def encode_upload_id(upload: Upload) -> str:
     return str(upload.id)
 
 
-def decode_upload_id(mastodon_id: str) -> int | None:
-    try:
-        return int(mastodon_id)
-    except ValueError:
-        return None
-
-
 async def get_upload_by_mastodon_id(
     db_session: AsyncSession, mastodon_id: str
 ) -> Upload | None:
-    internal_id = decode_upload_id(mastodon_id)
+    internal_id = safe_int_id(mastodon_id)
     if internal_id is None:
         return None
     return await db_session.get(Upload, internal_id)
-
-
-# Lists are a single table too — the Mastodon id is just the row's own PK.
-# Shared by `app.mastodon.router` (REST CRUD) and `app.mastodon.streaming`
-# (the `list` stream's subscribe-time validation), which can't import each
-# other (`router.py` imports `streaming.py` to mount its routes).
-
-
-def decode_list_id(mastodon_id: str) -> int | None:
-    try:
-        return int(mastodon_id)
-    except ValueError:
-        return None

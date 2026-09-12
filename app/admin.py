@@ -516,20 +516,15 @@ async def admin_mutes(
     )
 
 
-@router.get("/stream", response_model=None)
-async def admin_stream(
+async def _render_inbox_page(
     request: Request,
-    db_session: AsyncSession = Depends(get_db_session),
-    cursor: str | None = None,
+    db_session: AsyncSession,
+    where: list[Any],
+    cursor: str | None,
+    show_filters: bool,
 ) -> templates.TemplateResponse:
-    where = [
-        activitypub.models.InboxObject.is_hidden_from_stream.is_(False),
-        activitypub.models.InboxObject.is_deleted.is_(False),
-        # Keeping muted actors out of the stream is the whole point of a
-        # mute; they stay reachable from their profile and the Mutes page.
-        *activitypub.models.not_from_muted_actors(),
-        *activitypub.models.not_hidden_announces(),
-    ]
+    """Shared body of the Stream and Inbox admin pages: same query shape and
+    same template, they only differ by the `where` they start from."""
     if cursor:
         where.append(
             activitypub.models.InboxObject.ap_published_at
@@ -591,8 +586,30 @@ async def admin_stream(
             "inbox": inbox,
             "actors_metadata": actors_metadata,
             "next_cursor": next_cursor,
-            "show_filters": False,
+            "show_filters": show_filters,
         },
+    )
+
+
+@router.get("/stream", response_model=None)
+async def admin_stream(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    cursor: str | None = None,
+) -> templates.TemplateResponse:
+    return await _render_inbox_page(
+        request,
+        db_session,
+        [
+            activitypub.models.InboxObject.is_hidden_from_stream.is_(False),
+            activitypub.models.InboxObject.is_deleted.is_(False),
+            # Keeping muted actors out of the stream is the whole point of a
+            # mute; they stay reachable from their profile and the Mutes page.
+            *activitypub.models.not_from_muted_actors(),
+            *activitypub.models.not_hidden_announces(),
+        ],
+        cursor,
+        show_filters=False,
     )
 
 
@@ -623,69 +640,13 @@ async def admin_inbox(
     ]
     if filter_by:
         where.append(activitypub.models.InboxObject.ap_type == filter_by)
-    if cursor:
-        where.append(
-            activitypub.models.InboxObject.ap_published_at
-            < pagination.decode_cursor(cursor)
-        )
 
-    page_size = 20
-    remaining_count = await db_session.scalar(
-        select(func.count(activitypub.models.InboxObject.id)).where(*where)
-    )
-    q = select(activitypub.models.InboxObject).where(*where)
-
-    inbox = (
-        (
-            await db_session.scalars(
-                q.options(
-                    joinedload(
-                        activitypub.models.InboxObject.relates_to_inbox_object
-                    ).options(joinedload(activitypub.models.InboxObject.actor)),
-                    joinedload(
-                        activitypub.models.InboxObject.relates_to_outbox_object
-                    ).options(
-                        joinedload(
-                            activitypub.models.OutboxObject.outbox_object_attachments
-                        ).options(
-                            joinedload(activitypub.models.OutboxObjectAttachment.upload)
-                        ),
-                    ),
-                    joinedload(activitypub.models.InboxObject.actor),
-                )
-                .order_by(activitypub.models.InboxObject.ap_published_at.desc())
-                .limit(20)
-            )
-        )
-        .unique()
-        .all()
-    )
-
-    next_cursor = (
-        pagination.encode_cursor(inbox[-1].ap_published_at)
-        if inbox and remaining_count > page_size
-        else None
-    )
-
-    actors_metadata = await get_actors_metadata(
-        db_session,
-        [
-            inbox_object.actor
-            for inbox_object in inbox
-            if inbox_object.ap_type == "Follow"
-        ],
-    )
-
-    return await templates.render_template(
-        db_session,
+    return await _render_inbox_page(
         request,
-        "admin_inbox.html",
-        {
-            "inbox": inbox,
-            "actors_metadata": actors_metadata,
-            "next_cursor": next_cursor,
-            "show_filters": True,
-        },
+        db_session,
+        where,
+        cursor,
+        show_filters=True,
     )
 
 
@@ -1556,6 +1517,51 @@ async def admin_actions_unpin(
 _LANGUAGE_CODE_RE = re.compile(r"^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$")
 
 
+class _UploadRejected(Exception):
+    """Carries the message the compose/edit form should re-render with."""
+
+
+async def _process_uploads(
+    db_session: AsyncSession,
+    files: list[UploadFile],
+    raw_form_data: Any,
+    created_uploads: list[activitypub.models.Upload],
+) -> list[tuple[activitypub.models.Upload, str, str | None]]:
+    """Save the form's attachments, pairing each with its `alt_<n>` text.
+
+    Raises `_UploadRejected` so the caller can re-render its own form.
+    """
+    uploads: list[tuple[activitypub.models.Upload, str, str | None]] = []
+    # `alt_<n>` is numbered by new.js over the files the *browser* holds, so
+    # count only the entries that carry a filename -- an empty part (see the
+    # XXX at the call sites) must not consume an index and shift every alt
+    # text by one.
+    alt_index = 0
+    for f in files:
+        if f.filename is None or f.filename == "":
+            continue
+        try:
+            upload = await save_upload(db_session, f, created=created_uploads)
+        except UploadTooLargeError as exc:
+            raise _UploadRejected(
+                f"{gettext_default('Error: file is too large')} "
+                f"({exc.limit} bytes max) -- "
+                f"{gettext_default('files must be re-selected before trying again')}"
+            )
+        except IncompatibleMediaError as exc:
+            raise _UploadRejected(
+                f"{gettext_default('Error: unable to process upload')}: "
+                f"{exc.reason} -- "
+                f"{gettext_default('files must be re-selected before trying again')}"
+            )
+        if upload is None:
+            raise _UploadRejected(gettext_default("Error: Unable to process upload"))
+        alt = raw_form_data.get(f"alt_{alt_index}")
+        alt_index += 1
+        uploads.append((upload, f.filename, str(alt) if alt is not None else None))
+    return uploads
+
+
 @router.post("/actions/new", response_model=None)
 async def admin_actions_new(
     request: Request,
@@ -1704,43 +1710,14 @@ async def admin_actions_new(
         ap_type = "Article"
 
     # XXX: for some reason, no files restuls in an empty single file
-    uploads = []
+    uploads: list[tuple[activitypub.models.Upload, str, str | None]] = []
     if len(files) >= 1:
-        raw_form_data = await request.form()
-        # `alt_<n>` is numbered by new.js over the files the *browser* holds, so
-        # count only the entries that carry a filename -- an empty part (see the
-        # XXX above) must not consume an index and shift every alt text by one.
-        alt_index = 0
-        for f in files:
-            if f.filename is not None and f.filename != "":
-                try:
-                    upload = await save_upload(db_session, f, created=created_uploads)
-                except UploadTooLargeError as exc:
-                    return await _rerender(
-                        f"{gettext_default('Error: file is too large')} "
-                        f"({exc.limit} bytes max) -- "
-                        f"{gettext_default('files must be re-selected before trying again')}"
-                    )
-                except IncompatibleMediaError as exc:
-                    return await _rerender(
-                        f"{gettext_default('Error: unable to process upload')}: "
-                        f"{exc.reason} -- "
-                        f"{gettext_default('files must be re-selected before trying again')}"
-                    )
-                if upload is not None:
-                    alt = raw_form_data.get(f"alt_{alt_index}")
-                    alt_index += 1
-                    uploads.append(
-                        (
-                            upload,
-                            f.filename,
-                            str(alt) if alt is not None else None,
-                        )
-                    )
-                else:
-                    return await _rerender(
-                        gettext_default("Error: Unable to process upload")
-                    )
+        try:
+            uploads = await _process_uploads(
+                db_session, files, await request.form(), created_uploads
+            )
+        except _UploadRejected as exc:
+            return await _rerender(str(exc))
 
     try:
         public_id, _ = await boxes.send_create(
@@ -1921,33 +1898,12 @@ async def admin_actions_edit_text(
     # XXX: for some reason, no files results in an empty single file
     new_uploads: list[tuple[activitypub.models.Upload, str, str | None]] = []
     if len(files) >= 1:
-        alt_index = 0
-        for f in files:
-            if f.filename is not None and f.filename != "":
-                try:
-                    upload = await save_upload(db_session, f, created=created_uploads)
-                except UploadTooLargeError as exc:
-                    return await _rerender(
-                        f"{gettext_default('Error: file is too large')} "
-                        f"({exc.limit} bytes max) -- "
-                        f"{gettext_default('files must be re-selected before trying again')}"
-                    )
-                except IncompatibleMediaError as exc:
-                    return await _rerender(
-                        f"{gettext_default('Error: unable to process upload')}: "
-                        f"{exc.reason} -- "
-                        f"{gettext_default('files must be re-selected before trying again')}"
-                    )
-                if upload is not None:
-                    alt = raw_form_data.get(f"alt_{alt_index}")
-                    alt_index += 1
-                    new_uploads.append(
-                        (upload, f.filename, str(alt) if alt is not None else None)
-                    )
-                else:
-                    return await _rerender(
-                        gettext_default("Error: Unable to process upload")
-                    )
+        try:
+            new_uploads = await _process_uploads(
+                db_session, files, raw_form_data, created_uploads
+            )
+        except _UploadRejected as exc:
+            return await _rerender(str(exc))
 
     uploads_changed = attachments_removed or bool(new_uploads)
     uploads = [(row.upload, row.filename, row.alt) for row in kept_rows] + new_uploads

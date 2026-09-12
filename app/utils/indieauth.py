@@ -38,7 +38,6 @@ async def get_client_id_data(url: str) -> IndieAuthClient | None:
         for item in data["items"]:
             if "h-x-app" in item["type"] or "h-app" in item["type"]:
                 props = item.get("properties", {})
-                print(props)
                 logo = _get_prop(props, "logo")
                 return IndieAuthClient(
                     logo=make_abs(logo, url) if logo else None,

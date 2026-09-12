@@ -1,7 +1,5 @@
 import asyncio
 import traceback
-from datetime import datetime
-from datetime import timedelta
 
 from loguru import logger
 from sqlalchemy import select
@@ -47,25 +45,6 @@ async def new_ap_incoming_activity(
     await db_session.commit()
     await db_session.refresh(incoming_activity)
     return incoming_activity
-
-
-def _exp_backoff(tries: int) -> datetime:
-    seconds = 2 * (2 ** (tries - 1))
-    return now() + timedelta(seconds=seconds)
-
-
-def _set_next_try(
-    outgoing_activity: activitypub.models.IncomingActivity,
-    next_try: datetime | None = None,
-) -> None:
-    if not outgoing_activity.tries:
-        raise ValueError("Should never happen")
-
-    if outgoing_activity.tries >= _MAX_RETRIES:
-        outgoing_activity.is_errored = True
-        outgoing_activity.next_try = None
-    else:
-        outgoing_activity.next_try = next_try or _exp_backoff(outgoing_activity.tries)
 
 
 async def fetch_next_incoming_activity(
@@ -122,13 +101,13 @@ async def process_next_incoming_activity(
             await db_session.rollback()
             await db_session.refresh(next_activity)
             next_activity.error = traceback.format_exc()
-            _set_next_try(next_activity)
+            activitypub.models.set_next_try(next_activity, _MAX_RETRIES)
         except Exception:
             logger.exception("Failed")
             await db_session.rollback()
             await db_session.refresh(next_activity)
             next_activity.error = traceback.format_exc()
-            _set_next_try(next_activity)
+            activitypub.models.set_next_try(next_activity, _MAX_RETRIES)
         else:
             logger.info("Success")
             next_activity.is_processed = True

@@ -1064,7 +1064,7 @@ async def prefetch_scheduled_status_uploads(
         for media_id in scheduled_statuses.ComposeParams.from_json(
             row.params
         ).media_ids:
-            internal_id = ids.decode_upload_id(media_id)
+            internal_id = ids.safe_int_id(media_id)
             if internal_id is not None:
                 internal_ids.add(internal_id)
 

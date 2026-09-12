@@ -88,6 +88,7 @@ from app.mastodon.oauth import router as mastodon_oauth_router
 from app.mastodon.router import router as mastodon_router
 from app.mastodon.streaming import hub as mastodon_streaming_hub
 from app.mastodon.streaming import router as mastodon_streaming_router
+from app.redirect import redirect
 from app.templates import is_current_user_admin
 from app.uploads import UPLOAD_DIR
 from app.utils import pagination
@@ -382,27 +383,66 @@ async def custom_http_exception_handler(
     return await http_exception_handler(request, exc)
 
 
-async def redirect_to_remote_instance(
+async def _render_outbox_object_list(
     request: Request,
     db_session: AsyncSession,
-    url: str,
+    page: int | None,
+    ap_type_filter: Any,
+    template: str,
+    pinned_first: bool = False,
 ) -> templates.TemplateResponse:
-    """
-    Similar to RedirectResponse, but uses a 200 response with HTML.
+    """Paginated public outbox listing (the homepage and /articles)."""
+    page = page or 1
+    q = select(activitypub.models.OutboxObject).where(
+        activitypub.models.OutboxObject.visibility == ap.VisibilityEnum.PUBLIC,
+        activitypub.models.OutboxObject.is_deleted.is_(False),
+        activitypub.models.OutboxObject.is_hidden_from_homepage.is_(False),
+        ap_type_filter,
+    )
+    page_size = 20
+    page_offset = (page - 1) * page_size
 
-    Needed for remote redirects on form submission endpoints,
-    since our CSP policy disallows remote form submission.
-    https://github.com/w3c/webappsec-csp/issues/8#issuecomment-810108984
-    """
+    if pinned_first:
+        q = q.order_by(activitypub.models.OutboxObject.is_pinned.desc())
+
+    # Fetch one extra row instead of a separate `COUNT(*)` to know whether a
+    # next page exists -- avoids a second full-table scan of the same
+    # `WHERE` on every page load.
+    outbox_objects_result = await db_session.scalars(
+        q.options(
+            joinedload(
+                activitypub.models.OutboxObject.outbox_object_attachments
+            ).options(joinedload(activitypub.models.OutboxObjectAttachment.upload)),
+            joinedload(activitypub.models.OutboxObject.relates_to_inbox_object).options(
+                joinedload(activitypub.models.InboxObject.actor),
+            ),
+            joinedload(
+                activitypub.models.OutboxObject.relates_to_outbox_object
+            ).options(
+                joinedload(
+                    activitypub.models.OutboxObject.outbox_object_attachments
+                ).options(joinedload(activitypub.models.OutboxObjectAttachment.upload)),
+            ),
+        )
+        .order_by(activitypub.models.OutboxObject.ap_published_at.desc())
+        .offset(page_offset)
+        .limit(page_size + 1)
+    )
+    outbox_objects = outbox_objects_result.unique().all()
+    has_next_page = len(outbox_objects) > page_size
+    outbox_objects = outbox_objects[:page_size]
+
     return await templates.render_template(
         db_session,
         request,
-        "redirect_to_remote_instance.html",
+        template,
         {
             "request": request,
-            "url": url,
+            "objects": outbox_objects,
+            "current_page": page,
+            "has_next_page": has_next_page,
+            "has_previous_page": page > 1,
         },
-        headers={"Refresh": "0;url=" + url},
     )
 
 
@@ -416,58 +456,15 @@ async def index(
 
         return ActivityPubResponse(LOCAL_ACTOR.ap_actor)
 
-    page = page or 1
-    where = (
-        activitypub.models.OutboxObject.visibility == ap.VisibilityEnum.PUBLIC,
-        activitypub.models.OutboxObject.is_deleted.is_(False),
-        activitypub.models.OutboxObject.is_hidden_from_homepage.is_(False),
+    return await _render_outbox_object_list(
+        request,
+        db_session,
+        page,
         activitypub.models.OutboxObject.ap_type.in_(
             ["Announce", "Note", "Video", "Question"]
         ),
-    )
-    q = select(activitypub.models.OutboxObject).where(*where)
-    page_size = 20
-    page_offset = (page - 1) * page_size
-
-    # Fetch one extra row instead of a separate `COUNT(*)` to know whether a
-    # next page exists -- avoids a second full-table scan of the same
-    # `WHERE` on every page load.
-    outbox_objects_result = await db_session.scalars(
-        q.options(
-            joinedload(
-                activitypub.models.OutboxObject.outbox_object_attachments
-            ).options(joinedload(activitypub.models.OutboxObjectAttachment.upload)),
-            joinedload(activitypub.models.OutboxObject.relates_to_inbox_object).options(
-                joinedload(activitypub.models.InboxObject.actor),
-            ),
-            joinedload(
-                activitypub.models.OutboxObject.relates_to_outbox_object
-            ).options(
-                joinedload(
-                    activitypub.models.OutboxObject.outbox_object_attachments
-                ).options(joinedload(activitypub.models.OutboxObjectAttachment.upload)),
-            ),
-        )
-        .order_by(activitypub.models.OutboxObject.is_pinned.desc())
-        .order_by(activitypub.models.OutboxObject.ap_published_at.desc())
-        .offset(page_offset)
-        .limit(page_size + 1)
-    )
-    outbox_objects = outbox_objects_result.unique().all()
-    has_next_page = len(outbox_objects) > page_size
-    outbox_objects = outbox_objects[:page_size]
-
-    return await templates.render_template(
-        db_session,
-        request,
         "index.html",
-        {
-            "request": request,
-            "objects": outbox_objects,
-            "current_page": page,
-            "has_next_page": has_next_page,
-            "has_previous_page": page > 1,
-        },
+        pinned_first=True,
     )
 
 
@@ -480,55 +477,12 @@ async def articles(
 ) -> templates.TemplateResponse | ActivityPubResponse:
     # TODO: special ActivityPub collection for Article
 
-    page = page or 1
-    where = (
-        activitypub.models.OutboxObject.visibility == ap.VisibilityEnum.PUBLIC,
-        activitypub.models.OutboxObject.is_deleted.is_(False),
-        activitypub.models.OutboxObject.is_hidden_from_homepage.is_(False),
-        activitypub.models.OutboxObject.ap_type == "Article",
-    )
-    q = select(activitypub.models.OutboxObject).where(*where)
-    page_size = 20
-    page_offset = (page - 1) * page_size
-
-    # Fetch one extra row instead of a separate `COUNT(*)` to know whether a
-    # next page exists -- avoids a second full-table scan of the same
-    # `WHERE` on every page load.
-    outbox_objects_result = await db_session.scalars(
-        q.options(
-            joinedload(
-                activitypub.models.OutboxObject.outbox_object_attachments
-            ).options(joinedload(activitypub.models.OutboxObjectAttachment.upload)),
-            joinedload(activitypub.models.OutboxObject.relates_to_inbox_object).options(
-                joinedload(activitypub.models.InboxObject.actor),
-            ),
-            joinedload(
-                activitypub.models.OutboxObject.relates_to_outbox_object
-            ).options(
-                joinedload(
-                    activitypub.models.OutboxObject.outbox_object_attachments
-                ).options(joinedload(activitypub.models.OutboxObjectAttachment.upload)),
-            ),
-        )
-        .order_by(activitypub.models.OutboxObject.ap_published_at.desc())
-        .offset(page_offset)
-        .limit(page_size + 1)
-    )
-    outbox_objects = outbox_objects_result.unique().all()
-    has_next_page = len(outbox_objects) > page_size
-    outbox_objects = outbox_objects[:page_size]
-
-    return await templates.render_template(
-        db_session,
+    return await _render_outbox_object_list(
         request,
+        db_session,
+        page,
+        activitypub.models.OutboxObject.ap_type == "Article",
         "articles.html",
-        {
-            "request": request,
-            "objects": outbox_objects,
-            "current_page": page,
-            "has_next_page": has_next_page,
-            "has_previous_page": page > 1,
-        },
     )
 
 
@@ -1543,10 +1497,11 @@ async def post_remote_follow(
         # TODO(ts): error message to user
         raise HTTPException(status_code=404)
 
-    return await redirect_to_remote_instance(
+    return await redirect(
         request,
         db_session,
         remote_follow_template.format(uri=ID),
+        template="redirect_to_remote_instance.html",
     )
 
 
@@ -1587,10 +1542,11 @@ async def post_remote_interaction(
         # TODO(ts): error message to user
         raise HTTPException(status_code=404)
 
-    return await redirect_to_remote_instance(
+    return await redirect(
         request,
         db_session,
         remote_follow_template.format(uri=ID),
+        template="redirect_to_remote_instance.html",
     )
 
 
