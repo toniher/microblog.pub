@@ -146,6 +146,11 @@ so `.venv/` lives at the repo root and CI runs `poetry run inv lint` / `inv test
 poetry install --no-root      # populate ./.venv with runtime + dev deps (what CI does)
 ```
 
+Each **git worktree** gets its own `.venv` (not shared). If a session starts in a
+worktree without one, suggest running `poetry install --no-root` there before relying
+on tests, lint, or LSP — without it, LSP import resolution for third-party deps
+(`sqlalchemy`, `loguru`, …) fails.
+
 To catch the CI lint (`black --check`, `isort --check`, `flake8`, `mypy`) *before*
 pushing, a committed **`.pre-commit-config.yaml`** runs those same checks on every commit.
 It's meant to run with [prek](https://prek.j178.dev/) — a fast, drop-in replacement for the
