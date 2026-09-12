@@ -60,13 +60,15 @@ templates, Alembic migrations, background workers for federation traffic.
     than forking one), `serializers.py`/`entities.py` (AP object → Mastodon JSON),
     `ids.py` (timestamp-prefixed numeric ids so Mastodon's id-ordering contract
     holds across the merged inbox/outbox), `pagination.py` (`Link` header +
-    `max_id`/`since_id`/`min_id`), `scopes.py`, `errors.py`
+    `max_id`/`since_id`/`min_id`), `http.py` (JSON-vs-form request sniffing),
+    `scopes.py`, `errors.py`
 - `activitypub/` — the AP domain library (being **modularized** out of `app/`, see below)
   - `activitypub.py` — AP constants, `RawObject`, `ME` actor object, `fetch()`/collection parsing
   - `actor.py`, `ap_object.py` — actor + object models (pydantic v2 + SQLAlchemy)
   - `boxes.py` — core inbox/outbox processing logic (large; actively refactored)
   - `incoming_activities.py` / `outgoing_activities.py` — federation worker queues
-  - `models.py` — SQLAlchemy ORM models (Outbox/Inbox/Follower/Following/Upload…)
+  - `models.py` — SQLAlchemy ORM models (Outbox/Inbox/Follower/Following/Upload…),
+    shared `exp_backoff()`/`set_next_try()` retry scheduling for the two workers
   - `tests/` — AP-focused tests + `factories.py` (factory-boy)
 - `alembic/` — schema migrations (`alembic/versions/`, excluded from black/mypy)
 - `tests/` — app/integration tests; `tests/conftest.py` provides the DB + TestClient
@@ -88,6 +90,12 @@ templates, Alembic migrations, background workers for federation traffic.
   the repo, so a `see PLAN-quote.md` pointer is dangling for every reader. Inline
   the rationale where it's needed, or point at a tracked file (`docs/`, another
   module) instead.
+- Use Grep/Glob for discovery (finding files, searching patterns). Use LSP
+  (`goToDefinition`, `findReferences`, `hover`) for understanding (definitions,
+  references, type info) — it gives exact results, Grep gives text matches.
+  After locating a file with Grep/Glob, use LSP to navigate within it rather
+  than reading the whole file. If LSP errors (no server for the file type, or
+  unresolved imports in a worktree without `.venv` yet), fall back to Grep.
 
 ## Common commands
 
