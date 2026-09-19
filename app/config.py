@@ -20,19 +20,11 @@ from app.customization import _CUSTOM_ROUTES
 from app.customization import _StreamVisibilityCallback
 from app.customization import default_stream_visibility_callback
 from app.utils.emoji import _load_emojis
-from app.utils.version import get_version_commit
 
 ROOT_DIR = Path().parent.resolve()
 
 _CONFIG_FILE = os.getenv("MICROBLOGPUB_CONFIG_FILE", "profile.toml")
 
-
-try:
-    from app._version import VERSION_COMMIT  # type: ignore
-except ImportError:
-    VERSION_COMMIT = get_version_commit()
-
-VERSION += "+{}".format(VERSION_COMMIT)
 
 # Force reloading cache when the CSS is updated
 CSS_HASH = "none"
@@ -327,7 +319,6 @@ ENABLE_MICRODATA = CONFIG.enable_microdata
 FEATURED_TAGS = CONFIG.featured_tags
 DISCOVERABLE = CONFIG.discoverable
 INDEXABLE = CONFIG.indexable
-QUOTE_POLICY = CONFIG.quote_policy
 ALIAS_URL_PREFIX = CONFIG.alias_url_prefix
 PRIVACY_REPLACE = None
 if CONFIG.privacy_replace:

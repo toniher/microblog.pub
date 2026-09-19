@@ -38,7 +38,7 @@ router = APIRouter()
 _NON_EXPIRING_TOKEN_SECONDS = 100 * 365 * 24 * 3600
 
 
-@router.post("/api/v1/apps", response_model=None)
+@router.post("/api/v1/apps")
 async def apps_create(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -88,10 +88,10 @@ async def apps_create(
         client_id=client.client_id,
         client_secret=client.client_secret,
     )
-    return JSONResponse(content=application.model_dump(mode="json"), status_code=200)
+    return JSONResponse(content=application.model_dump(mode="json"))
 
 
-@router.get("/api/v1/apps/verify_credentials", response_model=None)
+@router.get("/api/v1/apps/verify_credentials")
 async def apps_verify_credentials(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -116,7 +116,6 @@ async def apps_verify_credentials(
             "website": client.client_uri,
             "vapid_key": vapid_public_key_b64(),
         },
-        status_code=200,
     )
 
 
@@ -130,7 +129,7 @@ async def oauth_authorize(
     return await indieauth_authorization_endpoint(request, db_session)
 
 
-@router.post("/oauth/token", response_model=None)
+@router.post("/oauth/token")
 async def oauth_token(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -169,11 +168,10 @@ async def oauth_token(
                 access_token.created_at.replace(tzinfo=timezone.utc).timestamp()
             ),
         },
-        status_code=200,
     )
 
 
-@router.post("/oauth/revoke", response_model=None)
+@router.post("/oauth/revoke")
 async def oauth_revoke(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -203,4 +201,4 @@ async def oauth_revoke(
             )
             await db_session.commit()
 
-    return JSONResponse(content={}, status_code=200)
+    return JSONResponse(content={})

@@ -488,10 +488,6 @@ def _emojify(text: str, is_local: bool) -> str:
     )
 
 
-def _parse_datetime(dt: str) -> datetime:
-    return parse(dt)
-
-
 def _poll_item_pct(item: ap.RawObject, voters_count: int) -> int:
     if voters_count == 0:
         return 0
@@ -510,7 +506,7 @@ _templates.env.filters["has_media_type"] = _has_media_type
 _templates.env.filters["html2text"] = _html2text
 _templates.env.filters["emojify"] = _emojify
 _templates.env.filters["pluralize"] = _pluralize
-_templates.env.filters["parse_datetime"] = _parse_datetime
+_templates.env.filters["parse_datetime"] = parse
 _templates.env.filters["poll_item_pct"] = _poll_item_pct
 _templates.env.filters["privacy_replace_url"] = privacy_replace.replace_url
 _templates.env.globals["JS_HASH"] = config.JS_HASH

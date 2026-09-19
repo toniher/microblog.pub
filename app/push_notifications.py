@@ -79,11 +79,6 @@ _ALERT_ATTR = {
 }
 
 
-def _exp_backoff(tries: int) -> datetime:
-    seconds = 2 * (2 ** (tries - 1))
-    return now() + timedelta(seconds=seconds)
-
-
 def _apply_backoff(
     sub: models.PushSubscription, retry_after: datetime | None = None
 ) -> bool:
@@ -91,7 +86,7 @@ def _apply_backoff(
     be deleted -- the only route there is a persistently dead endpoint."""
     if sub.tries >= _MAX_RETRIES:  # type: ignore
         return True
-    sub.next_try = retry_after or _exp_backoff(sub.tries)  # type: ignore
+    sub.next_try = retry_after or activitypub.models.exp_backoff(sub.tries)  # type: ignore
     return False
 
 

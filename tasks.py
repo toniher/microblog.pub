@@ -1,9 +1,7 @@
 import asyncio
 import io
 import tarfile
-from contextlib import contextmanager
 from pathlib import Path
-from typing import Generator
 from typing import Optional  # noqa: F401  # used in type comments
 
 import httpx
@@ -210,25 +208,10 @@ def stats(ctx):
     print_stats()
 
 
-@contextmanager
-def embed_version() -> Generator[None, None, None]:
-    from app.utils.version import get_version_commit
-
-    version_file = Path("app/_version.py")
-    version_file.unlink(missing_ok=True)
-    version_commit = get_version_commit()
-    version_file.write_text(f'VERSION_COMMIT = "{version_commit}"')
-    try:
-        yield
-    finally:
-        version_file.unlink()
-
-
 @task
 def build_docker_image(ctx):
     # type: (Context) -> None
-    with embed_version():
-        run("docker build -t microblogpub/microblogpub .")
+    run("docker build -t microblogpub/microblogpub .")
 
 
 @task

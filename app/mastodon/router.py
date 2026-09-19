@@ -179,7 +179,7 @@ _VERSION_STRING = (
 )
 
 
-@router.get("/api/v1/instance", response_model=None)
+@router.get("/api/v1/instance")
 async def instance_v1(
     db_session: AsyncSession = Depends(get_db_session),
 ) -> JSONResponse:
@@ -215,11 +215,10 @@ async def instance_v1(
             "contact_account": owner_account,
             "rules": [],
         },
-        status_code=200,
     )
 
 
-@router.get("/api/v2/instance", response_model=None)
+@router.get("/api/v2/instance")
 async def instance_v2(
     db_session: AsyncSession = Depends(get_db_session),
 ) -> JSONResponse:
@@ -260,35 +259,30 @@ async def instance_v2(
             },
             "rules": [],
         },
-        status_code=200,
     )
 
 
-@router.get("/api/v1/instance/rules", response_model=None)
+@router.get("/api/v1/instance/rules")
 async def instance_rules() -> JSONResponse:
-    return JSONResponse(content=[], status_code=200)
+    return JSONResponse(content=[])
 
 
-@router.get("/api/v1/instance/extended_description", response_model=None)
+@router.get("/api/v1/instance/extended_description")
 async def instance_extended_description() -> JSONResponse:
-    return JSONResponse(
-        content=serializers.serialize_extended_description(), status_code=200
-    )
+    return JSONResponse(content=serializers.serialize_extended_description())
 
 
-@router.get("/api/v1/instance/peers", response_model=None)
+@router.get("/api/v1/instance/peers")
 async def instance_peers() -> JSONResponse:
     # Deliberately empty rather than the real federated-peers list: exposing
     # who you've federated with is a privacy tradeoff (and a ready-made probe
     # target), not just a data-availability gap, so this instance opts out.
-    return JSONResponse(content=[], status_code=200)
+    return JSONResponse(content=[])
 
 
-@router.get("/api/v1/instance/domain_blocks", response_model=None)
+@router.get("/api/v1/instance/domain_blocks")
 async def instance_domain_blocks() -> JSONResponse:
-    return JSONResponse(
-        content=serializers.serialize_instance_domain_blocks(), status_code=200
-    )
+    return JSONResponse(content=serializers.serialize_instance_domain_blocks())
 
 
 _ACTIVITY_WEEKS = 12
@@ -300,7 +294,7 @@ def _week_start(dt: datetime) -> datetime:
     )
 
 
-@router.get("/api/v1/instance/activity", response_model=None)
+@router.get("/api/v1/instance/activity")
 async def instance_activity(
     db_session: AsyncSession = Depends(get_db_session),
 ) -> JSONResponse:
@@ -337,10 +331,10 @@ async def instance_activity(
                 "registrations": "0",
             }
         )
-    return JSONResponse(content=weeks, status_code=200)
+    return JSONResponse(content=weeks)
 
 
-@router.get("/api/v1/custom_emojis", response_model=None)
+@router.get("/api/v1/custom_emojis")
 async def custom_emojis() -> JSONResponse:
     return JSONResponse(
         content=[
@@ -353,11 +347,10 @@ async def custom_emojis() -> JSONResponse:
             }
             for ap_emoji in EMOJIS.values()
         ],
-        status_code=200,
     )
 
 
-@router.get("/api/v1/preferences", response_model=None)
+@router.get("/api/v1/preferences")
 async def preferences(
     token_info: AccessTokenInfo = Depends(require_scope("read")),
 ) -> JSONResponse:
@@ -369,15 +362,14 @@ async def preferences(
             "reading:expand:media": "default",
             "reading:expand:spoilers": False,
         },
-        status_code=200,
     )
 
 
-@router.get("/api/v1/announcements", response_model=None)
+@router.get("/api/v1/announcements")
 async def announcements(
     token_info: AccessTokenInfo = Depends(require_scope("read")),
 ) -> JSONResponse:
-    return JSONResponse(content=[], status_code=200)
+    return JSONResponse(content=[])
 
 
 _MARKER_TIMELINES = ("home", "notifications")
@@ -391,7 +383,7 @@ def _serialize_marker(marker: models.Marker) -> dict:
     }
 
 
-@router.get("/api/v1/markers", response_model=None)
+@router.get("/api/v1/markers")
 async def get_markers(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -405,11 +397,10 @@ async def get_markers(
     ).all()
     return JSONResponse(
         content={marker.timeline: _serialize_marker(marker) for marker in markers},
-        status_code=200,
     )
 
 
-@router.post("/api/v1/markers", response_model=None)
+@router.post("/api/v1/markers")
 async def post_markers(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -443,7 +434,6 @@ async def post_markers(
         content={
             timeline: _serialize_marker(marker) for timeline, marker in content.items()
         },
-        status_code=200,
     )
 
 
@@ -466,7 +456,7 @@ async def _pending_follow_requests_count(db_session: AsyncSession) -> int:
     )
 
 
-@router.get("/api/v1/accounts/verify_credentials", response_model=None)
+@router.get("/api/v1/accounts/verify_credentials")
 async def accounts_verify_credentials(
     db_session: AsyncSession = Depends(get_db_session),
     token_info: AccessTokenInfo = Depends(require_scope("read:accounts")),
@@ -480,10 +470,10 @@ async def accounts_verify_credentials(
         "fields": account["fields"],
         "follow_requests_count": await _pending_follow_requests_count(db_session),
     }
-    return JSONResponse(content=account, status_code=200)
+    return JSONResponse(content=account)
 
 
-@router.get("/api/v1/accounts", response_model=None)
+@router.get("/api/v1/accounts")
 async def accounts_index(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -505,7 +495,7 @@ async def accounts_index(
         if actor is not None:
             accounts.append(await serializers.serialize_account(db_session, actor))
 
-    return JSONResponse(content=accounts, status_code=200)
+    return JSONResponse(content=accounts)
 
 
 def _serialize_relationship(
@@ -555,7 +545,7 @@ async def _relationship_for_actor(
     return _serialize_relationship(account_id, actor, metadata.get(actor.ap_id))
 
 
-@router.get("/api/v1/accounts/relationships", response_model=None)
+@router.get("/api/v1/accounts/relationships")
 async def accounts_relationships(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -586,10 +576,10 @@ async def accounts_relationships(
                 _serialize_relationship(raw_id, actor, metadata.get(actor.ap_id))
             )
 
-    return JSONResponse(content=relationships, status_code=200)
+    return JSONResponse(content=relationships)
 
 
-@router.get("/api/v1/accounts/lookup", response_model=None)
+@router.get("/api/v1/accounts/lookup")
 async def accounts_lookup(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -601,7 +591,6 @@ async def accounts_lookup(
     if acct in (config.USERNAME, f"{config.USERNAME}@{config.WEBFINGER_DOMAIN}"):
         return JSONResponse(
             content=await serializers.serialize_owner_account(db_session),
-            status_code=200,
         )
 
     if "@" not in acct:
@@ -626,11 +615,10 @@ async def accounts_lookup(
 
     return JSONResponse(
         content=await serializers.serialize_account(db_session, match),
-        status_code=200,
     )
 
 
-@router.get("/api/v1/accounts/familiar_followers", response_model=None)
+@router.get("/api/v1/accounts/familiar_followers")
 async def accounts_familiar_followers(
     request: Request,
     token_info: AccessTokenInfo = Depends(require_scope("read:accounts")),
@@ -644,11 +632,10 @@ async def accounts_familiar_followers(
 
     return JSONResponse(
         content=[{"id": raw_id, "accounts": []} for raw_id in raw_ids],
-        status_code=200,
     )
 
 
-@router.get("/api/v1/accounts/search", response_model=None)
+@router.get("/api/v1/accounts/search")
 async def accounts_search(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -676,10 +663,10 @@ async def accounts_search(
         limit,
         only_following=request.query_params.get("following") == "true",
     )
-    return JSONResponse(content=accounts, status_code=200)
+    return JSONResponse(content=accounts)
 
 
-@router.get("/api/v1/accounts/{account_id}", response_model=None)
+@router.get("/api/v1/accounts/{account_id}")
 async def accounts_show(
     account_id: str,
     db_session: AsyncSession = Depends(get_db_session),
@@ -687,7 +674,6 @@ async def accounts_show(
     if account_id == ids.LOCAL_ACTOR_ID:
         return JSONResponse(
             content=await serializers.serialize_owner_account(db_session),
-            status_code=200,
         )
 
     actor = await ids.get_account_by_mastodon_id(db_session, account_id)
@@ -704,7 +690,6 @@ async def accounts_show(
 
     return JSONResponse(
         content=await serializers.serialize_account(db_session, actor),
-        status_code=200,
     )
 
 
@@ -713,7 +698,7 @@ async def _respond_with_status_list(
 ) -> JSONResponse:
     await serializers.prefetch_status_relations(db_session, objects)
     statuses = [await serializers.serialize_status(db_session, obj) for obj in objects]
-    response = JSONResponse(content=statuses, status_code=200)
+    response = JSONResponse(content=statuses)
     link_header = pagination.build_link_header(
         request, [status["id"] for status in statuses]
     )
@@ -722,7 +707,7 @@ async def _respond_with_status_list(
     return response
 
 
-@router.get("/api/v1/accounts/{account_id}/statuses", response_model=None)
+@router.get("/api/v1/accounts/{account_id}/statuses")
 async def accounts_statuses(
     account_id: str,
     request: Request,
@@ -789,7 +774,7 @@ async def accounts_statuses(
 
     if pinned_only:
         # We don't track pins on a remote actor's own posts.
-        return JSONResponse(content=[], status_code=200)
+        return JSONResponse(content=[])
 
     # Captured once up front: a failed backfill attempt below rolls back the
     # session, which expires every loaded ORM object (including `actor`), so
@@ -897,7 +882,7 @@ async def _respond_with_account_list(
         await serializers.serialize_account(db_session, actor) for actor in actors
     ]
 
-    response = JSONResponse(content=accounts, status_code=200)
+    response = JSONResponse(content=accounts)
     link_header = pagination.build_link_header(
         request, [account["id"] for account in accounts]
     )
@@ -939,7 +924,7 @@ async def _paginated_actor_list(
     )
 
 
-@router.get("/api/v1/accounts/{account_id}/followers", response_model=None)
+@router.get("/api/v1/accounts/{account_id}/followers")
 async def accounts_followers(
     account_id: str,
     request: Request,
@@ -950,10 +935,10 @@ async def accounts_followers(
             raise MastodonError(404, "not_found", "account not found")
         # We only have OUR OWN followers cached; a remote actor's follower
         # list lives on their home server.
-        return JSONResponse(content=[], status_code=200)
+        return JSONResponse(content=[])
 
     if config.HIDES_FOLLOWERS:
-        return JSONResponse(content=[], status_code=200)
+        return JSONResponse(content=[])
 
     return await _paginated_actor_list(
         request,
@@ -963,7 +948,7 @@ async def accounts_followers(
     )
 
 
-@router.get("/api/v1/accounts/{account_id}/following", response_model=None)
+@router.get("/api/v1/accounts/{account_id}/following")
 async def accounts_following(
     account_id: str,
     request: Request,
@@ -972,10 +957,10 @@ async def accounts_following(
     if account_id != ids.LOCAL_ACTOR_ID:
         if await ids.get_account_by_mastodon_id(db_session, account_id) is None:
             raise MastodonError(404, "not_found", "account not found")
-        return JSONResponse(content=[], status_code=200)
+        return JSONResponse(content=[])
 
     if config.HIDES_FOLLOWING:
-        return JSONResponse(content=[], status_code=200)
+        return JSONResponse(content=[])
 
     return await _paginated_actor_list(
         request,
@@ -985,7 +970,7 @@ async def accounts_following(
     )
 
 
-@router.get("/api/v1/accounts/{account_id}/featured_tags", response_model=None)
+@router.get("/api/v1/accounts/{account_id}/featured_tags")
 async def accounts_featured_tags(
     account_id: str,
     db_session: AsyncSession = Depends(get_db_session),
@@ -994,24 +979,23 @@ async def accounts_featured_tags(
         # We only have featured tags for our own profile (configured in
         # `data/profile.toml`) — a remote actor's featured tags live on
         # their home server.
-        return JSONResponse(content=[], status_code=200)
+        return JSONResponse(content=[])
 
     return JSONResponse(
         content=await serializers.serialize_featured_tags(db_session),
-        status_code=200,
     )
 
 
-@router.get("/api/v1/accounts/{account_id}/endorsements", response_model=None)
+@router.get("/api/v1/accounts/{account_id}/endorsements")
 async def accounts_endorsements(
     account_id: str,
 ) -> JSONResponse:
     # Endorsements (accounts featured on a profile) are not supported —
     # always return an empty list rather than 404ing.
-    return JSONResponse(content=[], status_code=200)
+    return JSONResponse(content=[])
 
 
-@router.get("/api/v1/accounts/{account_id}/lists", response_model=None)
+@router.get("/api/v1/accounts/{account_id}/lists")
 async def accounts_lists(
     account_id: str,
     db_session: AsyncSession = Depends(get_db_session),
@@ -1038,9 +1022,7 @@ async def accounts_lists(
             .order_by(models.MastodonList.id)
         )
     ).all()
-    return JSONResponse(
-        content=[serializers.serialize_list(row) for row in rows], status_code=200
-    )
+    return JSONResponse(content=[serializers.serialize_list(row) for row in rows])
 
 
 # --- Statuses ----------------------------------------------------------------
@@ -1069,19 +1051,17 @@ async def _get_visible_status_or_404(
     return obj
 
 
-@router.get("/api/v1/statuses/{status_id}", response_model=None)
+@router.get("/api/v1/statuses/{status_id}")
 async def statuses_show(
     status_id: str,
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
 ) -> JSONResponse:
     obj = await _get_visible_status_or_404(request, db_session, status_id)
-    return JSONResponse(
-        content=await serializers.serialize_status(db_session, obj), status_code=200
-    )
+    return JSONResponse(content=await serializers.serialize_status(db_session, obj))
 
 
-@router.get("/api/v1/statuses/{status_id}/source", response_model=None)
+@router.get("/api/v1/statuses/{status_id}/source")
 async def statuses_source(
     status_id: str,
     db_session: AsyncSession = Depends(get_db_session),
@@ -1099,11 +1079,10 @@ async def statuses_source(
             "text": obj.source or "",
             "spoiler_text": obj.summary or "",
         },
-        status_code=200,
     )
 
 
-@router.get("/api/v1/statuses/{status_id}/history", response_model=None)
+@router.get("/api/v1/statuses/{status_id}/history")
 async def statuses_history(
     status_id: str,
     request: Request,
@@ -1139,7 +1118,7 @@ async def statuses_history(
         )
     )
 
-    return JSONResponse(content=entries, status_code=200)
+    return JSONResponse(content=entries)
 
 
 def _find_node_with_ancestors(
@@ -1162,7 +1141,7 @@ def _flatten_descendants(node: ReplyTreeNode) -> list[ReplyTreeNode]:
     return out
 
 
-@router.get("/api/v1/statuses/{status_id}/context", response_model=None)
+@router.get("/api/v1/statuses/{status_id}/context")
 async def statuses_context(
     status_id: str,
     request: Request,
@@ -1212,11 +1191,10 @@ async def statuses_context(
 
     return JSONResponse(
         content={"ancestors": ancestors, "descendants": descendants},
-        status_code=200,
     )
 
 
-@router.get("/api/v1/statuses/{status_id}/favourited_by", response_model=None)
+@router.get("/api/v1/statuses/{status_id}/favourited_by")
 async def statuses_favourited_by(
     status_id: str,
     request: Request,
@@ -1228,7 +1206,7 @@ async def statuses_favourited_by(
     if not isinstance(obj, activitypub.models.OutboxObject):
         # We only know who liked OUR OWN posts (their Like activities land in
         # our inbox); a remote post's likers aren't visible to us.
-        return JSONResponse(content=[], status_code=200)
+        return JSONResponse(content=[])
 
     likers = (
         (
@@ -1249,10 +1227,10 @@ async def statuses_favourited_by(
     accounts = [
         await serializers.serialize_account(db_session, like.actor) for like in likers
     ]
-    return JSONResponse(content=accounts, status_code=200)
+    return JSONResponse(content=accounts)
 
 
-@router.get("/api/v1/statuses/{status_id}/reblogged_by", response_model=None)
+@router.get("/api/v1/statuses/{status_id}/reblogged_by")
 async def statuses_reblogged_by(
     status_id: str,
     request: Request,
@@ -1260,7 +1238,7 @@ async def statuses_reblogged_by(
 ) -> JSONResponse:
     obj = await _get_visible_status_or_404(request, db_session, status_id)
     if not isinstance(obj, activitypub.models.OutboxObject):
-        return JSONResponse(content=[], status_code=200)
+        return JSONResponse(content=[])
 
     boosters = (
         (
@@ -1282,7 +1260,7 @@ async def statuses_reblogged_by(
         await serializers.serialize_account(db_session, boost.actor)
         for boost in boosters
     ]
-    return JSONResponse(content=accounts, status_code=200)
+    return JSONResponse(content=accounts)
 
 
 # --- Timelines -----------------------------------------------------------------
@@ -1297,7 +1275,7 @@ async def _resolve_cursor_published_at(
     return obj.ap_published_at if obj else None
 
 
-@router.get("/api/v1/timelines/home", response_model=None)
+@router.get("/api/v1/timelines/home")
 async def timelines_home(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -1340,7 +1318,7 @@ async def timelines_home(
     return await _respond_with_status_list(request, db_session, merged)
 
 
-@router.get("/api/v1/timelines/public", response_model=None)
+@router.get("/api/v1/timelines/public")
 async def timelines_public(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -1432,7 +1410,7 @@ def _tag_query_params(request: Request, key: str) -> set[str]:
     }
 
 
-@router.get("/api/v1/timelines/tag/{hashtag}", response_model=None)
+@router.get("/api/v1/timelines/tag/{hashtag}")
 async def timelines_tag(
     hashtag: str,
     request: Request,
@@ -1542,7 +1520,7 @@ def _requested_grouped_types(request: Request) -> frozenset[str]:
     return notification_groups.GROUPABLE_TYPES & raw
 
 
-@router.get("/api/v1/notifications", response_model=None)
+@router.get("/api/v1/notifications")
 async def notifications_list(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -1591,7 +1569,7 @@ async def notifications_list(
             notif.is_new = False
         await db_session.commit()
 
-    response = JSONResponse(content=serialized, status_code=200)
+    response = JSONResponse(content=serialized)
     link_header = pagination.build_link_header(
         request, [entity["id"] for entity in serialized]
     )
@@ -1624,20 +1602,20 @@ def _notification_policy_content() -> dict[str, Any]:
     }
 
 
-@router.get("/api/v2/notifications/policy", response_model=None)
+@router.get("/api/v2/notifications/policy")
 async def notifications_policy_get(
     token_info: AccessTokenInfo = Depends(require_scope("read:notifications")),
 ) -> JSONResponse:
-    return JSONResponse(content=_notification_policy_content(), status_code=200)
+    return JSONResponse(content=_notification_policy_content())
 
 
-@router.put("/api/v2/notifications/policy", response_model=None)
+@router.put("/api/v2/notifications/policy")
 async def notifications_policy_put(
     token_info: AccessTokenInfo = Depends(require_scope("write:notifications")),
 ) -> JSONResponse:
     # No filtering is implemented, so there is nothing to persist — echo the
     # fixed accept-all policy back.
-    return JSONResponse(content=_notification_policy_content(), status_code=200)
+    return JSONResponse(content=_notification_policy_content())
 
 
 # --- Grouped notifications (4.3) ------------------------------------------
@@ -1756,7 +1734,7 @@ async def _serialize_grouped_notifications(
     }
 
 
-@router.get("/api/v2/notifications", response_model=None)
+@router.get("/api/v2/notifications")
 async def notifications_v2_list(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -1798,7 +1776,7 @@ async def notifications_v2_list(
         )
         await db_session.commit()
 
-    response = JSONResponse(content=content, status_code=200)
+    response = JSONResponse(content=content)
     if groups:
         # `build_link_header` only reads item_ids[0]/item_ids[-1]: passing
         # [first group's page_max_id, last group's page_min_id] yields the
@@ -1812,7 +1790,7 @@ async def notifications_v2_list(
     return response
 
 
-@router.get("/api/v2/notifications/unread_count", response_model=None)
+@router.get("/api/v2/notifications/unread_count")
 async def notifications_v2_unread_count(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -1837,10 +1815,10 @@ async def notifications_v2_unread_count(
         max_id=None,
         cursor=None,
     )
-    return JSONResponse(content={"count": len(groups)}, status_code=200)
+    return JSONResponse(content={"count": len(groups)})
 
 
-@router.get("/api/v2/notifications/{group_key}", response_model=None)
+@router.get("/api/v2/notifications/{group_key}")
 async def notifications_v2_show(
     group_key: str,
     request: Request,
@@ -1860,10 +1838,10 @@ async def notifications_v2_show(
     content = await _serialize_grouped_notifications(
         db_session, [group], include_page_fields=False
     )
-    return JSONResponse(content=content, status_code=200)
+    return JSONResponse(content=content)
 
 
-@router.post("/api/v2/notifications/{group_key}/dismiss", response_model=None)
+@router.post("/api/v2/notifications/{group_key}/dismiss")
 async def notifications_v2_dismiss(
     group_key: str,
     db_session: AsyncSession = Depends(get_db_session),
@@ -1873,10 +1851,10 @@ async def notifications_v2_dismiss(
     if key_where is not None:
         await db_session.execute(delete(models.Notification).where(key_where))
         await db_session.commit()
-    return JSONResponse(content={}, status_code=200)
+    return JSONResponse(content={})
 
 
-@router.get("/api/v2/notifications/{group_key}/accounts", response_model=None)
+@router.get("/api/v2/notifications/{group_key}/accounts")
 async def notifications_v2_group_accounts(
     group_key: str,
     request: Request,
@@ -1911,24 +1889,24 @@ async def notifications_v2_group_accounts(
         for actor_id in actor_ids
         if (actor := actors_by_id.get(actor_id)) is not None
     ]
-    return JSONResponse(content=accounts, status_code=200)
+    return JSONResponse(content=accounts)
 
 
-@router.get("/api/v1/notifications/requests/merged", response_model=None)
+@router.get("/api/v1/notifications/requests/merged")
 async def notification_requests_merged(
     token_info: AccessTokenInfo = Depends(require_scope("read:notifications")),
 ) -> JSONResponse:
-    return JSONResponse(content={"merged": True}, status_code=200)
+    return JSONResponse(content={"merged": True})
 
 
-@router.get("/api/v1/notifications/requests", response_model=None)
+@router.get("/api/v1/notifications/requests")
 async def notification_requests_index(
     token_info: AccessTokenInfo = Depends(require_scope("read:notifications")),
 ) -> JSONResponse:
-    return JSONResponse(content=[], status_code=200)
+    return JSONResponse(content=[])
 
 
-@router.get("/api/v1/notifications/unread_count", response_model=None)
+@router.get("/api/v1/notifications/unread_count")
 async def notifications_unread_count(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -1954,10 +1932,10 @@ async def notifications_unread_count(
         .subquery()
     )
     count = await db_session.scalar(query)
-    return JSONResponse(content={"count": count}, status_code=200)
+    return JSONResponse(content={"count": count})
 
 
-@router.get("/api/v1/notifications/{notification_id}", response_model=None)
+@router.get("/api/v1/notifications/{notification_id}")
 async def notifications_show(
     notification_id: str,
     db_session: AsyncSession = Depends(get_db_session),
@@ -1979,20 +1957,20 @@ async def notifications_show(
     if serialized is None:
         raise MastodonError(404, "not_found", "notification not found")
 
-    return JSONResponse(content=serialized, status_code=200)
+    return JSONResponse(content=serialized)
 
 
-@router.post("/api/v1/notifications/clear", response_model=None)
+@router.post("/api/v1/notifications/clear")
 async def notifications_clear(
     db_session: AsyncSession = Depends(get_db_session),
     token_info: AccessTokenInfo = Depends(require_scope("write:notifications")),
 ) -> JSONResponse:
     await db_session.execute(delete(models.Notification))
     await db_session.commit()
-    return JSONResponse(content={}, status_code=200)
+    return JSONResponse(content={})
 
 
-@router.post("/api/v1/notifications/{notification_id}/dismiss", response_model=None)
+@router.post("/api/v1/notifications/{notification_id}/dismiss")
 async def notifications_dismiss(
     notification_id: str,
     db_session: AsyncSession = Depends(get_db_session),
@@ -2004,7 +1982,7 @@ async def notifications_dismiss(
             delete(models.Notification).where(models.Notification.id == internal_id)
         )
         await db_session.commit()
-    return JSONResponse(content={}, status_code=200)
+    return JSONResponse(content={})
 
 
 # --- Web Push ------------------------------------------------------------------
@@ -2099,7 +2077,7 @@ def _serialize_push_subscription(sub: models.PushSubscription) -> dict:
     }
 
 
-@router.post("/api/v1/push/subscription", response_model=None)
+@router.post("/api/v1/push/subscription")
 async def push_subscription_create(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -2191,10 +2169,10 @@ async def push_subscription_create(
             "is the push_worker process running? See docs/mastodon_api.md."
         )
 
-    return JSONResponse(content=_serialize_push_subscription(sub), status_code=200)
+    return JSONResponse(content=_serialize_push_subscription(sub))
 
 
-@router.get("/api/v1/push/subscription", response_model=None)
+@router.get("/api/v1/push/subscription")
 async def push_subscription_get(
     db_session: AsyncSession = Depends(get_db_session),
     token_info: AccessTokenInfo = Depends(require_scope("push")),
@@ -2204,10 +2182,10 @@ async def push_subscription_get(
     if sub is None:
         raise MastodonError(404, "not_found", "no push subscription for this token")
 
-    return JSONResponse(content=_serialize_push_subscription(sub), status_code=200)
+    return JSONResponse(content=_serialize_push_subscription(sub))
 
 
-@router.put("/api/v1/push/subscription", response_model=None)
+@router.put("/api/v1/push/subscription")
 async def push_subscription_update(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -2237,10 +2215,10 @@ async def push_subscription_update(
 
     await db_session.commit()
 
-    return JSONResponse(content=_serialize_push_subscription(sub), status_code=200)
+    return JSONResponse(content=_serialize_push_subscription(sub))
 
 
-@router.delete("/api/v1/push/subscription", response_model=None)
+@router.delete("/api/v1/push/subscription")
 async def push_subscription_delete(
     db_session: AsyncSession = Depends(get_db_session),
     token_info: AccessTokenInfo = Depends(require_scope("push")),
@@ -2252,7 +2230,7 @@ async def push_subscription_delete(
         )
     )
     await db_session.commit()
-    return JSONResponse(content={}, status_code=200)
+    return JSONResponse(content={})
 
 
 # --- Conversations ---------------------------------------------------------------
@@ -2261,7 +2239,7 @@ async def push_subscription_delete(
 # / `app.mastodon.serializers` — the streaming event pump needs them too.
 
 
-@router.get("/api/v1/conversations", response_model=None)
+@router.get("/api/v1/conversations")
 async def conversations_list(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -2283,7 +2261,7 @@ async def conversations_list(
         await serializers.serialize_conversation(db_session, last, actor_ids, unread)
         for last, actor_ids, unread in threads
     ]
-    response = JSONResponse(content=serialized, status_code=200)
+    response = JSONResponse(content=serialized)
     link_header = pagination.build_link_header(
         request, [entity["id"] for entity in serialized]
     )
@@ -2292,7 +2270,7 @@ async def conversations_list(
     return response
 
 
-@router.post("/api/v1/conversations/{conversation_id}/read", response_model=None)
+@router.post("/api/v1/conversations/{conversation_id}/read")
 async def conversations_read(
     conversation_id: str,
     db_session: AsyncSession = Depends(get_db_session),
@@ -2326,7 +2304,6 @@ async def conversations_read(
         content=await serializers.serialize_conversation(
             db_session, last, actor_ids, False
         ),
-        status_code=200,
     )
 
 
@@ -2338,35 +2315,22 @@ async def conversations_read(
 # client can't yet act on.
 
 
-@router.get("/api/v1/filters", response_model=None)
-async def filters_v1_index(
+async def _empty_list_read_scoped(
     token_info: AccessTokenInfo = Depends(require_scope("read")),
 ) -> JSONResponse:
-    return JSONResponse(content=[], status_code=200)
+    return JSONResponse(content=[])
 
 
-@router.get("/api/v2/filters", response_model=None)
-async def filters_v2_index(
-    token_info: AccessTokenInfo = Depends(require_scope("read")),
-) -> JSONResponse:
-    return JSONResponse(content=[], status_code=200)
+for _path in (
+    "/api/v1/filters",
+    "/api/v2/filters",
+    "/api/v1/suggestions",
+    "/api/v2/suggestions",
+):
+    router.get(_path)(_empty_list_read_scoped)
 
 
-@router.get("/api/v1/suggestions", response_model=None)
-async def suggestions_v1_index(
-    token_info: AccessTokenInfo = Depends(require_scope("read")),
-) -> JSONResponse:
-    return JSONResponse(content=[], status_code=200)
-
-
-@router.get("/api/v2/suggestions", response_model=None)
-async def suggestions_v2_index(
-    token_info: AccessTokenInfo = Depends(require_scope("read")),
-) -> JSONResponse:
-    return JSONResponse(content=[], status_code=200)
-
-
-@router.get("/api/v1/endorsements", response_model=None)
+@router.get("/api/v1/endorsements")
 async def endorsements_index(
     token_info: AccessTokenInfo = Depends(require_scope("read:accounts")),
 ) -> JSONResponse:
@@ -2375,17 +2339,17 @@ async def endorsements_index(
     # per-account route existing while this one 404s is the worst of both:
     # clients open the profile fine, then error on the featured-accounts
     # section.
-    return JSONResponse(content=[], status_code=200)
+    return JSONResponse(content=[])
 
 
-@router.get("/api/v1/followed_tags", response_model=None)
+@router.get("/api/v1/followed_tags")
 async def followed_tags_index(
     token_info: AccessTokenInfo = Depends(require_scope("read:follows")),
 ) -> JSONResponse:
     # Following a hashtag isn't implemented (single-tag timelines are, see
     # `timelines_tag`). Empty rather than 404 so the client's followed-tags
     # screen shows an empty state instead of failing to open.
-    return JSONResponse(content=[], status_code=200)
+    return JSONResponse(content=[])
 
 
 def _serialize_tag(tag: str) -> dict:
@@ -2406,7 +2370,7 @@ def _serialize_tag(tag: str) -> dict:
     }
 
 
-@router.get("/api/v1/tags/{tag_id}", response_model=None)
+@router.get("/api/v1/tags/{tag_id}")
 async def tags_show(
     tag_id: str,
 ) -> JSONResponse:
@@ -2426,7 +2390,7 @@ async def tags_show(
     tag = timelines.normalize_tag(tag_id).strip()
     if not tag:
         raise MastodonError(404, "not_found", "not a valid hashtag")
-    return JSONResponse(content=_serialize_tag(tag), status_code=200)
+    return JSONResponse(content=_serialize_tag(tag))
 
 
 # /api/v1/blocks and /api/v1/mutes are real, non-stub lists (both are
@@ -2440,35 +2404,27 @@ async def tags_show(
 # Public, unauthenticated in real Mastodon too.
 
 
-@router.get("/api/v1/featured_tags", response_model=None)
+@router.get("/api/v1/featured_tags")
 async def featured_tags_index(
     db_session: AsyncSession = Depends(get_db_session),
     token_info: AccessTokenInfo = Depends(require_scope("read:accounts")),
 ) -> JSONResponse:
     return JSONResponse(
         content=await serializers.serialize_featured_tags(db_session),
-        status_code=200,
     )
 
 
-@router.get("/api/v1/directory", response_model=None)
-async def directory_index() -> JSONResponse:
-    return JSONResponse(content=[], status_code=200)
+async def _empty_list() -> JSONResponse:
+    return JSONResponse(content=[])
 
 
-@router.get("/api/v1/trends/tags", response_model=None)
-async def trends_tags() -> JSONResponse:
-    return JSONResponse(content=[], status_code=200)
-
-
-@router.get("/api/v1/trends/statuses", response_model=None)
-async def trends_statuses() -> JSONResponse:
-    return JSONResponse(content=[], status_code=200)
-
-
-@router.get("/api/v1/trends/links", response_model=None)
-async def trends_links() -> JSONResponse:
-    return JSONResponse(content=[], status_code=200)
+for _path in (
+    "/api/v1/directory",
+    "/api/v1/trends/tags",
+    "/api/v1/trends/statuses",
+    "/api/v1/trends/links",
+):
+    router.get(_path)(_empty_list)
 
 
 # --- Media -----------------------------------------------------------------
@@ -2494,7 +2450,7 @@ def _parse_focus(value: str) -> tuple[float, float]:
     return (x, y)
 
 
-@router.post("/api/v2/media", response_model=None)
+@router.post("/api/v2/media")
 async def media_create(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -2532,10 +2488,10 @@ async def media_create(
             raise MastodonError(422, "validation_failed", str(exc))
         await db_session.commit()
 
-    return JSONResponse(content=serializers.serialize_upload(upload), status_code=200)
+    return JSONResponse(content=serializers.serialize_upload(upload))
 
 
-@router.post("/api/v1/media", response_model=None)
+@router.post("/api/v1/media")
 async def media_create_v1(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -2544,7 +2500,7 @@ async def media_create_v1(
     return await media_create(request, db_session, token_info)
 
 
-@router.get("/api/v1/media/{media_id}", response_model=None)
+@router.get("/api/v1/media/{media_id}")
 async def media_show(
     media_id: str,
     db_session: AsyncSession = Depends(get_db_session),
@@ -2554,10 +2510,10 @@ async def media_show(
     if upload is None:
         raise MastodonError(404, "not_found", "media not found")
 
-    return JSONResponse(content=serializers.serialize_upload(upload), status_code=200)
+    return JSONResponse(content=serializers.serialize_upload(upload))
 
 
-@router.put("/api/v1/media/{media_id}", response_model=None)
+@router.put("/api/v1/media/{media_id}")
 async def media_update(
     media_id: str,
     request: Request,
@@ -2585,7 +2541,7 @@ async def media_update(
             upload.focus_x = upload.focus_y = None
         await db_session.commit()
 
-    return JSONResponse(content=serializers.serialize_upload(upload), status_code=200)
+    return JSONResponse(content=serializers.serialize_upload(upload))
 
 
 # --- Status writes / interactions / polls -----------------------------------
@@ -2919,7 +2875,7 @@ async def _parse_compose_params(
     )
 
 
-@router.post("/api/v1/statuses", response_model=None)
+@router.post("/api/v1/statuses")
 async def statuses_create(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -2940,7 +2896,6 @@ async def statuses_create(
         if cached is not None:
             return JSONResponse(
                 content=await serializers.serialize_status(db_session, cached),
-                status_code=200,
             )
 
     if cache_key and scheduled_at is not None:
@@ -2952,7 +2907,6 @@ async def statuses_create(
                     content=await serializers.serialize_scheduled_status(
                         db_session, cached_row
                     ),
-                    status_code=200,
                 )
 
     compose = await _parse_compose_params(db_session, params, idempotency_key)
@@ -2967,7 +2921,6 @@ async def statuses_create(
             content=await serializers.serialize_scheduled_status(
                 db_session, scheduled_status
             ),
-            status_code=200,
         )
 
     try:
@@ -2988,7 +2941,6 @@ async def statuses_create(
     assert created is not None
     return JSONResponse(
         content=await serializers.serialize_status(db_session, created),
-        status_code=200,
     )
 
 
@@ -3024,7 +2976,7 @@ async def _resolve_edit_media(
     return upload, serializers.synthetic_filename(upload), upload.description
 
 
-@router.put("/api/v1/statuses/{status_id}", response_model=None)
+@router.put("/api/v1/statuses/{status_id}")
 async def statuses_update(
     status_id: str,
     request: Request,
@@ -3108,11 +3060,10 @@ async def statuses_update(
     assert updated is not None
     return JSONResponse(
         content=await serializers.serialize_status(db_session, updated),
-        status_code=200,
     )
 
 
-@router.delete("/api/v1/statuses/{status_id}", response_model=None)
+@router.delete("/api/v1/statuses/{status_id}")
 async def statuses_delete(
     status_id: str,
     db_session: AsyncSession = Depends(get_db_session),
@@ -3129,7 +3080,7 @@ async def statuses_delete(
 
     await send_delete(db_session, obj.ap_id)
 
-    return JSONResponse(content=serialized, status_code=200)
+    return JSONResponse(content=serialized)
 
 
 # --- Scheduled statuses --------------------------------------------------------
@@ -3154,7 +3105,7 @@ async def _resolve_scheduled_status_or_404(
     return scheduled_status
 
 
-@router.get("/api/v1/scheduled_statuses", response_model=None)
+@router.get("/api/v1/scheduled_statuses")
 async def scheduled_statuses_index(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -3189,7 +3140,7 @@ async def scheduled_statuses_index(
         await serializers.serialize_scheduled_status(db_session, row) for row in rows
     ]
 
-    response = JSONResponse(content=serialized, status_code=200)
+    response = JSONResponse(content=serialized)
     link_header = pagination.build_link_header(
         request, [entity["id"] for entity in serialized]
     )
@@ -3198,7 +3149,7 @@ async def scheduled_statuses_index(
     return response
 
 
-@router.get("/api/v1/scheduled_statuses/{scheduled_status_id}", response_model=None)
+@router.get("/api/v1/scheduled_statuses/{scheduled_status_id}")
 async def scheduled_statuses_show(
     scheduled_status_id: str,
     db_session: AsyncSession = Depends(get_db_session),
@@ -3211,11 +3162,10 @@ async def scheduled_statuses_show(
         content=await serializers.serialize_scheduled_status(
             db_session, scheduled_status
         ),
-        status_code=200,
     )
 
 
-@router.put("/api/v1/scheduled_statuses/{scheduled_status_id}", response_model=None)
+@router.put("/api/v1/scheduled_statuses/{scheduled_status_id}")
 async def scheduled_statuses_update(
     scheduled_status_id: str,
     request: Request,
@@ -3244,11 +3194,10 @@ async def scheduled_statuses_update(
         content=await serializers.serialize_scheduled_status(
             db_session, scheduled_status
         ),
-        status_code=200,
     )
 
 
-@router.delete("/api/v1/scheduled_statuses/{scheduled_status_id}", response_model=None)
+@router.delete("/api/v1/scheduled_statuses/{scheduled_status_id}")
 async def scheduled_statuses_delete(
     scheduled_status_id: str,
     db_session: AsyncSession = Depends(get_db_session),
@@ -3259,7 +3208,7 @@ async def scheduled_statuses_delete(
     )
     await db_session.delete(scheduled_status)
     await db_session.commit()
-    return JSONResponse(content={}, status_code=200)
+    return JSONResponse(content={})
 
 
 # --- Lists ---------------------------------------------------------------------
@@ -3305,7 +3254,7 @@ def _validate_list_params(params: _StatusParams) -> tuple[str, str, bool]:
     return title, replies_policy, params.get_bool("exclusive")
 
 
-@router.get("/api/v1/lists", response_model=None)
+@router.get("/api/v1/lists")
 async def lists_index(
     db_session: AsyncSession = Depends(get_db_session),
     token_info: AccessTokenInfo = Depends(require_scope("read:lists")),
@@ -3315,12 +3264,10 @@ async def lists_index(
             select(models.MastodonList).order_by(models.MastodonList.id)
         )
     ).all()
-    return JSONResponse(
-        content=[serializers.serialize_list(row) for row in rows], status_code=200
-    )
+    return JSONResponse(content=[serializers.serialize_list(row) for row in rows])
 
 
-@router.post("/api/v1/lists", response_model=None)
+@router.post("/api/v1/lists")
 async def lists_create(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -3340,24 +3287,20 @@ async def lists_create(
     )
     db_session.add(mastodon_list)
     await db_session.commit()
-    return JSONResponse(
-        content=serializers.serialize_list(mastodon_list), status_code=200
-    )
+    return JSONResponse(content=serializers.serialize_list(mastodon_list))
 
 
-@router.get("/api/v1/lists/{list_id}", response_model=None)
+@router.get("/api/v1/lists/{list_id}")
 async def lists_show(
     list_id: str,
     db_session: AsyncSession = Depends(get_db_session),
     token_info: AccessTokenInfo = Depends(require_scope("read:lists")),
 ) -> JSONResponse:
     mastodon_list = await _resolve_list_or_404(db_session, list_id)
-    return JSONResponse(
-        content=serializers.serialize_list(mastodon_list), status_code=200
-    )
+    return JSONResponse(content=serializers.serialize_list(mastodon_list))
 
 
-@router.put("/api/v1/lists/{list_id}", response_model=None)
+@router.put("/api/v1/lists/{list_id}")
 async def lists_update(
     list_id: str,
     request: Request,
@@ -3390,12 +3333,10 @@ async def lists_update(
 
     mastodon_list.updated_at = now()
     await db_session.commit()
-    return JSONResponse(
-        content=serializers.serialize_list(mastodon_list), status_code=200
-    )
+    return JSONResponse(content=serializers.serialize_list(mastodon_list))
 
 
-@router.delete("/api/v1/lists/{list_id}", response_model=None)
+@router.delete("/api/v1/lists/{list_id}")
 async def lists_delete(
     list_id: str,
     db_session: AsyncSession = Depends(get_db_session),
@@ -3409,10 +3350,10 @@ async def lists_delete(
     )
     await db_session.delete(mastodon_list)
     await db_session.commit()
-    return JSONResponse(content={}, status_code=200)
+    return JSONResponse(content={})
 
 
-@router.get("/api/v1/lists/{list_id}/accounts", response_model=None)
+@router.get("/api/v1/lists/{list_id}/accounts")
 async def lists_accounts_index(
     list_id: str,
     request: Request,
@@ -3445,7 +3386,7 @@ async def lists_accounts_index(
         accounts = [
             await serializers.serialize_account(db_session, row.actor) for row in rows
         ]
-        return JSONResponse(content=accounts, status_code=200)
+        return JSONResponse(content=accounts)
 
     return await _paginated_actor_list(
         request,
@@ -3458,7 +3399,7 @@ async def lists_accounts_index(
     )
 
 
-@router.post("/api/v1/lists/{list_id}/accounts", response_model=None)
+@router.post("/api/v1/lists/{list_id}/accounts")
 async def lists_accounts_add(
     list_id: str,
     request: Request,
@@ -3501,10 +3442,10 @@ async def lists_accounts_add(
             models.MastodonListMember(list_id=mastodon_list.id, actor_id=actor.id)
         )
     await db_session.commit()
-    return JSONResponse(content={}, status_code=200)
+    return JSONResponse(content={})
 
 
-@router.delete("/api/v1/lists/{list_id}/accounts", response_model=None)
+@router.delete("/api/v1/lists/{list_id}/accounts")
 async def lists_accounts_remove(
     list_id: str,
     request: Request,
@@ -3525,10 +3466,10 @@ async def lists_accounts_remove(
             )
         )
         await db_session.commit()
-    return JSONResponse(content={}, status_code=200)
+    return JSONResponse(content={})
 
 
-@router.get("/api/v1/timelines/list/{list_id}", response_model=None)
+@router.get("/api/v1/timelines/list/{list_id}")
 async def timelines_list(
     list_id: str,
     request: Request,
@@ -3571,7 +3512,7 @@ async def timelines_list(
     return await _respond_with_status_list(request, db_session, items)
 
 
-@router.post("/api/v1/statuses/{status_id}/favourite", response_model=None)
+@router.post("/api/v1/statuses/{status_id}/favourite")
 async def statuses_favourite(
     status_id: str,
     request: Request,
@@ -3580,12 +3521,10 @@ async def statuses_favourite(
 ) -> JSONResponse:
     obj = await _get_visible_status_or_404(request, db_session, status_id)
     await send_like(db_session, obj.ap_id)
-    return JSONResponse(
-        content=await serializers.serialize_status(db_session, obj), status_code=200
-    )
+    return JSONResponse(content=await serializers.serialize_status(db_session, obj))
 
 
-@router.post("/api/v1/statuses/{status_id}/unfavourite", response_model=None)
+@router.post("/api/v1/statuses/{status_id}/unfavourite")
 async def statuses_unfavourite(
     status_id: str,
     request: Request,
@@ -3596,12 +3535,10 @@ async def statuses_unfavourite(
     like_ap_id = getattr(obj, "liked_via_outbox_object_ap_id", None)
     if like_ap_id:
         await send_undo(db_session, like_ap_id)
-    return JSONResponse(
-        content=await serializers.serialize_status(db_session, obj), status_code=200
-    )
+    return JSONResponse(content=await serializers.serialize_status(db_session, obj))
 
 
-@router.post("/api/v1/statuses/{status_id}/reblog", response_model=None)
+@router.post("/api/v1/statuses/{status_id}/reblog")
 async def statuses_reblog(
     status_id: str,
     request: Request,
@@ -3610,12 +3547,10 @@ async def statuses_reblog(
 ) -> JSONResponse:
     obj = await _get_visible_status_or_404(request, db_session, status_id)
     await send_announce(db_session, obj.ap_id)
-    return JSONResponse(
-        content=await serializers.serialize_status(db_session, obj), status_code=200
-    )
+    return JSONResponse(content=await serializers.serialize_status(db_session, obj))
 
 
-@router.post("/api/v1/statuses/{status_id}/unreblog", response_model=None)
+@router.post("/api/v1/statuses/{status_id}/unreblog")
 async def statuses_unreblog(
     status_id: str,
     request: Request,
@@ -3626,12 +3561,10 @@ async def statuses_unreblog(
     announce_ap_id = getattr(obj, "announced_via_outbox_object_ap_id", None)
     if announce_ap_id:
         await send_undo(db_session, announce_ap_id)
-    return JSONResponse(
-        content=await serializers.serialize_status(db_session, obj), status_code=200
-    )
+    return JSONResponse(content=await serializers.serialize_status(db_session, obj))
 
 
-@router.post("/api/v1/statuses/{status_id}/bookmark", response_model=None)
+@router.post("/api/v1/statuses/{status_id}/bookmark")
 async def statuses_bookmark(
     status_id: str,
     request: Request,
@@ -3645,12 +3578,10 @@ async def statuses_bookmark(
     if isinstance(obj, activitypub.models.InboxObject):
         obj.is_bookmarked = True
         await db_session.commit()
-    return JSONResponse(
-        content=await serializers.serialize_status(db_session, obj), status_code=200
-    )
+    return JSONResponse(content=await serializers.serialize_status(db_session, obj))
 
 
-@router.post("/api/v1/statuses/{status_id}/unbookmark", response_model=None)
+@router.post("/api/v1/statuses/{status_id}/unbookmark")
 async def statuses_unbookmark(
     status_id: str,
     request: Request,
@@ -3661,12 +3592,10 @@ async def statuses_unbookmark(
     if isinstance(obj, activitypub.models.InboxObject):
         obj.is_bookmarked = False
         await db_session.commit()
-    return JSONResponse(
-        content=await serializers.serialize_status(db_session, obj), status_code=200
-    )
+    return JSONResponse(content=await serializers.serialize_status(db_session, obj))
 
 
-@router.post("/api/v1/statuses/{status_id}/pin", response_model=None)
+@router.post("/api/v1/statuses/{status_id}/pin")
 async def statuses_pin(
     status_id: str,
     db_session: AsyncSession = Depends(get_db_session),
@@ -3691,12 +3620,10 @@ async def statuses_pin(
             )
     obj.is_pinned = True
     await db_session.commit()
-    return JSONResponse(
-        content=await serializers.serialize_status(db_session, obj), status_code=200
-    )
+    return JSONResponse(content=await serializers.serialize_status(db_session, obj))
 
 
-@router.post("/api/v1/statuses/{status_id}/unpin", response_model=None)
+@router.post("/api/v1/statuses/{status_id}/unpin")
 async def statuses_unpin(
     status_id: str,
     db_session: AsyncSession = Depends(get_db_session),
@@ -3709,12 +3636,10 @@ async def statuses_unpin(
         )
     obj.is_pinned = False
     await db_session.commit()
-    return JSONResponse(
-        content=await serializers.serialize_status(db_session, obj), status_code=200
-    )
+    return JSONResponse(content=await serializers.serialize_status(db_session, obj))
 
 
-@router.post("/api/v1/statuses/{status_id}/mute", response_model=None)
+@router.post("/api/v1/statuses/{status_id}/mute")
 async def statuses_mute(
     status_id: str,
     request: Request,
@@ -3731,12 +3656,10 @@ async def statuses_mute(
     if existing is None:
         db_session.add(models.MutedConversation(conversation=conversation))
         await db_session.commit()
-    return JSONResponse(
-        content=await serializers.serialize_status(db_session, obj), status_code=200
-    )
+    return JSONResponse(content=await serializers.serialize_status(db_session, obj))
 
 
-@router.post("/api/v1/statuses/{status_id}/unmute", response_model=None)
+@router.post("/api/v1/statuses/{status_id}/unmute")
 async def statuses_unmute(
     status_id: str,
     request: Request,
@@ -3751,12 +3674,10 @@ async def statuses_unmute(
         )
     )
     await db_session.commit()
-    return JSONResponse(
-        content=await serializers.serialize_status(db_session, obj), status_code=200
-    )
+    return JSONResponse(content=await serializers.serialize_status(db_session, obj))
 
 
-@router.get("/api/v1/polls/{poll_id}", response_model=None)
+@router.get("/api/v1/polls/{poll_id}")
 async def polls_show(
     poll_id: str,
     request: Request,
@@ -3766,10 +3687,10 @@ async def polls_show(
     poll = serializers.serialize_poll(obj, poll_id)
     if poll is None:
         raise MastodonError(404, "not_found", "poll not found")
-    return JSONResponse(content=poll, status_code=200)
+    return JSONResponse(content=poll)
 
 
-@router.post("/api/v1/polls/{poll_id}/votes", response_model=None)
+@router.post("/api/v1/polls/{poll_id}/votes")
 async def polls_vote(
     poll_id: str,
     request: Request,
@@ -3826,10 +3747,10 @@ async def polls_vote(
     poll = serializers.serialize_poll(obj, poll_id)
     if poll is None:
         raise MastodonError(404, "not_found", "poll not found")
-    return JSONResponse(content=poll, status_code=200)
+    return JSONResponse(content=poll)
 
 
-@router.get("/api/v1/bookmarks", response_model=None)
+@router.get("/api/v1/bookmarks")
 async def bookmarks_index(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -3860,7 +3781,7 @@ async def bookmarks_index(
     return await _respond_with_status_list(request, db_session, items)
 
 
-@router.get("/api/v1/favourites", response_model=None)
+@router.get("/api/v1/favourites")
 async def favourites_index(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -3927,7 +3848,7 @@ async def _resolve_account_or_404(
     return actor
 
 
-@router.post("/api/v1/accounts/{account_id}/follow", response_model=None)
+@router.post("/api/v1/accounts/{account_id}/follow")
 async def accounts_follow(
     account_id: str,
     request: Request,
@@ -3967,11 +3888,10 @@ async def accounts_follow(
 
     return JSONResponse(
         content=await _relationship_for_actor(db_session, account_id, actor),
-        status_code=200,
     )
 
 
-@router.post("/api/v1/accounts/{account_id}/unfollow", response_model=None)
+@router.post("/api/v1/accounts/{account_id}/unfollow")
 async def accounts_unfollow(
     account_id: str,
     db_session: AsyncSession = Depends(get_db_session),
@@ -3983,11 +3903,10 @@ async def accounts_unfollow(
         await send_undo(db_session, follow_activity.ap_id)
     return JSONResponse(
         content=await _relationship_for_actor(db_session, account_id, actor),
-        status_code=200,
     )
 
 
-@router.post("/api/v1/accounts/{account_id}/remove_from_followers", response_model=None)
+@router.post("/api/v1/accounts/{account_id}/remove_from_followers")
 async def accounts_remove_from_followers(
     account_id: str,
     db_session: AsyncSession = Depends(get_db_session),
@@ -4003,11 +3922,10 @@ async def accounts_remove_from_followers(
     await remove_follower(db_session, actor)
     return JSONResponse(
         content=await _relationship_for_actor(db_session, account_id, actor),
-        status_code=200,
     )
 
 
-@router.post("/api/v1/accounts/{account_id}/block", response_model=None)
+@router.post("/api/v1/accounts/{account_id}/block")
 async def accounts_block(
     account_id: str,
     db_session: AsyncSession = Depends(get_db_session),
@@ -4018,11 +3936,10 @@ async def accounts_block(
         await send_block(db_session, actor.ap_id)
     return JSONResponse(
         content=await _relationship_for_actor(db_session, account_id, actor),
-        status_code=200,
     )
 
 
-@router.post("/api/v1/accounts/{account_id}/unblock", response_model=None)
+@router.post("/api/v1/accounts/{account_id}/unblock")
 async def accounts_unblock(
     account_id: str,
     db_session: AsyncSession = Depends(get_db_session),
@@ -4033,11 +3950,10 @@ async def accounts_unblock(
         await send_unblock(db_session, actor.ap_id)
     return JSONResponse(
         content=await _relationship_for_actor(db_session, account_id, actor),
-        status_code=200,
     )
 
 
-@router.get("/api/v1/blocks", response_model=None)
+@router.get("/api/v1/blocks")
 async def blocks_index(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -4069,7 +3985,7 @@ async def blocks_index(
     return await _respond_with_account_list(request, db_session, actors)
 
 
-@router.get("/api/v1/mutes", response_model=None)
+@router.get("/api/v1/mutes")
 async def mutes_index(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -4097,7 +4013,7 @@ async def mutes_index(
     return await _respond_with_account_list(request, db_session, actors)
 
 
-@router.post("/api/v1/accounts/{account_id}/mute", response_model=None)
+@router.post("/api/v1/accounts/{account_id}/mute")
 async def accounts_mute(
     account_id: str,
     request: Request,
@@ -4120,11 +4036,10 @@ async def accounts_mute(
     await mute_actor(db_session, actor, duration=duration, notifications=notifications)
     return JSONResponse(
         content=await _relationship_for_actor(db_session, account_id, actor),
-        status_code=200,
     )
 
 
-@router.post("/api/v1/accounts/{account_id}/unmute", response_model=None)
+@router.post("/api/v1/accounts/{account_id}/unmute")
 async def accounts_unmute(
     account_id: str,
     db_session: AsyncSession = Depends(get_db_session),
@@ -4135,11 +4050,10 @@ async def accounts_unmute(
         await unmute_actor(db_session, actor)
     return JSONResponse(
         content=await _relationship_for_actor(db_session, account_id, actor),
-        status_code=200,
     )
 
 
-@router.get("/api/v1/domain_blocks", response_model=None)
+@router.get("/api/v1/domain_blocks")
 async def domain_blocks_index(
     token_info: AccessTokenInfo = Depends(require_scope("read:blocks")),
 ) -> JSONResponse:
@@ -4154,11 +4068,10 @@ async def domain_blocks_index(
         content=sorted(
             blocked_server.hostname for blocked_server in config.CONFIG.blocked_servers
         ),
-        status_code=200,
     )
 
 
-@router.post("/api/v1/accounts/{account_id}/note", response_model=None)
+@router.post("/api/v1/accounts/{account_id}/note")
 async def accounts_note(
     account_id: str,
     request: Request,
@@ -4175,7 +4088,6 @@ async def accounts_note(
 
     return JSONResponse(
         content=await _relationship_for_actor(db_session, account_id, actor),
-        status_code=200,
     )
 
 
@@ -4198,7 +4110,7 @@ async def _pending_follower_notification(
     ).first()
 
 
-@router.get("/api/v1/follow_requests", response_model=None)
+@router.get("/api/v1/follow_requests")
 async def follow_requests_index(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -4224,10 +4136,10 @@ async def follow_requests_index(
         for notif in notifications
         if notif.actor is not None
     ]
-    return JSONResponse(content=accounts, status_code=200)
+    return JSONResponse(content=accounts)
 
 
-@router.post("/api/v1/follow_requests/{account_id}/authorize", response_model=None)
+@router.post("/api/v1/follow_requests/{account_id}/authorize")
 async def follow_requests_authorize(
     account_id: str,
     db_session: AsyncSession = Depends(get_db_session),
@@ -4241,11 +4153,10 @@ async def follow_requests_authorize(
     await send_accept(db_session, notif.id)
     return JSONResponse(
         content=await _relationship_for_actor(db_session, account_id, actor),
-        status_code=200,
     )
 
 
-@router.post("/api/v1/follow_requests/{account_id}/reject", response_model=None)
+@router.post("/api/v1/follow_requests/{account_id}/reject")
 async def follow_requests_reject(
     account_id: str,
     db_session: AsyncSession = Depends(get_db_session),
@@ -4259,7 +4170,6 @@ async def follow_requests_reject(
     await send_reject(db_session, notif.id)
     return JSONResponse(
         content=await _relationship_for_actor(db_session, account_id, actor),
-        status_code=200,
     )
 
 
@@ -4376,7 +4286,7 @@ async def _resolve_remote(db_session: AsyncSession, query: str):
         return None
 
 
-@router.get("/api/v2/search", response_model=None)
+@router.get("/api/v2/search")
 async def search(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -4448,5 +4358,4 @@ async def search(
 
     return JSONResponse(
         content={"accounts": accounts, "statuses": statuses, "hashtags": hashtags},
-        status_code=200,
     )

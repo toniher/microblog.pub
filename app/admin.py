@@ -288,7 +288,7 @@ def _new_form_context(
     }
 
 
-@router.get("/new", response_model=None)
+@router.get("/new")
 async def admin_new(
     request: Request,
     query: str | None = None,
@@ -361,7 +361,7 @@ async def admin_new(
     )
 
 
-@router.get("/bookmarks", response_model=None)
+@router.get("/bookmarks")
 async def admin_bookmarks(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -408,7 +408,7 @@ async def admin_bookmarks(
     )
 
 
-@router.get("/blocks", response_model=None)
+@router.get("/blocks")
 async def admin_blocks(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -462,7 +462,7 @@ async def admin_blocks(
     )
 
 
-@router.get("/mutes", response_model=None)
+@router.get("/mutes")
 async def admin_mutes(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -591,7 +591,7 @@ async def _render_inbox_page(
     )
 
 
-@router.get("/stream", response_model=None)
+@router.get("/stream")
 async def admin_stream(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -613,7 +613,7 @@ async def admin_stream(
     )
 
 
-@router.get("/inbox", response_model=None)
+@router.get("/inbox")
 async def admin_inbox(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -650,7 +650,7 @@ async def admin_inbox(
     )
 
 
-@router.get("/direct_messages", response_model=None)
+@router.get("/direct_messages")
 async def admin_direct_messages(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -847,7 +847,7 @@ async def admin_direct_messages(
     )
 
 
-@router.get("/outbox", response_model=None)
+@router.get("/outbox")
 async def admin_outbox(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -927,7 +927,7 @@ async def admin_outbox(
     )
 
 
-@router.get("/notifications", response_model=None)
+@router.get("/notifications")
 async def get_notifications(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -1014,7 +1014,7 @@ async def get_notifications(
     return tpl_resp
 
 
-@router.get("/object", response_model=None)
+@router.get("/object")
 async def admin_object(
     request: Request,
     ap_id: str,
@@ -1046,7 +1046,7 @@ async def admin_object(
     )
 
 
-@router.get("/profile", response_model=None)
+@router.get("/profile")
 async def admin_profile(
     request: Request,
     actor_id: str,
@@ -1129,7 +1129,7 @@ async def admin_profile(
     )
 
 
-@router.post("/actions/force_delete", response_model=None)
+@router.post("/actions/force_delete")
 async def admin_actions_force_delete(
     request: Request,
     ap_object_id: str = Form(),
@@ -1153,7 +1153,7 @@ async def admin_actions_force_delete(
     return RedirectResponse(redirect_url, status_code=302)
 
 
-@router.post("/actions/force_delete_webmention", response_model=None)
+@router.post("/actions/force_delete_webmention")
 async def admin_actions_force_delete_webmention(
     request: Request,
     webmention_id: int = Form(),
@@ -1189,7 +1189,7 @@ async def admin_actions_force_delete_webmention(
     return RedirectResponse(redirect_url, status_code=302)
 
 
-@router.post("/actions/follow", response_model=None)
+@router.post("/actions/follow")
 async def admin_actions_follow(
     request: Request,
     ap_actor_id: str = Form(),
@@ -1202,7 +1202,7 @@ async def admin_actions_follow(
     return RedirectResponse(redirect_url, status_code=302)
 
 
-@router.post("/actions/block", response_model=None)
+@router.post("/actions/block")
 async def admin_actions_block(
     request: Request,
     ap_actor_id: str = Form(),
@@ -1214,7 +1214,7 @@ async def admin_actions_block(
     return RedirectResponse(redirect_url, status_code=302)
 
 
-@router.post("/actions/unblock", response_model=None)
+@router.post("/actions/unblock")
 async def admin_actions_unblock(
     request: Request,
     ap_actor_id: str = Form(),
@@ -1227,7 +1227,7 @@ async def admin_actions_unblock(
     return RedirectResponse(redirect_url, status_code=302)
 
 
-@router.post("/actions/mute", response_model=None)
+@router.post("/actions/mute")
 async def admin_actions_mute(
     request: Request,
     ap_actor_id: str = Form(),
@@ -1243,7 +1243,7 @@ async def admin_actions_mute(
     return RedirectResponse(redirect_url, status_code=302)
 
 
-@router.post("/actions/unmute", response_model=None)
+@router.post("/actions/unmute")
 async def admin_actions_unmute(
     request: Request,
     ap_actor_id: str = Form(),
@@ -1257,7 +1257,7 @@ async def admin_actions_unmute(
     return RedirectResponse(redirect_url, status_code=302)
 
 
-@router.post("/actions/hide_announces", response_model=None)
+@router.post("/actions/hide_announces")
 async def admin_actions_hide_announces(
     request: Request,
     ap_actor_id: str = Form(),
@@ -1271,7 +1271,7 @@ async def admin_actions_hide_announces(
     return RedirectResponse(redirect_url, status_code=302)
 
 
-@router.post("/actions/show_announces", response_model=None)
+@router.post("/actions/show_announces")
 async def admin_actions_show_announces(
     request: Request,
     ap_actor_id: str = Form(),
@@ -1285,7 +1285,7 @@ async def admin_actions_show_announces(
     return RedirectResponse(redirect_url, status_code=302)
 
 
-@router.post("/actions/notify_on", response_model=None)
+@router.post("/actions/notify_on")
 async def admin_actions_notify_on(
     request: Request,
     ap_actor_id: str = Form(),
@@ -1299,7 +1299,7 @@ async def admin_actions_notify_on(
     return RedirectResponse(redirect_url, status_code=302)
 
 
-@router.post("/actions/notify_off", response_model=None)
+@router.post("/actions/notify_off")
 async def admin_actions_notify_off(
     request: Request,
     ap_actor_id: str = Form(),
@@ -1313,7 +1313,7 @@ async def admin_actions_notify_off(
     return RedirectResponse(redirect_url, status_code=302)
 
 
-@router.post("/actions/delete", response_model=None)
+@router.post("/actions/delete")
 async def admin_actions_delete(
     request: Request,
     ap_object_id: str = Form(),
@@ -1325,7 +1325,7 @@ async def admin_actions_delete(
     return RedirectResponse(redirect_url, status_code=302)
 
 
-@router.post("/actions/accept_incoming_follow", response_model=None)
+@router.post("/actions/accept_incoming_follow")
 async def admin_actions_accept_incoming_follow(
     request: Request,
     notification_id: int = Form(),
@@ -1337,7 +1337,7 @@ async def admin_actions_accept_incoming_follow(
     return RedirectResponse(redirect_url, status_code=302)
 
 
-@router.post("/actions/reject_incoming_follow", response_model=None)
+@router.post("/actions/reject_incoming_follow")
 async def admin_actions_reject_incoming_follow(
     request: Request,
     notification_id: int = Form(),
@@ -1349,7 +1349,7 @@ async def admin_actions_reject_incoming_follow(
     return RedirectResponse(redirect_url, status_code=302)
 
 
-@router.post("/actions/accept_incoming_quote_request", response_model=None)
+@router.post("/actions/accept_incoming_quote_request")
 async def admin_actions_accept_incoming_quote_request(
     request: Request,
     notification_id: int = Form(),
@@ -1361,7 +1361,7 @@ async def admin_actions_accept_incoming_quote_request(
     return RedirectResponse(redirect_url, status_code=302)
 
 
-@router.post("/actions/reject_incoming_quote_request", response_model=None)
+@router.post("/actions/reject_incoming_quote_request")
 async def admin_actions_reject_incoming_quote_request(
     request: Request,
     notification_id: int = Form(),
@@ -1373,7 +1373,7 @@ async def admin_actions_reject_incoming_quote_request(
     return RedirectResponse(redirect_url, status_code=302)
 
 
-@router.post("/actions/revoke_quote", response_model=None)
+@router.post("/actions/revoke_quote")
 async def admin_actions_revoke_quote(
     request: Request,
     ap_object_id: str = Form(),
@@ -1385,7 +1385,7 @@ async def admin_actions_revoke_quote(
     return RedirectResponse(redirect_url, status_code=302)
 
 
-@router.post("/actions/like", response_model=None)
+@router.post("/actions/like")
 async def admin_actions_like(
     request: Request,
     ap_object_id: str = Form(),
@@ -1397,7 +1397,7 @@ async def admin_actions_like(
     return RedirectResponse(redirect_url, status_code=302)
 
 
-@router.post("/actions/undo", response_model=None)
+@router.post("/actions/undo")
 async def admin_actions_undo(
     request: Request,
     ap_object_id: str = Form(),
@@ -1409,7 +1409,7 @@ async def admin_actions_undo(
     return RedirectResponse(redirect_url, status_code=302)
 
 
-@router.post("/actions/announce", response_model=None)
+@router.post("/actions/announce")
 async def admin_actions_announce(
     request: Request,
     ap_object_id: str = Form(),
@@ -1421,7 +1421,7 @@ async def admin_actions_announce(
     return RedirectResponse(redirect_url, status_code=302)
 
 
-@router.post("/actions/bookmark", response_model=None)
+@router.post("/actions/bookmark")
 async def admin_actions_bookmark(
     request: Request,
     ap_object_id: str = Form(),
@@ -1439,7 +1439,7 @@ async def admin_actions_bookmark(
     return RedirectResponse(redirect_url, status_code=302)
 
 
-@router.post("/actions/unbookmark", response_model=None)
+@router.post("/actions/unbookmark")
 async def admin_actions_unbookmark(
     request: Request,
     ap_object_id: str = Form(),
@@ -1455,7 +1455,7 @@ async def admin_actions_unbookmark(
     return RedirectResponse(redirect_url, status_code=302)
 
 
-@router.post("/actions/fetch_replies", response_model=None)
+@router.post("/actions/fetch_replies")
 async def admin_actions_fetch_replies(
     request: Request,
     ap_object_id: str = Form(),
@@ -1470,7 +1470,7 @@ async def admin_actions_fetch_replies(
     return RedirectResponse(redirect_url, status_code=302)
 
 
-@router.post("/actions/pin", response_model=None)
+@router.post("/actions/pin")
 async def admin_actions_pin(
     request: Request,
     ap_object_id: str = Form(),
@@ -1496,7 +1496,7 @@ async def admin_actions_pin(
     return RedirectResponse(redirect_url, status_code=302)
 
 
-@router.post("/actions/unpin", response_model=None)
+@router.post("/actions/unpin")
 async def admin_actions_unpin(
     request: Request,
     ap_object_id: str = Form(),
@@ -2007,7 +2007,7 @@ def _build_diff(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-@router.get("/edit_history/{public_id}", response_model=None)
+@router.get("/edit_history/{public_id}")
 async def admin_edit_history(
     request: Request,
     public_id: str,
@@ -2061,7 +2061,7 @@ async def admin_edit_history(
     )
 
 
-@router.post("/actions/vote", response_model=None)
+@router.post("/actions/vote")
 async def admin_actions_vote(
     request: Request,
     redirect_url: str = Form(),
@@ -2129,7 +2129,7 @@ async def login_validation(
     return resp
 
 
-@router.get("/logout", response_model=None)
+@router.get("/logout")
 async def logout(
     request: Request,
 ) -> RedirectResponse:
