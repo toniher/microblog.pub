@@ -101,7 +101,7 @@ async def post_micropub_endpoint(
                     return insufficient_scope_resp
                 logger.info(f"Deleting object {outbox_object.ap_id}")
                 await send_delete(db_session, outbox_object.ap_id)  # type: ignore
-                return JSONResponse(content={}, status_code=200)
+                return JSONResponse(content={})
 
             elif form_data["action"] == "update":
                 if "update" not in access_token_info.scopes:
@@ -114,7 +114,7 @@ async def post_micropub_endpoint(
                     await send_update(
                         db_session, outbox_object.ap_id, form_data["replace"]["content"]  # type: ignore
                     )
-                    return JSONResponse(content={}, status_code=200)
+                    return JSONResponse(content={})
                 else:
                     return JSONResponse(
                         content={

@@ -62,7 +62,7 @@ class OAuthRegisterClientRequest(BaseModel):
     scope: str | None = None
 
 
-@router.post("/oauth/register", response_model=None)
+@router.post("/oauth/register")
 async def oauth_registration_endpoint(
     register_client_request: OAuthRegisterClientRequest,
     db_session: AsyncSession = Depends(get_db_session),
@@ -99,7 +99,7 @@ async def oauth_registration_endpoint(
     )
 
 
-@router.get("/auth", response_model=None)
+@router.get("/auth")
 async def indieauth_authorization_endpoint(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -174,7 +174,7 @@ async def _validate_redirect_uri(
         raise HTTPException(status_code=400, detail="redirect_uri_mismatch")
 
 
-@router.post("/admin/indieauth", response_model=None)
+@router.post("/admin/indieauth")
 async def indieauth_flow(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -298,7 +298,7 @@ def _verify_pkce(
     return is_valid
 
 
-@router.post("/auth", response_model=None)
+@router.post("/auth")
 async def indieauth_reedem_auth_code(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -329,7 +329,6 @@ async def indieauth_reedem_auth_code(
             content={
                 "me": config.ID + "/",
             },
-            status_code=200,
         )
     else:
         return JSONResponse(
@@ -449,7 +448,7 @@ async def issue_access_token(
     return access_token
 
 
-@router.post("/token", response_model=None)
+@router.post("/token")
 async def indieauth_token_endpoint(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -502,7 +501,6 @@ async def indieauth_token_endpoint(
                 access_token.created_at.replace(tzinfo=timezone.utc).timestamp()
             ),
         },
-        status_code=200,
     )
 
 
@@ -625,7 +623,7 @@ async def enforce_access_token(
     return maybe_access_token_info
 
 
-@router.post("/revoke_token", response_model=None)
+@router.post("/revoke_token")
 async def indieauth_revocation_endpoint(
     request: Request,
     token: str = Form(),
@@ -650,11 +648,10 @@ async def indieauth_revocation_endpoint(
 
     return JSONResponse(
         content={},
-        status_code=200,
     )
 
 
-@router.post("/token_introspection", response_model=None)
+@router.post("/token_introspection")
 async def oauth_introspection_endpoint(
     request: Request,
     credentials: HTTPBasicCredentials = Depends(basic_auth),
@@ -705,5 +702,4 @@ async def oauth_introspection_endpoint(
                 ).timestamp()
             ),
         },
-        status_code=200,
     )

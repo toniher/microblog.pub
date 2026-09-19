@@ -264,7 +264,7 @@ class _CachedStaticFiles(StaticFiles):
 app.mount("/static", _CachedStaticFiles(directory="app/static"), name="static")
 
 
-@app.get("/img/{filename}", response_model=None)
+@app.get("/img/{filename}")
 def local_actor_image(filename: str) -> FileResponse:
     """Serve the local actor's avatar/header image and the favicon.
 
@@ -486,7 +486,7 @@ async def articles(
     )
 
 
-@app.get("/about", response_model=None)
+@app.get("/about")
 async def about(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -726,7 +726,7 @@ async def following(
     )
 
 
-@app.get("/outbox", response_model=None)
+@app.get("/outbox")
 async def outbox(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -757,7 +757,7 @@ async def outbox(
     )
 
 
-@app.post("/outbox", response_model=None)
+@app.post("/outbox")
 async def post_outbox(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -801,7 +801,7 @@ async def post_outbox(
     )
 
 
-@app.get("/featured", response_model=None)
+@app.get("/featured")
 async def featured(
     db_session: AsyncSession = Depends(get_db_session),
     _: httpsig.HTTPSigInfo = Depends(httpsig.httpsig_checker),
@@ -832,7 +832,7 @@ async def featured(
     )
 
 
-@app.get("/featured_tags", response_model=None)
+@app.get("/featured_tags")
 async def featured_tags(
     _: httpsig.HTTPSigInfo = Depends(httpsig.httpsig_checker),
 ) -> ActivityPubResponse:
@@ -1173,7 +1173,7 @@ async def article_by_slug(
     return await _render_outbox_object_page(request, db_session, maybe_object)
 
 
-@app.get("/o/{public_id}/activity", response_model=None)
+@app.get("/o/{public_id}/activity")
 async def outbox_activity_by_public_id(
     public_id: str,
     request: Request,
@@ -1223,7 +1223,7 @@ async def _get_outbox_object_for_ap_collection(
     return maybe_object
 
 
-@app.get("/o/{public_id}/replies", response_model=None)
+@app.get("/o/{public_id}/replies")
 async def outbox_object_replies(
     public_id: str,
     request: Request,
@@ -1253,7 +1253,7 @@ async def outbox_object_replies(
     )
 
 
-@app.get("/o/{public_id}/likes", response_model=None)
+@app.get("/o/{public_id}/likes")
 async def outbox_object_likes(
     public_id: str,
     request: Request,
@@ -1275,7 +1275,7 @@ async def outbox_object_likes(
     )
 
 
-@app.get("/o/{public_id}/shares", response_model=None)
+@app.get("/o/{public_id}/shares")
 async def outbox_object_shares(
     public_id: str,
     request: Request,
@@ -1374,7 +1374,7 @@ async def tag_by_name(
     )
 
 
-@app.get("/e/{name}", response_model=None)
+@app.get("/e/{name}")
 def emoji_by_name(name: str) -> ActivityPubResponse:
     try:
         emoji = EMOJIS_BY_NAME[f":{name}:"]
@@ -1384,7 +1384,7 @@ def emoji_by_name(name: str) -> ActivityPubResponse:
     return ActivityPubResponse({"@context": ap.AS_EXTENDED_CTX, **emoji})
 
 
-@app.get("/inbox", response_model=None)
+@app.get("/inbox")
 async def get_inbox(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -1456,7 +1456,7 @@ async def get_inbox(
     return ActivityPubResponse(collection_page)
 
 
-@app.post("/inbox", response_model=None)
+@app.post("/inbox")
 async def inbox(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -1469,7 +1469,7 @@ async def inbox(
     return Response(status_code=202)
 
 
-@app.get("/remote_follow", response_model=None)
+@app.get("/remote_follow")
 async def get_remote_follow(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -1482,7 +1482,7 @@ async def get_remote_follow(
     )
 
 
-@app.post("/remote_follow", response_model=None)
+@app.post("/remote_follow")
 async def post_remote_follow(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -1505,7 +1505,7 @@ async def post_remote_follow(
     )
 
 
-@app.get("/remote_interaction", response_model=None)
+@app.get("/remote_interaction")
 async def remote_interaction(
     request: Request,
     ap_id: str,
@@ -1526,7 +1526,7 @@ async def remote_interaction(
     )
 
 
-@app.post("/remote_interaction", response_model=None)
+@app.post("/remote_interaction")
 async def post_remote_interaction(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -1550,7 +1550,7 @@ async def post_remote_interaction(
     )
 
 
-@app.get("/.well-known/webfinger", response_model=None)
+@app.get("/.well-known/webfinger")
 async def wellknown_webfinger(resource: str) -> JSONResponse:
     """Exposes/servers WebFinger data."""
     if resource not in [
@@ -1797,7 +1797,7 @@ def _resize_image(
     return resized_content, resized_mimetype
 
 
-@app.get("/proxy/media/{exp}/{sig}/{encoded_url}/{size}", response_model=None)
+@app.get("/proxy/media/{exp}/{sig}/{encoded_url}/{size}")
 async def serve_proxy_media_resized(
     request: Request,
     exp: int,
@@ -2080,7 +2080,7 @@ async def rss_feed(
     )
 
 
-@app.get("/feed.atom", response_model=None)
+@app.get("/feed.atom")
 async def atom_feed(
     db_session: AsyncSession = Depends(get_db_session),
 ) -> PlainTextResponse:

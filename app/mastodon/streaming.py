@@ -1062,6 +1062,6 @@ async def streaming_endpoint(websocket: WebSocket) -> None:
             await websocket.close()
 
 
-@router.get("/api/v1/streaming/health", response_model=None)
+@router.get("/api/v1/streaming/health")
 async def streaming_health() -> PlainTextResponse:
     return PlainTextResponse("OK")

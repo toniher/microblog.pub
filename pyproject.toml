@@ -55,7 +55,6 @@ invoke = "^2.2"
 libsass = ">=0.22,<1.0"
 boussole = "^2.0.0"
 uvicorn = {extras = ["standard"], version = ">=0.30,<1.0"}
-Brotli = "^1.0.9"
 mistletoe = "^1.2.1"
 Pebble = "^5.0.2"
 Babel = "^2.16"

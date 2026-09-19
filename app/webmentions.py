@@ -46,7 +46,7 @@ def is_source_containing_target(source_html: str, target_url: str) -> bool:
     return False
 
 
-@router.post("/webmentions", response_model=None)
+@router.post("/webmentions")
 async def webmention_endpoint(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
@@ -150,7 +150,7 @@ async def webmention_endpoint(
                 detail="target not found in source",
             )
         else:
-            return JSONResponse(content={}, status_code=200)
+            return JSONResponse(content={})
 
     webmention_type = models.WebmentionType.UNKNOWN
     webmention: models.Webmention
@@ -214,7 +214,7 @@ async def webmention_endpoint(
     await _handle_webmention_side_effects(db_session, webmention, mentioned_object)
     await db_session.commit()
 
-    return JSONResponse(content={}, status_code=200)
+    return JSONResponse(content={})
 
 
 async def _handle_webmention_side_effects(

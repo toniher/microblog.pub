@@ -14,9 +14,9 @@ T = TypeVar("T")
 
 class Worker(Generic[T]):
     # How many messages to fetch per poll. Subclasses that want batched,
-    # concurrent processing raise this and override `get_next_messages`/
-    # `process_messages`; a class attr (rather than a constructor arg) so
-    # tests can shrink `_idle_sleep` on a subclass without touching __init__.
+    # concurrent processing raise this; a class attr (rather than a
+    # constructor arg) so tests can shrink `_idle_sleep` on a subclass
+    # without touching __init__.
     batch_size: int = 1
     _idle_sleep: float = 2.0
 
@@ -24,21 +24,13 @@ class Worker(Generic[T]):
         self._loop = asyncio.get_event_loop()
         self._stop_event = asyncio.Event()
 
-    async def process_message(self, db_session: AsyncSession, message: T) -> None:
-        raise NotImplementedError
-
-    async def get_next_message(self, db_session: AsyncSession) -> T | None:
-        raise NotImplementedError
-
     async def get_next_messages(self, db_session: AsyncSession, limit: int) -> list[T]:
-        next_message = await self.get_next_message(db_session)
-        return [next_message] if next_message else []
+        raise NotImplementedError
 
     async def process_messages(
         self, db_session: AsyncSession, messages: list[T]
     ) -> None:
-        for message in messages:
-            await self.process_message(db_session, message)
+        raise NotImplementedError
 
     async def startup(self, db_session: AsyncSession) -> None:
         return None

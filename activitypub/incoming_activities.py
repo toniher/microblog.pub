@@ -119,18 +119,21 @@ async def process_next_incoming_activity(
 
 
 class IncomingActivityWorker(Worker[activitypub.models.IncomingActivity]):
-    async def process_message(
+    async def get_next_messages(
         self,
         db_session: AsyncSession,
-        next_activity: activitypub.models.IncomingActivity,
-    ) -> None:
-        await process_next_incoming_activity(db_session, next_activity)
+        limit: int,
+    ) -> list[activitypub.models.IncomingActivity]:
+        next_activity = await fetch_next_incoming_activity(db_session)
+        return [next_activity] if next_activity else []
 
-    async def get_next_message(
+    async def process_messages(
         self,
         db_session: AsyncSession,
-    ) -> activitypub.models.IncomingActivity | None:
-        return await fetch_next_incoming_activity(db_session)
+        messages: list[activitypub.models.IncomingActivity],
+    ) -> None:
+        for next_activity in messages:
+            await process_next_incoming_activity(db_session, next_activity)
 
 
 async def loop() -> None:
