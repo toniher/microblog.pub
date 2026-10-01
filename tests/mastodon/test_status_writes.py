@@ -238,7 +238,7 @@ async def test_statuses_quote_state_revoked(
 
     # A revoked quote reports "revoked" with no `quoted_status`, and needs no
     # serializer change to do it: `OutboxObject.quote_state` passes straight
-    # through `_serialize_quote`.
+    # through `serialize_quote`.
     quoting.quote_state = "revoked"
     await async_db_session.commit()
 

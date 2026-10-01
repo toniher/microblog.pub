@@ -72,9 +72,18 @@ forgotten on the device.
   declined. A stamp you've granted can be revoked from `/admin`, which sends a
   `Delete` federating the revocation; the quote then reports `revoked` here (or,
   for a quote of a remote post, `unauthorized` — the inbox side has no dedicated
-  revoked state). **Not supported**: the client-API
-  `POST /api/v1/statuses/:id/quotes/:quoting_status_id/revoke` endpoint (Mastodon
-  4.5.0), since no client acts on it while this instance advertises 4.3.0.
+  revoked state). Mastodon 4.5's client surface is there too: `quoted_status_id`
+  (the official name for `quote_id`, which still works), `quotes_count` and
+  `quote_approval` on every status (for your own posts derived from
+  `quote_policy`, for remote ones from the `interactionPolicy` they publish),
+  `GET /api/v1/statuses/:id/quotes`, `POST .../quotes/:quoting_status_id/revoke`
+  (the API twin of the `/admin` button), and the policy as
+  `posting:default:quote_policy` / `source[quote_policy]` (`manual` reports as
+  `nobody`, since Mastodon has no approval-queue default). **Not supported**:
+  choosing a policy per post. `quote_approval_policy` on create/edit is refused
+  with a `422` unless it equals the configured policy (ignored on private/direct
+  posts, as in Mastodon), and `PUT /api/v1/statuses/:id/interaction_policy`
+  doesn't exist. Nor is the `quoted_update` notification.
 - **Link previews** — posts containing a link carry a Mastodon `card`, built from
   the OpenGraph metadata this instance already scrapes for its own web UI, so
   clients render the same preview box. The thumbnail goes through the media
@@ -237,6 +246,11 @@ instead of crashing:
 
 - **Filters, suggestions, the directory, trends, and familiar
   followers** — always empty.
+- **Profile curation (Mastodon 4.4)** — endorsing accounts
+  (`/accounts/:id/endorse`, `/unendorse`) and featuring hashtags
+  (`/tags/:id/feature`, `/unfeature`) 404: there is no storage behind them
+  (featured tags come from `profile.toml`) and no one to curate for. Likewise
+  `delete_media` on `DELETE /api/v1/statuses/:id` is ignored.
 - **Federated peers** (`/api/v1/instance/peers`) — always empty. This one's a
   deliberate privacy choice rather than a missing feature: the data exists,
   but publishing which servers you've federated with is worth opting out of.

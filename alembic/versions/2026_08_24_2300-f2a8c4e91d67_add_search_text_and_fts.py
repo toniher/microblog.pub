@@ -19,7 +19,7 @@ closes both gaps.
 `activitypub/models.py`, alongside the mapper events that keep it in sync on
 every future write) needs a one-time backfill here for existing rows --
 normalization is Python, it can't be expressed in SQL. Batched via
-`op.get_bind()`, following `b28c0551c236`'s precedent for a migration-time
+`op.get_bind()` over table stubs, following `b28c0551c236`'s precedent for a migration-time
 Python data backfill.
 
 Plain `op.add_column`, not `batch_alter_table`, for `inbox`/`outbox`: batch
@@ -50,7 +50,6 @@ Create Date: 2026-08-24 23:00:00.000000+00:00
 """
 
 import sqlalchemy as sa
-from sqlalchemy.orm.session import Session
 
 from alembic import op
 
@@ -84,36 +83,41 @@ def upgrade() -> None:
 
 
 def _backfill_search_text() -> None:
-    from activitypub.models import Actor
-    from activitypub.models import InboxObject
-    from activitypub.models import OutboxObject
+    # Table stubs rather than the live ORM models: those map every column
+    # later migrations add (`outbox.alias`, ...), so a query through them
+    # fails on any DB being upgraded from before those revisions.
     from app.utils.search_text import actor_search_text
     from app.utils.search_text import object_search_text
 
-    session = Session(bind=op.get_bind())
-    try:
-        for model, compute in (
-            (Actor, lambda row: actor_search_text(row.ap_actor)),
-            (InboxObject, lambda row: object_search_text(row.ap_object)),
-            (OutboxObject, lambda row: object_search_text(row.ap_object)),
-        ):
-            last_id = 0
-            while True:
-                rows = (
-                    session.query(model)
-                    .filter(model.id > last_id)
-                    .order_by(model.id)
-                    .limit(_BATCH_SIZE)
-                    .all()
+    bind = op.get_bind()
+    for table_name, json_column, compute in (
+        ("actor", "ap_actor", actor_search_text),
+        ("inbox", "ap_object", object_search_text),
+        ("outbox", "ap_object", object_search_text),
+    ):
+        table = sa.table(
+            table_name,
+            sa.column("id", sa.Integer),
+            sa.column(json_column, sa.JSON),
+            sa.column("search_text", sa.String),
+        )
+        last_id = 0
+        while True:
+            rows = bind.execute(
+                sa.select(table.c.id, table.c[json_column])
+                .where(table.c.id > last_id)
+                .order_by(table.c.id)
+                .limit(_BATCH_SIZE)
+            ).all()
+            if not rows:
+                break
+            for row_id, raw in rows:
+                bind.execute(
+                    table.update()
+                    .where(table.c.id == row_id)
+                    .values(search_text=compute(raw))
                 )
-                if not rows:
-                    break
-                for row in rows:
-                    row.search_text = compute(row)
-                session.commit()
-                last_id = rows[-1].id
-    finally:
-        session.close()
+            last_id = rows[-1][0]
 
 
 def downgrade() -> None:

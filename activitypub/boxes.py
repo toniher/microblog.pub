@@ -3404,7 +3404,7 @@ async def _process_inbound_quote(
     if not quoted_object and quote_authorization_ap_id:
         # Only fetched when there's a stamp to check it against. Without one
         # the quote stays unverified, and an unverified quote is never shown
-        # (`get_quoted_object_for_display`, the Mastodon `_serialize_quote`),
+        # (`get_quoted_object_for_display`, the Mastodon `serialize_quote`),
         # so fetching its target would be work nothing reads.
         #
         # Bounded and savepointed on purpose. `save_to_inbox` inserts the

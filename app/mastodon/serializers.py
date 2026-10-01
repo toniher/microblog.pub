@@ -819,7 +819,7 @@ def serialize_card(obj: AnyboxObject) -> dict | None:
     return None
 
 
-async def _serialize_quote(db_session: AsyncSession, obj: AnyboxObject) -> dict | None:
+async def serialize_quote(db_session: AsyncSession, obj: AnyboxObject) -> dict | None:
     """FEP-044f quote, mapped to Mastodon's `Quote` entity: `{state,
     quoted_status}`. `quoted_status` is only populated for an accepted
     quote -- a pending/rejected/unauthorized one has nothing to show beyond
@@ -848,6 +848,76 @@ async def _serialize_quote(db_session: AsyncSession, obj: AnyboxObject) -> dict 
         )
 
     return {"state": state, "quoted_status": quoted_status}
+
+
+def _serialize_quote_approval(obj: AnyboxObject) -> dict:
+    """Mastodon 4.5 `QuoteApproval`: who may quote `obj`, and how that applies
+    to the requester. The owner is the only requester on a single-user
+    instance, so `current_user` is always about them.
+    """
+    if isinstance(obj, activitypub.models.OutboxObject):
+        # Mirrors `boxes._quote_interaction_policy` / the QuoteRequest handler:
+        # only public/unlisted posts are ever quotable by others.
+        quotable = obj.visibility in (
+            ap.VisibilityEnum.PUBLIC,
+            ap.VisibilityEnum.UNLISTED,
+        )
+        policy = config.CONFIG.quote_policy
+        return {
+            "automatic": (
+                [policy] if quotable and policy in ("public", "followers") else []
+            ),
+            "manual": ["public"] if quotable and policy == "manual" else [],
+            "current_user": "automatic",
+        }
+
+    raw_policy = obj.ap_object.get("interactionPolicy")
+    can_quote = raw_policy.get("canQuote") if isinstance(raw_policy, dict) else None
+    if not isinstance(can_quote, dict):
+        # No FEP-044f policy published: promise nothing.
+        return {
+            "automatic": ["unsupported_policy"],
+            "manual": [],
+            "current_user": "unknown",
+        }
+
+    def approved(key: str) -> set[str]:
+        # The author is implicitly always approved; Mastodon has no label for it.
+        return {ap.get_id(item) for item in ap.as_list(can_quote.get(key) or [])} - {
+            obj.ap_actor_id
+        }
+
+    def labels(ap_ids: set[str]) -> list[str]:
+        return sorted(
+            {
+                (
+                    "public"
+                    if i == ap.AS_PUBLIC
+                    else (
+                        "followers"
+                        if i.endswith("/followers")
+                        else "unsupported_policy"
+                    )
+                )
+                for i in ap_ids
+            }
+        )
+
+    automatic, manual = approved("automaticApproval"), approved("manualApproval")
+    if automatic & {ap.AS_PUBLIC, config.ID}:
+        current_user = "automatic"
+    elif manual & {ap.AS_PUBLIC, config.ID}:
+        current_user = "manual"
+    elif automatic or manual:
+        # Followers-only etc.: we don't resolve the follow relationship here.
+        current_user = "unknown"
+    else:
+        current_user = "denied"
+    return {
+        "automatic": labels(automatic),
+        "manual": labels(manual),
+        "current_user": current_user,
+    }
 
 
 async def serialize_status(
@@ -885,7 +955,7 @@ async def serialize_status(
         if target is not None:
             reblog = await serialize_status(db_session, target, _resolve_reblog=False)
 
-    quote = await _serialize_quote(db_session, obj) if _resolve_quote else None
+    quote = await serialize_quote(db_session, obj) if _resolve_quote else None
 
     in_reply_to_id = None
     in_reply_to_account_id = None
@@ -936,6 +1006,10 @@ async def serialize_status(
         "pinned": pinned,
         "reblog": reblog,
         "quote": quote,
+        "quotes_count": (
+            obj.quotes_count if isinstance(obj, activitypub.models.OutboxObject) else 0
+        ),
+        "quote_approval": _serialize_quote_approval(obj),
         "in_reply_to_id": in_reply_to_id,
         "in_reply_to_account_id": in_reply_to_account_id,
         "poll": serialize_poll(obj, status_id),
@@ -971,6 +1045,7 @@ def serialize_status_edit(
     actor: BaseActor,
     account: dict,
     status_id: str,
+    quote: dict | None = None,
 ) -> dict:
     snapshot = _RevisionSnapshot(ap_object, actor)
     created_at = (
@@ -983,6 +1058,8 @@ def serialize_status_edit(
         "sensitive": bool(snapshot.sensitive),
         "created_at": format_datetime(created_at),
         "account": account,
+        # A quote can't be edited, so every revision carries the live one.
+        "quote": quote,
         # Polls aren't editable through send_update — every revision shares
         # the same poll as the live status, so there's nothing distinct to
         # report per historical entry.

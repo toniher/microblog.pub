@@ -52,6 +52,7 @@ from activitypub.boxes import send_block
 from activitypub.boxes import send_delete
 from activitypub.boxes import send_follow
 from activitypub.boxes import send_like
+from activitypub.boxes import send_quote_revoke
 from activitypub.boxes import send_reject
 from activitypub.boxes import send_unblock
 from activitypub.boxes import send_undo
@@ -76,6 +77,8 @@ from app.mastodon.http import is_json_request
 from app.mastodon.scopes import require_scope
 from app.uploads import IncompatibleMediaError
 from app.uploads import UploadTooLargeError
+from app.uploads import delete_uploads
+from app.uploads import find_unattached_uploads
 from app.uploads import save_upload
 from app.utils.datetime import as_utc
 from app.utils.datetime import now
@@ -161,19 +164,22 @@ _SOURCE_URL = "https://github.com/toniher/microblog.pub"
 # bookmarks 3.1, markers 3.0, /api/v2/instance 4.0. It would also have drifted
 # on its own the moment microblog.pub reached 3.x.
 #
-# 4.3.0 is the highest version whose gated features are all either implemented
+# 4.5.0 is the highest version whose gated features are all either implemented
 # or degrade gracefully here. Raising it is a deliberate act: check what the
-# new gate makes clients *expect*. Two known consequences of 4.3 itself, both
-# now real rather than degradations: clients prefer `GET /api/v2/notifications`
-# (see the "Grouped notifications" section below), and every Notification
-# carries a real `group_key` (`app.mastodon.notification_groups`).
+# new gate makes clients *expect*. Known consequences: clients prefer
+# `GET /api/v2/notifications` since 4.3 (see "Grouped notifications" below),
+# and the 4.5 quote UI (quote button, `quote_approval`, the quotes list) is
+# gated on `api_versions.mastodon >= 7`, not on the version string.
 #
-# Deliberately *not* advertising `api_versions` (Instance, 4.3.0+): it's an
-# opaque fast-moving counter — mastodon.social on 4.7.0 reports 11 — with no
-# published mapping from version to value, so any number here would be a
-# guess that clients act on. Omitting it makes them fall back to parsing
-# `version`, which the constant above now states correctly.
-_MASTODON_COMPAT_VERSION = "4.3.0"
+# `api_versions` is Mastodon's own counter (lib/mastodon/version.rb: 6 at
+# v4.4.0, 7 at v4.5.0), so it must move together with the constant below.
+# Deliberately *not* implemented for 4.4/4.5, and why: endorse/unendorse and
+# tag feature/unfeature (no storage, and nobody to curate for as a single
+# actor), per-post `quote_approval_policy` and `PUT .../interaction_policy`
+# (the quote policy is the one `quote_policy` setting in profile.toml), the
+# `quoted_update` notification, and `delete_media` on status delete.
+_MASTODON_COMPAT_VERSION = "4.5.0"
+_MASTODON_API_VERSION = 7
 _VERSION_STRING = (
     f"{_MASTODON_COMPAT_VERSION} (compatible; microblogpub {config.VERSION})"
 )
@@ -239,19 +245,33 @@ async def instance_v2(
                 "versions": {},
             },
             "languages": [config.LANGUAGE_CODE],
+            "api_versions": {"mastodon": _MASTODON_API_VERSION},
             "configuration": {
                 **_INSTANCE_CONFIGURATION,
                 "vapid": {"public_key": vapid_public_key_b64()},
-                "urls": (
-                    {"streaming": streaming_url}
-                    if (streaming_url := streaming.streaming_base_url())
-                    else {}
-                ),
+                "urls": {
+                    **(
+                        {"streaming": streaming_url}
+                        if (streaming_url := streaming.streaming_base_url())
+                        else {}
+                    ),
+                    "about": f"{config.BASE_URL}/",
+                    "privacy_policy": None,
+                    "terms_of_service": None,
+                },
+                "limited_federation": False,
+                # Both feeds are served unauthenticated, local and remote.
+                "timelines_access": {
+                    feed: {"local": "public", "remote": "public"}
+                    for feed in ("live_feeds", "hashtag_feeds")
+                },
             },
             "registrations": {
                 "enabled": False,
                 "approval_required": False,
                 "message": None,
+                "reason_required": False,
+                "min_age": None,
             },
             "contact": {
                 "email": config.CONFIG.contact_email or "",
@@ -350,6 +370,15 @@ async def custom_emojis() -> JSONResponse:
     )
 
 
+def _default_quote_policy() -> str:
+    """The profile.toml `quote_policy` in Mastodon's three-value vocabulary.
+    `manual` has no equivalent (an approval queue, not a default), so it
+    reports the stricter `nobody`.
+    """
+    policy = config.CONFIG.quote_policy
+    return policy if policy in ("public", "followers") else "nobody"
+
+
 @router.get("/api/v1/preferences")
 async def preferences(
     token_info: AccessTokenInfo = Depends(require_scope("read")),
@@ -359,6 +388,7 @@ async def preferences(
             "posting:default:visibility": "public",
             "posting:default:sensitive": False,
             "posting:default:language": None,
+            "posting:default:quote_policy": _default_quote_policy(),
             "reading:expand:media": "default",
             "reading:expand:spoilers": False,
         },
@@ -466,6 +496,7 @@ async def accounts_verify_credentials(
         "privacy": "public",
         "sensitive": False,
         "language": config.LANGUAGE_CODE,
+        "quote_policy": _default_quote_policy(),
         "note": account["note"],
         "fields": account["fields"],
         "follow_requests_count": await _pending_follow_requests_count(db_session),
@@ -1098,6 +1129,7 @@ async def statuses_history(
         raise MastodonError(404, "not_found", "status not found")
 
     account = await serializers.serialize_account(db_session, obj.actor)
+    quote = await serializers.serialize_quote(db_session, obj)
     entries = [
         serializers.serialize_status_edit(
             revision["ap_object"],
@@ -1105,6 +1137,7 @@ async def statuses_history(
             obj.actor,
             account,
             status_id,
+            quote,
         )
         for revision in obj.revisions or []
     ]
@@ -1115,10 +1148,82 @@ async def statuses_history(
             obj.actor,
             account,
             status_id,
+            quote,
         )
     )
 
     return JSONResponse(content=entries)
+
+
+@router.get("/api/v1/statuses/{status_id}/quotes")
+async def statuses_quotes(
+    status_id: str,
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:statuses")),
+) -> JSONResponse:
+    """Accepted quotes of a status, from both boxes (same merge as the public
+    timeline)."""
+    obj = await _get_visible_status_or_404(request, db_session, status_id)
+    params = pagination.parse_pagination(request)
+    before = await _resolve_cursor_published_at(db_session, params.max_id)
+    after = await _resolve_cursor_published_at(
+        db_session, params.min_id or params.since_id
+    )
+    inbox_items = await timelines.fetch_inbox_timeline_page(
+        db_session,
+        before=before,
+        after=after,
+        limit=params.limit,
+        extra_where=(
+            activitypub.models.InboxObject.quote_ap_id == obj.ap_id,
+            activitypub.models.InboxObject.quote_is_verified.is_(True),
+        ),
+        force_index="ix_inbox_quote_ap_id",
+    )
+    outbox_items = await timelines.fetch_outbox_timeline_page(
+        db_session,
+        before=before,
+        after=after,
+        limit=params.limit,
+        extra_where=(
+            activitypub.models.OutboxObject.quote_ap_id == obj.ap_id,
+            activitypub.models.OutboxObject.quote_state == "accepted",
+        ),
+    )
+    combined: list[AnyboxObject] = [*inbox_items, *outbox_items]
+    merged = sorted(combined, key=timelines.status_id_int, reverse=True)[: params.limit]
+    return await _respond_with_status_list(request, db_session, merged)
+
+
+@router.post("/api/v1/statuses/{status_id}/quotes/{quoting_status_id}/revoke")
+async def statuses_quote_revoke(
+    status_id: str,
+    quoting_status_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:statuses")),
+) -> JSONResponse:
+    obj = await ids.get_object_by_mastodon_id(db_session, status_id)
+    if obj is None or not isinstance(obj, activitypub.models.OutboxObject):
+        raise MastodonError(404, "not_found", "status not found")
+
+    # Only a remote post's stamp can be revoked: our own quotes of our own
+    # posts are self-authorized, and there is nobody to tell.
+    quoting = await ids.get_object_by_mastodon_id(db_session, quoting_status_id)
+    if (
+        not isinstance(quoting, activitypub.models.InboxObject)
+        or quoting.quote_ap_id != obj.ap_id
+    ):
+        raise MastodonError(404, "not_found", "quoting status not found")
+
+    try:
+        await send_quote_revoke(db_session, quoting.ap_id)
+    except ValueError as exc:
+        # Not verified, or the stamp wasn't ours: nothing to revoke.
+        raise MastodonError(422, "validation_failed", str(exc))
+
+    await db_session.refresh(quoting)
+    return JSONResponse(content=await serializers.serialize_status(db_session, quoting))
 
 
 def _find_node_with_ancestors(
@@ -2359,7 +2464,7 @@ def _serialize_tag(tag: str) -> dict:
     so the normalized name doubles as the (String-typed) id. `history` is
     always empty — no per-day usage is tracked. `following` is honestly
     `false`: see `followed_tags_index`. `featuring` is omitted rather than
-    hardcoded, since it's 4.4 and we advertise 4.3.
+    hardcoded, since featured tags come from profile.toml (no per-tag state).
     """
     return {
         "id": tag,
@@ -2511,6 +2616,29 @@ async def media_show(
         raise MastodonError(404, "not_found", "media not found")
 
     return JSONResponse(content=serializers.serialize_upload(upload))
+
+
+@router.delete("/api/v1/media/{media_id}")
+async def media_delete(
+    media_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("write:media")),
+) -> JSONResponse:
+    upload = await ids.get_upload_by_mastodon_id(db_session, media_id)
+    if upload is None:
+        raise MastodonError(404, "not_found", "media not found")
+
+    # Attached to a post, or queued in a scheduled status: still in use.
+    deletable = {
+        item.upload.id
+        for item in await find_unattached_uploads(db_session)
+        if not item.referenced_by_scheduled_status
+    }
+    if upload.id not in deletable:
+        raise MastodonError(422, "validation_failed", "media is attached to a status")
+
+    await delete_uploads(db_session, [upload])
+    return JSONResponse(content={})
 
 
 @router.put("/api/v1/media/{media_id}")
@@ -2764,6 +2892,22 @@ def _parse_scheduled_at(params: _StatusParams) -> datetime | None:
     return scheduled_at
 
 
+def _check_quote_approval_policy(params: "_StatusParams", is_quotable: bool) -> None:
+    """The quote policy is the single `quote_policy` setting in profile.toml,
+    not a per-post choice. A client echoing the default it read from
+    preferences passes; anything else is refused rather than silently
+    dropped. Private/direct posts are exempt, as in Mastodon (ignored there).
+    """
+    requested = params.get("quote_approval_policy")
+    if requested and is_quotable and str(requested) != _default_quote_policy():
+        raise MastodonError(
+            422,
+            "validation_failed",
+            "quote_approval_policy is set in the instance configuration "
+            f"(currently {_default_quote_policy()!r})",
+        )
+
+
 async def _parse_compose_params(
     db_session: AsyncSession,
     params: _StatusParams,
@@ -2807,11 +2951,11 @@ async def _parse_compose_params(
     else:
         in_reply_to_id = None
 
-    quote_id = params.get("quote_id")
+    quote_id = params.get("quoted_status_id") or params.get("quote_id")
     if quote_id:
         quote_id = str(quote_id)
         if await ids.get_object_by_mastodon_id(db_session, quote_id) is None:
-            raise MastodonError(422, "validation_failed", "quote_id not found")
+            raise MastodonError(422, "validation_failed", "quoted_status_id not found")
     else:
         quote_id = None
 
@@ -2819,6 +2963,11 @@ async def _parse_compose_params(
     visibility = _MASTODON_VISIBILITY_TO_AP.get(visibility_param)
     if visibility is None:
         raise MastodonError(422, "validation_failed", "invalid visibility")
+
+    _check_quote_approval_policy(
+        params,
+        visibility in (ap.VisibilityEnum.PUBLIC, ap.VisibilityEnum.UNLISTED),
+    )
 
     language_value = params.get("language")
     language = str(language_value) if language_value else None
@@ -2991,6 +3140,11 @@ async def statuses_update(
         params = _StatusParams(await request.json(), None)
     else:
         params = _StatusParams(None, await request.form())
+
+    _check_quote_approval_policy(
+        params,
+        obj.visibility in (ap.VisibilityEnum.PUBLIC, ap.VisibilityEnum.UNLISTED),
+    )
 
     content_value = params.get("status")
     content = str(content_value) if content_value is not None else ""
@@ -3507,7 +3661,7 @@ async def timelines_list(
         # Membership narrows to a handful of actor_ids; without this,
         # SQLite drives off the publish-order index and scans the whole
         # inbox for a quiet list (see `fetch_inbox_timeline_page`'s docstring).
-        force_actor_index=True,
+        force_index="ix_inbox_actor_id_ap_published_at",
     )
     return await _respond_with_status_list(request, db_session, items)
 

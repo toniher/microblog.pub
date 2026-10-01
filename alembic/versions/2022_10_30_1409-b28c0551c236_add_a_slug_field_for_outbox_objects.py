@@ -6,8 +6,6 @@ Create Date: 2022-10-30 14:09:14.540461+00:00
 
 """
 import sqlalchemy as sa
-from sqlalchemy import select
-from sqlalchemy.orm.session import Session
 
 from alembic import op
 
@@ -26,17 +24,30 @@ def upgrade() -> None:
 
     # ### end Alembic commands ###
 
-    # Backfill the slug for existing articles
-    from activitypub.models import OutboxObject
+    # Backfill the slug for existing articles. A table stub with just the
+    # columns this revision knows about, not the live `OutboxObject` model:
+    # the model also maps every column later migrations add, so selecting
+    # through it fails on any DB that isn't already at head.
     from app.utils.text import slugify
-    sess = Session(op.get_bind())
-    articles = sess.execute(select(OutboxObject).where(
-        OutboxObject.ap_type == "Article")
-    ).scalars()
-    for article in articles:
-        title = article.ap_object["name"]
-        article.slug = slugify(title)
-    sess.commit()
+    outbox = sa.table(
+        "outbox",
+        sa.column("id", sa.Integer),
+        sa.column("ap_type", sa.String),
+        sa.column("ap_object", sa.JSON),
+        sa.column("slug", sa.String),
+    )
+    bind = op.get_bind()
+    articles = bind.execute(
+        sa.select(outbox.c.id, outbox.c.ap_object).where(
+            outbox.c.ap_type == "Article"
+        )
+    ).all()
+    for article_id, ap_object in articles:
+        bind.execute(
+            outbox.update()
+            .where(outbox.c.id == article_id)
+            .values(slug=slugify(ap_object["name"]))
+        )
 
 
 def downgrade() -> None:

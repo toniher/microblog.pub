@@ -227,7 +227,7 @@ class InboxObject(Base, BaseObject):
         # timeline additionally filters to a handful of member `actor_id`s,
         # and SQLite won't give up the ordering index for that filter on its
         # own — this composite exists so `app.mastodon.timelines` can force
-        # an actor_id-driven plan for that one case (`force_actor_index=`),
+        # an actor_id-driven plan for that one case (`force_index=`),
         # turning an O(inbox size) scan into O(member posts).
         Index("ix_inbox_actor_id_ap_published_at", "actor_id", "ap_published_at"),
         Index("ix_inbox_in_reply_to", text(_IN_REPLY_TO_INDEX_EXPR)),

@@ -79,7 +79,7 @@ def test_version_advertises_mastodon_compat_not_our_own_version() -> None:
         int(part) for part in _MASTODON_COMPAT_VERSION.split(".")[:2]
     )
     # Above every feature gate the surface actually implements.
-    assert (mastodon_major, mastodon_minor) >= (4, 3)
+    assert (mastodon_major, mastodon_minor) >= (4, 5)
     assert _VERSION_STRING.startswith(_MASTODON_COMPAT_VERSION)
     assert f"microblogpub {config.VERSION}" in _VERSION_STRING
     # The whole point: our version must not be the number clients parse.
@@ -93,11 +93,26 @@ def test_both_instance_endpoints_report_the_same_version(client: TestClient) -> 
     assert client.get("/api/v2/instance").json()["version"] == _VERSION_STRING
 
 
-def test_instance_omits_api_versions(client: TestClient) -> None:
-    """`api_versions` is an opaque fast-moving counter (4.7.0 reports 11) with
-    no published version-to-value mapping, so any value we picked would be a
-    guess clients act on. Omitting it makes them parse `version` instead."""
-    assert "api_versions" not in client.get("/api/v2/instance").json()
+def test_instance_advertises_api_version_7(client: TestClient) -> None:
+    """Mastodon 4.5.0 ships `api_versions.mastodon == 7` (4.4.0 was 6), and
+    clients gate the quote UI on it, not on the `version` string."""
+    assert client.get("/api/v2/instance").json()["api_versions"] == {"mastodon": 7}
+
+
+def test_instance_v2_carries_the_4_4_and_4_5_fields(client: TestClient) -> None:
+    data = client.get("/api/v2/instance").json()
+    configuration = data["configuration"]
+
+    assert configuration["urls"]["about"].endswith("/")
+    assert configuration["urls"]["privacy_policy"] is None
+    assert configuration["urls"]["terms_of_service"] is None
+    assert configuration["limited_federation"] is False
+    assert configuration["timelines_access"]["live_feeds"] == {
+        "local": "public",
+        "remote": "public",
+    }
+    assert data["registrations"]["reason_required"] is False
+    assert data["registrations"]["min_age"] is None
 
 
 def test_instance_rules_is_empty(client: TestClient) -> None:

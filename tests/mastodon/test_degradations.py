@@ -108,7 +108,8 @@ async def test_tags_show_returns_a_tag_entity(
     assert data["history"] == []
     # Honest: following a hashtag isn't implemented.
     assert data["following"] is False
-    # 4.4-only, and we advertise 4.3 — omitted rather than hardcoded.
+    # 4.4 `featuring` is omitted: featured tags come from profile.toml, so
+    # there is no per-tag state to report (and no feature/unfeature write).
     assert "featuring" not in data
 
 

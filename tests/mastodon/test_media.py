@@ -383,3 +383,54 @@ async def test_media_create_audio_has_duration_no_blurhash(
     assert data["meta"]["duration"] == pytest.approx(1, abs=0.5)
     assert data["blurhash"] is None
     assert data["preview_url"] is None
+
+
+@pytest.mark.asyncio
+async def test_media_delete_removes_an_unattached_upload(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    token = await _make_access_token(async_db_session, "write:media read:media")
+    headers = {"Authorization": f"Bearer {token}"}
+    created = client.post(
+        "/api/v2/media",
+        headers=headers,
+        files={"file": ("photo.png", _png_bytes(), "image/png")},
+    ).json()
+
+    response = client.delete(f"/api/v1/media/{created['id']}", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json() == {}
+    assert (
+        client.get(f"/api/v1/media/{created['id']}", headers=headers).status_code == 404
+    )
+
+
+@pytest.mark.asyncio
+async def test_media_delete_refuses_media_attached_to_a_status(
+    client: TestClient, async_db_session: AsyncSession
+) -> None:
+    token = await _make_access_token(
+        async_db_session, "write:media read:media write:statuses"
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+    created = client.post(
+        "/api/v2/media",
+        headers=headers,
+        files={"file": ("photo.png", _png_bytes(), "image/png")},
+    ).json()
+    assert (
+        client.post(
+            "/api/v1/statuses",
+            headers=headers,
+            data={"status": "with media", "media_ids[]": [created["id"]]},
+        ).status_code
+        == 200
+    )
+
+    response = client.delete(f"/api/v1/media/{created['id']}", headers=headers)
+
+    assert response.status_code == 422
+    assert (
+        client.get(f"/api/v1/media/{created['id']}", headers=headers).status_code == 200
+    )
