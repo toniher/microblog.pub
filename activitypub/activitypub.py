@@ -94,6 +94,10 @@ AS_EXTENDED_CTX = [
         "quoteUrl": "as:quoteUrl",
         "quoteUri": "http://fedibird.com/ns#quoteUri",
         "_misskey_quote": "https://misskey-hub.net/ns/#_misskey_quote",
+        # FEP-2c59: the actor's canonical WebFinger handle. Defined inline
+        # rather than via the FEP's context URL, which pyld would fetch over
+        # HTTP when LD-signing.
+        "webfinger": "https://purl.archive.org/socialweb/webfinger#webfinger",
     },
 ]
 
@@ -172,6 +176,11 @@ ME: RawObject = {
     "inbox": config.BASE_URL + "/inbox",
     "outbox": config.BASE_URL + "/outbox",
     "preferredUsername": config.USERNAME,
+    # FEP-2c59: state the handle instead of letting servers derive it from
+    # preferredUsername + the actor's host, which is wrong when
+    # `webfinger_domain` differs from the domain this instance runs on.
+    # Mastodon 4.6+ prefers it; it must match the WebFinger `subject`.
+    "webfinger": f"{config.USERNAME}@{config.WEBFINGER_DOMAIN}",
     "name": config.CONFIG.name,
     "summary": _LOCAL_ACTOR_SUMMARY,
     "endpoints": {

@@ -453,6 +453,20 @@ async def serialize_account(
         "last_status_at": None,
         "emojis": [],
         "fields": _fields(actor),
+        # Mastodon 4.6 profile attributes. The descriptions are not stored,
+        # the media/featured tabs are always on, and `feature_approval` is the
+        # "nobody may feature this account" policy: there is no Collections
+        # storage here (see the stubs in router.py).
+        "avatar_description": "",
+        "header_description": "",
+        "show_media": True,
+        "show_media_replies": True,
+        "show_featured": True,
+        "feature_approval": {
+            "automatic": [],
+            "manual": [],
+            "current_user": "denied",
+        },
         "moved": (await serialize_account(db_session, moved_to) if moved_to else None),
     }
 
@@ -812,6 +826,7 @@ def serialize_card(obj: AnyboxObject) -> dict | None:
             # the card doesn't leak the reader's IP to the linked host.
             "image": proxied_media_url(image) if image else None,
             "embed_url": "",
+            "missing_attribution": False,
             # Only computed for local uploads, never for scraped OG images.
             "blurhash": None,
         }
@@ -1017,6 +1032,7 @@ async def serialize_status(
         "language": _object_language(obj) or config.LANGUAGE_CODE,
         "text": None,
         "filtered": [],
+        "tagged_collections": [],
     }
 
 

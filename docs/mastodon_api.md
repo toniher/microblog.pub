@@ -84,6 +84,15 @@ forgotten on the device.
   with a `422` unless it equals the configured policy (ignored on private/direct
   posts, as in Mastodon), and `PUT /api/v1/statuses/:id/interaction_policy`
   doesn't exist. Nor is the `quoted_update` notification.
+- **Mastodon 4.6** — the instance reports `4.6.0` / `api_versions.mastodon`
+  10. New entity keys are present (`avatar_description`, `show_media*`,
+  `feature_approval`, `muting_expires_at`, `tagged_collections`,
+  `missing_attribution`, `wrapstodon`, `configuration.accounts`) and
+  `exclude_direct` works on account statuses. `GET /api/v1/profile` returns the
+  profile; its `PATCH`/`DELETE` are `422` (edit `data/profile.toml`). Collections
+  are **not supported**: the reads return empty, the writes are `422`. Annual
+  reports likewise report nothing (`ineligible`). `supported_types[]` on
+  notifications is ignored, as none of the new notification types are emitted.
 - **Link previews** — posts containing a link carry a Mastodon `card`, built from
   the OpenGraph metadata this instance already scrapes for its own web UI, so
   clients render the same preview box. The thumbnail goes through the media

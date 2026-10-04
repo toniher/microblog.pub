@@ -110,6 +110,23 @@ _POLL_MAX_CHARACTERS_PER_OPTION = 100
 _POLL_MIN_EXPIRATION = 300
 _POLL_MAX_EXPIRATION = 2_629_746
 
+# Mastodon 4.6's `configuration.accounts`: advisory profile-editing limits.
+# Profile edits go through data/profile.toml here, so these are only what a
+# client's (disabled) profile form would display. Mastodon's own defaults.
+_INSTANCE_ACCOUNTS_CONFIGURATION = {
+    # Pre-4.6 keys, and required: Tusky's Moshi model has a non-null
+    # `max_featured_tags`, so omitting it fails the whole instance parse.
+    "max_featured_tags": 10,
+    "max_pinned_statuses": activitypub.models.MAX_PINNED_OBJECTS,
+    "max_note_length": 500,
+    "max_display_name_length": 40,
+    "max_avatar_description_length": 150,
+    "max_header_description_length": 150,
+    "max_profile_fields": 4,
+    "profile_field_name_limit": 255,
+    "profile_field_value_limit": 255,
+}
+
 _INSTANCE_CONFIGURATION = {
     "statuses": {
         "max_characters": 100_000,
@@ -164,7 +181,7 @@ _SOURCE_URL = "https://github.com/toniher/microblog.pub"
 # bookmarks 3.1, markers 3.0, /api/v2/instance 4.0. It would also have drifted
 # on its own the moment microblog.pub reached 3.x.
 #
-# 4.5.0 is the highest version whose gated features are all either implemented
+# 4.6.0 is the highest version whose gated features are all either implemented
 # or degrade gracefully here. Raising it is a deliberate act: check what the
 # new gate makes clients *expect*. Known consequences: clients prefer
 # `GET /api/v2/notifications` since 4.3 (see "Grouped notifications" below),
@@ -172,14 +189,19 @@ _SOURCE_URL = "https://github.com/toniher/microblog.pub"
 # gated on `api_versions.mastodon >= 7`, not on the version string.
 #
 # `api_versions` is Mastodon's own counter (lib/mastodon/version.rb: 6 at
-# v4.4.0, 7 at v4.5.0), so it must move together with the constant below.
+# v4.4.0, 7 at v4.5.0, 10 at v4.6.0), so it must move together with the
+# constant below. 8 gates `/api/v1/profile` and annual reports, 9 avatar/header
+# descriptions, 10 collections; 11 (4.6.1) only adds description params to
+# `update_credentials`, which this API does not have. The 4.6 surface is
+# read-only stubs: no profile writes (identity lives in profile.toml), no
+# collections (nobody to curate for) and no annual reports.
 # Deliberately *not* implemented for 4.4/4.5, and why: endorse/unendorse and
 # tag feature/unfeature (no storage, and nobody to curate for as a single
 # actor), per-post `quote_approval_policy` and `PUT .../interaction_policy`
 # (the quote policy is the one `quote_policy` setting in profile.toml), the
 # `quoted_update` notification, and `delete_media` on status delete.
-_MASTODON_COMPAT_VERSION = "4.5.0"
-_MASTODON_API_VERSION = 7
+_MASTODON_COMPAT_VERSION = "4.6.0"
+_MASTODON_API_VERSION = 10
 _VERSION_STRING = (
     f"{_MASTODON_COMPAT_VERSION} (compatible; microblogpub {config.VERSION})"
 )
@@ -244,10 +266,12 @@ async def instance_v2(
                 "blurhash": None,
                 "versions": {},
             },
+            "wrapstodon": None,
             "languages": [config.LANGUAGE_CODE],
             "api_versions": {"mastodon": _MASTODON_API_VERSION},
             "configuration": {
                 **_INSTANCE_CONFIGURATION,
+                "accounts": _INSTANCE_ACCOUNTS_CONFIGURATION,
                 "vapid": {"public_key": vapid_public_key_b64()},
                 "urls": {
                     **(
@@ -547,6 +571,7 @@ def _serialize_relationship(
             "blocked_by": False,
             "muting": False,
             "muting_notifications": False,
+            "muting_expires_at": None,
             "requested": False,
             "domain_blocking": False,
             "endorsed": False,
@@ -562,6 +587,11 @@ def _serialize_relationship(
         "blocked_by": meta.has_blocked_local_actor if meta else False,
         "muting": actor.is_muted_now,
         "muting_notifications": actor.are_notifications_muted_now,
+        "muting_expires_at": (
+            serializers.format_datetime(actor.muted_until)
+            if actor.is_muted_now and actor.muted_until
+            else None
+        ),
         "requested": meta.is_follow_request_sent if meta else False,
         "domain_blocking": False,
         "endorsed": False,
@@ -756,6 +786,10 @@ async def accounts_statuses(
         if is_admin
         else [ap.VisibilityEnum.PUBLIC, ap.VisibilityEnum.UNLISTED]
     )
+    if request.query_params.get("exclude_direct") == "true":
+        allowed_visibility = [
+            v for v in allowed_visibility if v != ap.VisibilityEnum.DIRECT
+        ]
 
     if account_id == ids.LOCAL_ACTOR_ID:
         query = (
@@ -1014,6 +1048,127 @@ async def accounts_featured_tags(
 
     return JSONResponse(
         content=await serializers.serialize_featured_tags(db_session),
+    )
+
+
+# --- Mastodon 4.6 stubs (api_versions 8-10) ----------------------------------
+# Advertising api_versions >= 8 makes clients probe these routes. None needs
+# storage here: identity is edited in data/profile.toml, Collections need
+# someone to curate for, and there is no annual-report generator. Reads answer
+# in Mastodon's own shape but empty, so clients hide the feature; writes answer
+# 422 so nothing silently drops, with a readable `error` (the official Android
+# app shows it verbatim, unlike `error_description`).
+
+
+@router.get("/api/v1/profile")
+async def profile_show(
+    db_session: AsyncSession = Depends(get_db_session),
+    token_info: AccessTokenInfo = Depends(require_scope("read:accounts")),
+) -> JSONResponse:
+    account = await serializers.serialize_owner_account(db_session)
+    return JSONResponse(
+        content={
+            "id": account["id"],
+            "display_name": account["display_name"],
+            "note": config.CONFIG.summary,
+            "fields": [
+                {"name": m.key, "value": m.value, "verified_at": None}
+                for m in config.CONFIG.metadata or []
+            ],
+            "avatar": account["avatar"] or None,
+            "avatar_static": account["avatar_static"] or None,
+            "avatar_description": "",
+            "header": account["header"] or None,
+            "header_static": account["header_static"] or None,
+            "header_description": "",
+            "locked": account["locked"],
+            "bot": account["bot"],
+            "hide_collections": config.HIDES_FOLLOWERS or config.HIDES_FOLLOWING,
+            "discoverable": account["discoverable"],
+            "indexable": not account["noindex"],
+            "show_media": True,
+            "show_media_replies": True,
+            "show_featured": True,
+            "attribution_domains": [],
+            "featured_tags": await serializers.serialize_featured_tags(db_session),
+        },
+    )
+
+
+@router.put("/api/v1/profile")
+@router.patch("/api/v1/profile")
+@router.delete("/api/v1/profile/avatar")
+@router.delete("/api/v1/profile/header")
+async def profile_write(
+    token_info: AccessTokenInfo = Depends(require_scope("write:accounts")),
+) -> JSONResponse:
+    raise MastodonError(
+        422, "Validation failed: the profile is edited in data/profile.toml"
+    )
+
+
+@router.get("/api/v1/accounts/{account_id}/collections")
+async def accounts_collections() -> JSONResponse:
+    return JSONResponse(content={"collections": []})
+
+
+@router.get("/api/v1/accounts/{account_id}/in_collections")
+async def accounts_in_collections(
+    token_info: AccessTokenInfo = Depends(require_scope("read:collections")),
+) -> JSONResponse:
+    return JSONResponse(content={"collections": []})
+
+
+@router.get("/api/v1/collections/{collection_id}")
+async def collections_show(collection_id: str) -> JSONResponse:
+    raise MastodonError(404, "not_found", "collection not found")
+
+
+@router.post("/api/v1/collections")
+@router.patch("/api/v1/collections/{collection_id}")
+@router.delete("/api/v1/collections/{collection_id}")
+@router.post("/api/v1/collections/{collection_id}/items")
+@router.delete("/api/v1/collections/{collection_id}/items/{item_id}")
+@router.post("/api/v1/collections/{collection_id}/items/{item_id}/revoke")
+async def collections_write(
+    token_info: AccessTokenInfo = Depends(require_scope("write:collections")),
+) -> JSONResponse:
+    raise MastodonError(
+        422, "Validation failed: collections are not supported by this instance"
+    )
+
+
+@router.get("/api/v1/annual_reports")
+async def annual_reports_index(
+    token_info: AccessTokenInfo = Depends(require_scope("read:accounts")),
+) -> JSONResponse:
+    return JSONResponse(content={"annual_reports": [], "accounts": [], "statuses": []})
+
+
+@router.get("/api/v1/annual_reports/{year}/state")
+async def annual_reports_state(
+    year: str,
+    token_info: AccessTokenInfo = Depends(require_scope("read:accounts")),
+) -> JSONResponse:
+    return JSONResponse(content={"state": "ineligible"})
+
+
+@router.get("/api/v1/annual_reports/{year}")
+@router.post("/api/v1/annual_reports/{year}/read")
+async def annual_reports_missing(
+    year: str,
+    token_info: AccessTokenInfo = Depends(require_scope("read:accounts")),
+) -> JSONResponse:
+    raise MastodonError(404, "not_found", "annual report not found")
+
+
+@router.post("/api/v1/annual_reports/{year}/generate")
+async def annual_reports_generate(
+    year: str,
+    token_info: AccessTokenInfo = Depends(require_scope("write:accounts")),
+) -> JSONResponse:
+    raise MastodonError(
+        422, "Validation failed: annual reports are not supported by this instance"
     )
 
 
@@ -4511,5 +4666,10 @@ async def search(
                     ]
 
     return JSONResponse(
-        content={"accounts": accounts, "statuses": statuses, "hashtags": hashtags},
+        content={
+            "accounts": accounts,
+            "statuses": statuses,
+            "hashtags": hashtags,
+            "collections": [],
+        },
     )
