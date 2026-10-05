@@ -33,7 +33,7 @@ move-to:
 
 .PHONY: self-destruct
 self-destruct:
-	-docker run --rm --it --volume `pwd`/data:/app/data --volume microblogpub_static:/app/app/static microblogpub-server inv self-destruct
+	-docker run --rm -it --volume `pwd`/data:/app/data --volume microblogpub_static:/app/app/static microblogpub-server inv self-destruct
 
 .PHONY: reset-password
 reset-password:

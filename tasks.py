@@ -360,6 +360,7 @@ def self_destruct(ctx):
     async def _send_self_destruct():
         if input("Initiating self destruct, type yes to confirm: ") != "yes":
             print("Aborting")
+            return
 
         async with async_session() as db_session:
             await send_self_destruct(db_session)

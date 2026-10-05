@@ -181,7 +181,7 @@ _SOURCE_URL = "https://github.com/toniher/microblog.pub"
 # bookmarks 3.1, markers 3.0, /api/v2/instance 4.0. It would also have drifted
 # on its own the moment microblog.pub reached 3.x.
 #
-# 4.6.0 is the highest version whose gated features are all either implemented
+# 4.7.3 is the highest version whose gated features are all either implemented
 # or degrade gracefully here. Raising it is a deliberate act: check what the
 # new gate makes clients *expect*. Known consequences: clients prefer
 # `GET /api/v2/notifications` since 4.3 (see "Grouped notifications" below),
@@ -189,19 +189,21 @@ _SOURCE_URL = "https://github.com/toniher/microblog.pub"
 # gated on `api_versions.mastodon >= 7`, not on the version string.
 #
 # `api_versions` is Mastodon's own counter (lib/mastodon/version.rb: 6 at
-# v4.4.0, 7 at v4.5.0, 10 at v4.6.0), so it must move together with the
-# constant below. 8 gates `/api/v1/profile` and annual reports, 9 avatar/header
-# descriptions, 10 collections; 11 (4.6.1) only adds description params to
-# `update_credentials`, which this API does not have. The 4.6 surface is
-# read-only stubs: no profile writes (identity lives in profile.toml), no
-# collections (nobody to curate for) and no annual reports.
+# v4.4.0, 7 at v4.5.0, 10 at v4.6.0, 11 from v4.6.1 through v4.7.3), so it
+# must move together with the constant below. 8 gates `/api/v1/profile` and
+# annual reports, 9 avatar/header descriptions, 10 collections, 11 description
+# params on profile writes, which `PUT /api/v1/profile` refuses like every
+# other profile write. The 4.6 surface is read-only stubs: no profile writes
+# (identity lives in profile.toml), no collections (nobody to curate for) and
+# no annual reports. 4.7 adds no client API beyond `Account.invalid_handle`,
+# which Mastodon only emits when true and never applies to this instance.
 # Deliberately *not* implemented for 4.4/4.5, and why: endorse/unendorse and
 # tag feature/unfeature (no storage, and nobody to curate for as a single
 # actor), per-post `quote_approval_policy` and `PUT .../interaction_policy`
 # (the quote policy is the one `quote_policy` setting in profile.toml), the
 # `quoted_update` notification, and `delete_media` on status delete.
-_MASTODON_COMPAT_VERSION = "4.6.0"
-_MASTODON_API_VERSION = 10
+_MASTODON_COMPAT_VERSION = "4.7.3"
+_MASTODON_API_VERSION = 11
 _VERSION_STRING = (
     f"{_MASTODON_COMPAT_VERSION} (compatible; microblogpub {config.VERSION})"
 )

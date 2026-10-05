@@ -280,6 +280,17 @@ def test_about__html(client, db) -> None:
     assert LOCAL_ACTOR.display_name in response.text
 
 
+def test_about__respects_hides_followers_and_following(client, db) -> None:
+    with mock.patch.dict(
+        "app.templates._templates.env.globals",
+        {"HIDES_FOLLOWERS": True, "HIDES_FOLLOWING": True},
+    ):
+        response = client.get("/about")
+    assert response.status_code == 200
+    assert "/followers" not in response.text
+    assert "/following" not in response.text
+
+
 def test_about__falls_back_to_summary_when_about_unset(client, db) -> None:
     # tests.toml sets `summary = "<p>Hello</p>"` and no `about` field.
     response = client.get("/about")

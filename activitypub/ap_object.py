@@ -120,21 +120,9 @@ class Object:
     def attachments(self) -> list["Attachment"]:
         attachments = []
         for obj in ap.as_list(self.ap_object.get("attachment", [])):
-            if obj.get("type") == "PropertyValue":
-                continue
-
-            if obj.get("type") == "Link":
-                attachments.append(
-                    Attachment.model_validate(
-                        {
-                            "proxiedUrl": None,
-                            "resizedUrl": None,
-                            "mediaType": None,
-                            "type": "Link",
-                            "url": obj["href"],
-                        }
-                    )
-                )
+            # A `Link` is a preview-card hint (FEP-8967, sent by Mastodon 4.7+
+            # on every post with a card), not media: `external_urls` picks it up.
+            if obj.get("type") in ("PropertyValue", "Link"):
                 continue
 
             proxied_url = proxied_media_url(obj["url"])

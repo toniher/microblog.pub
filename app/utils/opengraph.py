@@ -102,30 +102,37 @@ async def external_urls(
                 tags_hrefs.add(LOCAL_ACTOR.ap_id)
                 tags_hrefs.add(LOCAL_ACTOR.url)
 
-    urls = set()
+    candidates = []
     if ro.content:
         soup = BeautifulSoup(ro.content, "html5lib")
-        for link in soup.find_all("a"):
-            h = link.get("href")
-            if not h:
-                continue
+        candidates = [link.get("href") for link in soup.find_all("a")]
+    # FEP-8967: a `Link` attachment names the URL to build the card from.
+    candidates += [
+        obj.get("href")
+        for obj in ap.as_list(ro.ap_object.get("attachment", []))
+        if isinstance(obj, dict) and obj.get("type") == "Link"
+    ]
 
-            try:
-                ph = urlparse(h)
-                mimetype, _ = mimetypes.guess_type(h)
-                if (
-                    ph.scheme in {"http", "https"}
-                    and ph.hostname != note_host
-                    and await is_url_valid_async(h)
-                    and (
-                        not mimetype
-                        or mimetype.split("/")[0] not in ["image", "video", "audio"]
-                    )
-                ):
-                    urls.add(h)
-            except Exception:
-                logger.exception(f"Failed to check {h}")
-                continue
+    urls = set()
+    for h in candidates:
+        if not isinstance(h, str):
+            continue
+
+        try:
+            ph = urlparse(h)
+            mimetype, _ = mimetypes.guess_type(h)
+            if (
+                ph.scheme in {"http", "https"}
+                and ph.hostname != note_host
+                and await is_url_valid_async(h)
+                and (
+                    not mimetype
+                    or mimetype.split("/")[0] not in ["image", "video", "audio"]
+                )
+            ):
+                urls.add(h)
+        except Exception:
+            logger.exception(f"Failed to check {h}")
 
     return urls - tags_hrefs
 

@@ -31,7 +31,7 @@ async def _headers(db_session: AsyncSession, scope: str) -> dict[str, str]:
 
 def test_instance_v2_46_fields(client: TestClient) -> None:
     body = client.get("/api/v2/instance").json()
-    assert body["version"].startswith("4.6.0 ")
+    assert body["version"].startswith("4.7.3 ")
     assert body["wrapstodon"] is None
     assert body["configuration"]["accounts"]["max_display_name_length"] == 40
     # Required by Tusky's instance model.

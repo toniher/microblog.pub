@@ -38,8 +38,6 @@
                 </div>
                 {% elif attachment.type == "Audio" or (attachment | has_media_type("audio")) %}
                 <audio controls preload="metadata" src="{{ attachment.proxied_url }}"{% if attachment.name%} aria-label="{{ attachment.name }}"{% endif %} class="attachment u-audio"{% if ENABLE_MICRODATA %} itemprop="audio"{% endif %}></audio>
-                {% elif attachment.type == "Link" %}
-                <a href="{{ attachment.url }}" class="attachment">{{ attachment.url | truncate(64, True) }}</a> ({{ attachment.mimetype}})
                 {% else %}
                 <a href="{{ attachment.url | media_proxy_url }}"{% if attachment.name %} title="{{ attachment.url }}"{% endif %} class="attachment">
                     {% if attachment.name %}{{ attachment.name }}{% else %}{{ attachment.url | truncate(64, True) }}{% endif %}

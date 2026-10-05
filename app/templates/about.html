@@ -31,14 +31,18 @@
     <dt class="muted">{{ _("Articles") }}</dt>
     <dd><a href="{{ url_for("articles") }}">{{ articles_count }}</a></dd>
 </dl>
+{% if not HIDES_FOLLOWERS or is_admin %}
 <dl>
     <dt class="muted">{{ _("Followers") }}</dt>
     <dd><a href="{{ url_for("followers") }}">{{ followers_count }}</a></dd>
 </dl>
+{% endif %}
+{% if not HIDES_FOLLOWING or is_admin %}
 <dl>
     <dt class="muted">{{ _("Following") }}</dt>
     <dd><a href="{{ url_for("following") }}">{{ following_count }}</a></dd>
 </dl>
+{% endif %}
 </div>
 
 <div class="box">

@@ -1,5 +1,8 @@
+import pytest
+
 from activitypub.actor import LOCAL_ACTOR
 from activitypub.ap_object import RemoteObject
+from app.utils import opengraph
 
 
 def _remote_note(attachment: dict, **extra) -> RemoteObject:
@@ -102,3 +105,18 @@ def test_peertube_video_link_gets_poster_from_object_icon() -> None:
     attachments = obj.attachments
     assert len(attachments) == 1
     assert attachments[0].poster_url is not None
+
+
+@pytest.mark.asyncio
+async def test_fep_8967_link_attachment_feeds_card_not_media(monkeypatch) -> None:
+    async def _valid(url: str) -> bool:
+        return True
+
+    monkeypatch.setattr(opengraph, "is_url_valid_async", _valid)
+    obj = _remote_note({"type": "Link", "href": "https://news.example/story"})
+
+    assert obj.attachments == []
+    # No `Mention` tags, so the session is never touched.
+    assert await opengraph.external_urls(None, obj) == {  # type: ignore[arg-type]
+        "https://news.example/story"
+    }

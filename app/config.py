@@ -193,6 +193,18 @@ class Config(pydantic.BaseModel):
             "feed.atom",
             "robots.txt",
             ".well-known",
+            "custom_emoji",
+            "openapi.json",
+            # Routers mounted without a prefix (IndieAuth, Micropub,
+            # Webmentions, the Mastodon API and its OAuth endpoints).
+            "api",
+            "auth",
+            "oauth",
+            "token",
+            "revoke_token",
+            "token_introspection",
+            "micropub",
+            "webmentions",
         }
         if v in reserved:
             raise ValueError(

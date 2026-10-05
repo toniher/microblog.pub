@@ -17,12 +17,12 @@ The server has 4 components:
  - One process that takes care of processing "incoming activities"
  - One process that delivers Web Push notifications (`app/push_notifications.py`)
 
-Two periodic jobs ride along on the outgoing-activities process rather than
-getting a process of their own — publishing due scheduled statuses
+Two periodic jobs run inside the outgoing-activities process instead of getting
+a process of their own: publishing due scheduled statuses
 (`app/scheduled_statuses.py`) and emitting `poll`-ended notifications
 (`app/poll_notifications.py`). That process runs in every deployment (nothing
 federates without it), so an install that upgrades without adding a new
-supervisord entry can't silently lose either job. Both are rate-limited to a
+supervisord entry can't lose either job. Both are rate-limited to a
 few seconds so they don't interleave with every delivery batch, and both are
 isolated from the delivery path: a failure in one can't stop activities going
 out.
@@ -31,17 +31,64 @@ The Mastodon streaming API (`app/mastodon/streaming.py`) adds no fifth process:
 it's a background `asyncio` task inside the web server, since that's the only
 component with an open WebSocket to push events to. It learns about activity
 from the other processes by polling committed rows (SQLite is WAL, so this
-never blocks a writer) rather than through any direct signalling between
-processes — see the module docstring for the full rationale.
+never blocks a writer) instead of signalling between processes directly (see
+the module docstring for the full rationale).
+
+### Module layout
+
+ - `activitypub/`: the ActivityPub domain library, being split out of `app/`.
+   - `activitypub.py`: AP constants, `RawObject`, the local actor object, `fetch()` and collection parsing
+   - `actor.py`, `ap_object.py`: actor and object models
+   - `boxes.py`: inbox/outbox processing
+   - `models.py`: SQLAlchemy ORM models and the shared retry backoff
+   - `incoming_activities.py`, `outgoing_activities.py`: the two federation workers
+   - `tests/`: AP-focused tests and the factory-boy `factories.py`
+ - `app/`: the web application.
+   - `main.py`: the FastAPI app, public and AP routes, media proxy
+   - `admin.py`: the `/admin` UI
+   - `config.py`: loads `data/profile.toml`
+   - `database.py`: sync and async engines, `Base`
+   - `templates.py`, `i18n.py`: template rendering, sanitization, locale negotiation
+   - `httpsig.py`, `ldsig.py`, `key.py`: HTTP and Linked Data signatures, the keypair
+   - `indieauth.py`, `micropub.py`, `webmentions.py`, `webfinger.py`: IndieWeb and discovery
+   - `source.py`: Markdown to HTML, hashtags and mentions
+   - `uploads.py`, `media.py`, `ffmpeg.py`: attachments, thumbnails, the media proxy
+   - `push_notifications.py`: the Web Push worker
+ - `app/mastodon/`: the Mastodon client API.
+   - `router.py`: the REST endpoints
+   - `oauth.py`: app registration and login, adapting `app/indieauth.py`
+   - `serializers.py`, `entities.py`: AP objects to Mastodon JSON
+   - `ids.py`: timestamp-prefixed numeric ids, so Mastodon's id ordering holds across inbox and outbox
+   - `pagination.py`: `Link` headers and `max_id`/`since_id`/`min_id`
+   - `streaming.py`: the WebSocket streaming API
+ - `alembic/versions/`: schema migrations (see [Database migrations](#database-migrations)).
+ - `tests/`: app and integration tests; `tests/mastodon/` covers the Mastodon API.
 
 ### Tasks
 
 The project uses [Invoke](https://www.pyinvoke.org/) to manage tasks (a Python powered Makefile).
 
+The commands in this guide assume the in-project virtualenv (`.venv/`, set by
+`poetry.toml`) is active. Otherwise prefix them with `poetry run`. Each git
+worktree gets its own `.venv/`, so run `poetry install --no-root` in a new
+worktree before using it.
+
 You can find the tasks definition in `tasks.py` and list the tasks using:
 
 ```bash
 inv -l
+```
+
+Tasks for local development:
+
+```bash
+inv compile-scss [--watch]          # build the CSS (--watch rebuilds on change)
+inv uvicorn                         # web server
+inv process-incoming-activities     # inbox worker
+inv process-outgoing-activities     # outbox worker (also runs scheduled statuses and poll notifications)
+inv process-push-notifications      # Web Push worker
+inv stats                           # print instance statistics
+inv build-docker-image              # docker build -t microblogpub/microblogpub .
 ```
 
 ### Media storage
@@ -51,30 +98,30 @@ Files metadata are stored in the database.
 
 `{content_hash}_resized` is always a webp: for an image it's a thumbnail of the original; for
 video it's a poster frame extracted with `ffmpeg` (see below) and thumbnailed the same way, so
-`Upload.has_thumbnail` and the `/attachments/thumbnails/...` route work identically for both —
-no separate "poster" concept.
+`Upload.has_thumbnail` and the `/attachments/thumbnails/...` route work the same for both.
+There is no separate "poster" concept.
 
 #### Video and audio uploads
 
 `app/ffmpeg.py` is a thin subprocess wrapper (argv-only, `-protocol_whitelist file`, explicit
-timeouts) over the `ffprobe`/`ffmpeg` binaries — never a Python binding, so there's no new
-dependency and `shutil.which`-based degradation is free. It does three things, all read-only
-(no transcoding):
+timeouts) over the `ffprobe`/`ffmpeg` binaries rather than a Python binding, so it adds no
+dependency and gets `shutil.which`-based degradation for free. It does three things, all
+read-only (no transcoding):
 
-- **Probe** (`ffmpeg.probe`) — duration, width/height (rotation-corrected), whether a real
+- **Probe** (`ffmpeg.probe`): duration, width/height (rotation-corrected), whether a real
   video/audio stream is present (guarding against an MP3's embedded cover art, which ffprobe
   reports as an `attached_pic` video stream), and a compatibility verdict.
-- **Poster extraction** (`ffmpeg.extract_poster`) — a single PNG frame from partway through the
+- **Poster extraction** (`ffmpeg.extract_poster`): a single PNG frame from partway through the
   clip, later re-encoded to the same webp thumbnail format as images.
-- **Compatibility classification** (`ffmpeg.classify_compatibility`) — rejects a file only on
+- **Compatibility classification** (`ffmpeg.classify_compatibility`): rejects a file only on
   confident, well-understood incompatibilities (HEVC and other non-`{h264,vp8,vp9,av1}` codecs,
-  4:4:4/4:2:2 chroma, the QuickTime `.mov` container brand). Everything else — including
-  "verdict unavailable" (no `ffmpeg`, probe failure, timeout) — is accepted. This fail-open rule
+  4:4:4/4:2:2 chroma, the QuickTime `.mov` container brand). It accepts everything else,
+  including "verdict unavailable" (no `ffmpeg`, probe failure, timeout). This fail-open rule
   is deliberate: a false-positive rejection blocks a legitimate post, so the classifier only
   refuses what it's sure about.
 
 `ffmpeg` is an optional runtime dependency (`app.ffmpeg.is_available()`); without it, video/audio
-uploads still work, they just get no duration, no poster/blurhash, and no compatibility
+uploads still work, but get no duration, no poster/blurhash, and no compatibility
 rejection. `save_upload` (`app/uploads.py`) enforces size limits (`max_image_upload_size`/
 `max_video_upload_size` in `data/profile.toml`) before any byte is written to disk, and unlinks
 a written-then-rejected file so an incompatible upload never leaves an orphaned row or file
@@ -85,7 +132,7 @@ behind.
 `app/mastodon/` implements a subset of the [Mastodon client REST
 API](https://docs.joinmastodon.org/client/intro/) (OAuth, timelines, statuses,
 notifications, conversations, accounts/social graph, search, media) on top of
-the same ActivityPub data — no separate data model. It's mounted unconditionally
+the same ActivityPub data, with no separate data model. It's mounted unconditionally
 in `app/main.py`. See the [user-facing docs](mastodon_api.md) for what's
 supported.
 
@@ -97,12 +144,12 @@ under `alembic/versions/`. This fork's history includes all migrations from
 up to `a209f0333f5a` (*Add oauth refresh token support*, 2022-12-18), plus the
 migrations below, which exist only in this fork.
 
-They are listed in dependency order — the order `inv migrate-db` applies them, and
-so also the order of the `alembic_version` values a database passes through. The
+The table lists them in dependency order: the order `inv migrate-db` applies them,
+which is also the order of the `alembic_version` values a database passes through. The
 last row is the current head.
 
 **Whenever a new migration is added to `alembic/versions/` (see the autogenerate
-caveat below), add a matching row to this table in the same change** — revision id,
+caveat below), add a matching row to this table in the same change**: revision id,
 date, and a one-line description of what it does and why. This table is the only
 place that history is summarized; a migration without a row here is invisible to
 anyone reading this guide instead of grepping the directory.
@@ -131,10 +178,10 @@ anyone reading this guide instead of grepping the directory.
 | `b8f31a6c9e05` | 2026-08-22 | Index `actor.is_muted`, the pre-existing sibling of `are_announces_hidden_from_stream` above: `muted_actor_ids()` runs the same shape of subquery on every timeline *and* notification read, rendered twice per timeline query. Measured over 5k actors, 1% muted: 0.386ms -> 0.178ms per timeline query. |
 | `f2a8c4e91d67` | 2026-08-24 | Add `search_text` to `actor`/`inbox`/`outbox` (NFC + casefold normalized, backfilled in Python) plus the `<table>_search` FTS5 trigram indexes and their sync triggers, so `/api/v2/search` matches non-ASCII case-insensitively and stops scanning. Measured over 50k inbox rows, rare-match query: 99ms -> 1ms. |
 | `0dcf9e09fd18` | 2026-08-28 | Add `outbox.alias` plus the unique `ix_outbox_alias` behind [URL aliases](user_guide.md#url-aliases). Deliberately a plain `ADD COLUMN` + `CREATE UNIQUE INDEX` rather than `op.batch_alter_table`: batch mode rebuilds the table, which silently drops both `ix_outbox_in_reply_to` (an expression index SQLAlchemy cannot reflect) and the `outbox_search_*` FTS5 triggers, leaving reply lookups scanning and the search index frozen. Never batch-alter `outbox`/`inbox` for that reason. |
-| `17a4a33f1e12` | 2026-09-04 | Add the `mastodon_list` and `mastodon_list_member` tables backing Mastodon Lists (the `POST /api/v1/lists` family) — purely local and curated, like `actor.is_muted`; nothing here is federated. |
-| `9c2d5e7a3f41` | 2026-09-05 | Add `ix_inbox_actor_id_ap_published_at`. The list timeline's membership filter narrows to a handful of `actor_id`s, but SQLite still prefers `ix_inbox_stream`'s publish-order scan without this — measured as an O(inbox size) scan for a quiet or empty list. `app.mastodon.timelines.fetch_inbox_timeline_page`'s `force_index` forces the plan onto this index via `INDEXED BY` (the quotes list does the same with `ix_inbox_quote_ap_id`). |
+| `17a4a33f1e12` | 2026-09-04 | Add the `mastodon_list` and `mastodon_list_member` tables backing Mastodon Lists (the `POST /api/v1/lists` family), purely local and curated, like `actor.is_muted`; nothing here is federated. |
+| `9c2d5e7a3f41` | 2026-09-05 | Add `ix_inbox_actor_id_ap_published_at`. The list timeline's membership filter narrows to a handful of `actor_id`s, but SQLite still prefers `ix_inbox_stream`'s publish-order scan without this (measured as an O(inbox size) scan for a quiet or empty list). `app.mastodon.timelines.fetch_inbox_timeline_page`'s `force_index` forces the plan onto this index via `INDEXED BY` (the quotes list does the same with `ix_inbox_quote_ap_id`). |
 
-Running `poetry run inv migrate-db` (or `inv update`, see [Updating](install.md#updating))
+Running `poetry run inv migrate-db` (or `inv update`, see [Updating](install.md#updating-1))
 applies any migration not yet present in your local database, regardless of
 whether it originated upstream or in this fork. To see where a database stands
 before upgrading it:
@@ -151,18 +198,17 @@ between an upstream checkout and this fork (or vice versa), check `alembic_versi
 in the database against the table above to confirm the schema is compatible before
 running the app.
 
-Three conventions this fork's migrations follow, all learned the hard way:
+This fork's migrations follow three conventions, all learned the hard way:
 
 - **Write them by hand, and never commit an autogenerated body unread.**
   `alembic/env.py` imports `Base` but none of the model modules, so
   `Base.metadata` is empty when it runs. Autogenerate therefore compares the live
-  database against *nothing* and confidently emits `op.drop_table()` for every
-  table in the schema. `inv generate-db-migration "message"` is still the right
-  way to get a revision file with the correct `down_revision` — just delete the
-  generated `upgrade()`/`downgrade()` bodies and write the real ones.
+  database against *nothing* and emits `op.drop_table()` for every table in the
+  schema. Use `inv generate-db-migration "message"` to get a revision file with
+  the correct `down_revision`, then delete the generated `upgrade()`/`downgrade()` bodies and write the real ones.
 - **Use plain `op.create_index` for expression indexes**, not
   `batch_alter_table`. Batch mode recreates the table and reflects its indexes,
-  and expression indexes do not survive that reflection — SQLAlchemy skips them
+  and expression indexes do not survive that reflection: SQLAlchemy skips them
   with `SAWarning: Skipped unsupported reflection of expression-based index`,
   which in batch mode means the index is silently dropped.
 - **Backfill through table stubs, never the live models.** A Python data
@@ -180,7 +226,7 @@ Standard unicode emoji are rendered as [Twemoji](https://github.com/jdecked/twem
 SVGs served from `app/static/twemoji/`. These are **not** checked into the repo (the
 directory ships with only a `.gitignore`), so a fresh clone starts without them.
 
-They are downloaded automatically during setup — the `download-twemoji` task is a
+Setup downloads them: the `download-twemoji` task is a
 dependency of `configuration-wizard`, so `poetry run inv configuration-wizard`
 (Python) or `make config` (Docker) fetches them. For Docker, the entrypoint
 (`misc/docker_start.sh`) also re-runs `download-twemoji` on **every** container
@@ -194,8 +240,8 @@ pinned version).
 Under the hood the task downloads a release tarball and extracts `assets/svg/`. The
 source is [jdecked/twemoji](https://github.com/jdecked/twemoji), the maintained
 continuation of the original `twitter/twemoji` (abandoned after the Twitter/X
-acquisition). The release tag is pinned in `tasks.py:download_twemoji` — bump it there
-when a newer release is needed.
+acquisition). The release tag is pinned in `tasks.py:download_twemoji`; bump it there
+when you need a newer release.
 
 ### Translations (i18n)
 
@@ -210,8 +256,8 @@ back to `language_code` when no match is found (e.g. no header sent, or none of
 the requested languages are available).
 
 Bundled locales: `en` (source strings), `ca` (Catalan), `es` (Spanish), `fr` (French),
-`it` (Italian), and `ro` (Romanian). Corrections and new locales are welcome — see
-below.
+`it` (Italian), and `ro` (Romanian). Corrections and new locales are welcome (see
+below).
 
 To add or update a translation:
 
@@ -224,9 +270,9 @@ poetry run inv compile-translations       # compile .po -> .mo (also runs automa
 
 Edit the generated `.po` file's `msgstr` entries with a gettext-aware editor (e.g.
 [Poedit](https://poedit.net/)) or by hand, then run `compile-translations` to produce
-the `.mo` file the app actually loads at runtime (`.mo` files are build artifacts and
-are gitignored). A `data/translations/<locale>/LC_MESSAGES/messages.mo` — following the
-same `data/`-over-`app/` override convention used for templates — takes precedence over
+the `.mo` file the app loads at runtime (`.mo` files are build artifacts and
+are gitignored). A `data/translations/<locale>/LC_MESSAGES/messages.mo` (following the
+same `data/`-over-`app/` override convention used for templates) takes precedence over
 the bundled one, letting an instance ship a custom or newer translation without
 touching the checkout.
 
@@ -234,7 +280,7 @@ touching the checkout.
 
 Running a local version requires:
 
- - Python 3.10+ (3.12 recommended — it's what the project is developed and tested against)
+ - Python 3.10+ (3.12 recommended: the project is developed and tested against it)
  - SQLite 3.35+
 
 You can follow the [Python developer version of the install instructions](install.md#python-developer-edition).
@@ -244,11 +290,11 @@ You can follow the [Python developer version of the install instructions](instal
 The documentation is a set of Markdown files in `docs/`, built into a static
 website with [Sphinx](https://www.sphinx-doc.org/) using the
 [MyST](https://myst-parser.readthedocs.io/) Markdown parser and the
-[Furo](https://pradyunsg.me/furo/) theme. The online documentation is published
-to GitHub Pages automatically by the `.github/workflows/pages.yml` workflow on
-every push to `main` that touches `docs/`.
+[Furo](https://pradyunsg.me/furo/) theme. The `.github/workflows/pages.yml` workflow
+publishes the online documentation to GitHub Pages on every push to `main` that touches `docs/`.
 
-Install the documentation dependencies (ideally in a dedicated virtualenv):
+Install the documentation dependencies (ideally in a dedicated virtualenv).
+The pinned Sphinx (9.1) requires Python 3.12 or newer.
 
 ```bash
 pip install -r docs/requirements.txt
@@ -281,10 +327,37 @@ inv autoformat
 inv lint
 ```
 
+`inv lint` runs `black --check`, `isort --sl --check-only`, `flake8` (max line
+length 120, E203 ignored, see `.flake8`) and `mypy` with the SQLAlchemy and
+pydantic plugins (see `pyproject.toml`). `inv autoformat` applies black and
+`isort --sl`.
+
+`.pre-commit-config.yaml` runs the same four checks on every commit, using the
+tools from `.venv/`. Run it with [prek](https://prek.j178.dev/), a drop-in
+replacement for `pre-commit` (plain `pre-commit` works too):
+
+```bash
+pipx install prek          # or: uv tool install prek
+poetry install --no-root   # the hooks call ./.venv/bin/*
+prek install               # once per clone
+prek run --all-files       # on demand
+```
+
 And that the tests suite is passing:
 
 ```bash
 inv tests
+```
+
+`inv tests` runs pytest with `MICROBLOGPUB_CONFIG_FILE=tests.toml`, which points
+at an in-memory SQLite database. It collects tests from `tests/`,
+`tests/mastodon/` and `activitypub/tests/`: about 770 tests, around 5 minutes
+for the full suite. `tests/test_ffmpeg.py` needs `ffmpeg`/`ffprobe` on the
+`PATH` and skips itself without them. To run a subset, pass a pytest `-k`
+expression:
+
+```bash
+inv tests -k test_ffmpeg
 ```
 
 Please also consider adding new test cases if needed.

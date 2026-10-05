@@ -93,10 +93,10 @@ def test_both_instance_endpoints_report_the_same_version(client: TestClient) -> 
     assert client.get("/api/v2/instance").json()["version"] == _VERSION_STRING
 
 
-def test_instance_advertises_api_version_10(client: TestClient) -> None:
-    """Mastodon 4.6.0 ships `api_versions.mastodon == 10` (4.5.0 was 7), and
+def test_instance_advertises_api_version_11(client: TestClient) -> None:
+    """Mastodon 4.7.3 ships `api_versions.mastodon == 11` (4.5.0 was 7), and
     clients gate profile/collections on it, not on the `version` string."""
-    assert client.get("/api/v2/instance").json()["api_versions"] == {"mastodon": 10}
+    assert client.get("/api/v2/instance").json()["api_versions"] == {"mastodon": 11}
 
 
 def test_instance_v2_carries_the_4_4_and_4_5_fields(client: TestClient) -> None:

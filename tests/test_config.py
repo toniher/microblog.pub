@@ -18,9 +18,10 @@ def test_alias_url_prefix_defaults_to_post() -> None:
     assert config.alias_url_prefix == "post"
 
 
-def test_alias_url_prefix_rejects_a_reserved_segment() -> None:
+@pytest.mark.parametrize("prefix", ["admin", "oauth", "api", "micropub"])
+def test_alias_url_prefix_rejects_a_reserved_segment(prefix: str) -> None:
     with pytest.raises(ValueError):
-        Config.model_validate({**_BASE_KWARGS, "alias_url_prefix": "admin"})
+        Config.model_validate({**_BASE_KWARGS, "alias_url_prefix": prefix})
 
 
 def test_alias_url_prefix_accepts_a_custom_value() -> None:
