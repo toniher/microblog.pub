@@ -130,3 +130,11 @@ async def test_owner_counts_is_cached_per_request(
 
         await serializers._owner_counts(async_db_session)
         assert len(statements) == query_count_after_first_call
+
+
+def test_media_attachment_falls_back_to_ap_type_without_media_type() -> None:
+    # Bridgy Fed: no `mediaType`, extensionless blob URL.
+    from activitypub.ap_object import Attachment
+
+    att = Attachment(type="Image", url="https://pds.example/xrpc/getBlob?cid=x")
+    assert serializers.serialize_media_attachment(att, 0, "1")["type"] == "image"

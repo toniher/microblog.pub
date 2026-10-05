@@ -585,7 +585,12 @@ def serialize_media_attachment(
     url = attachment.proxied_url or attachment.url
     duration = attachment.duration_seconds
     media_type = _mastodon_media_type(
-        attachment.media_type,
+        # Bridgy Fed sends `{"type": "Image"}` with no `mediaType` on an
+        # extensionless blob URL; the AP type is the only hint, as in the web UI.
+        attachment.media_type
+        or {"Image": "image/*", "Video": "video/*", "Audio": "audio/*"}.get(
+            attachment.type
+        ),
         attachment.url,
         duration=duration,
         has_audio=attachment.has_audio,
