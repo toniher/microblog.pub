@@ -32,13 +32,15 @@ def _set_sqlite_pragmas(dbapi_connection: Any, connection_record: Any) -> None:
     # reasserting it here keeps freshly created DBs (including the in-memory
     # test DB) consistent with production. synchronous=NORMAL is safe under
     # WAL (a crash can't corrupt, only lose the last transactions) and avoids
-    # a full fsync on every write. temp_store=MEMORY keeps ORDER BY spills
-    # off disk; cache_size/mmap_size raise the working set SQLite keeps hot.
+    # a full fsync on every write. mmap_size keeps the hot working set in the
+    # shared, reclaimable OS page cache. cache_size and temp_store stay at
+    # SQLite's defaults on purpose: both are private (anonymous) memory per
+    # connection, there is one connection per session (NullPool) in each of the
+    # four processes, so a large cache is thrown away on close yet still
+    # inflates RSS, and in-memory sorts over a GB-sized DB spill into RAM.
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA journal_mode=WAL")
     cursor.execute("PRAGMA synchronous=NORMAL")
-    cursor.execute("PRAGMA temp_store=MEMORY")
-    cursor.execute("PRAGMA cache_size=-64000")
     cursor.execute("PRAGMA mmap_size=268435456")
     cursor.close()
 

@@ -6,6 +6,10 @@ services:
     container_name: microblogpub
     user: 1000:1000
     restart: unless-stopped
+    environment:
+      # Cap glibc malloc arenas: the threaded aiosqlite/PIL work otherwise
+      # creates many arenas that never return freed memory to the OS.
+      - MALLOC_ARENA_MAX=2
     volumes:
       - ./data:/app/data
       # app/static is a named volume rather than a host bind mount: generated
