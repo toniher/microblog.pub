@@ -143,6 +143,82 @@ make account=user@other.tld webfinger              # resolve a remote actor URL
 See the [User's guide](user_guide.md) for the full list and the details of each
 task (each one documents its "Docker edition" invocation).
 
+### Checking memory and disk usage
+
+Expect the container to use about 500 MiB of RAM. The four processes start at
+roughly 100 to 150 MiB each, and the kernel adds some page cache for the SQLite
+database on top.
+
+You can cap the container's memory in `docker-compose.yml` (or in a
+`docker-compose.override.yml`):
+
+```yaml
+services:
+  server:
+    mem_limit: 768m
+```
+
+Size the cap from your own numbers below. The process memory needs to fit
+under it with room to spare, and the database cache uses whatever remains.
+
+#### Container totals
+
+```bash
+docker stats --no-stream microblogpub
+```
+
+`MEM USAGE` counts process memory plus the part of the page cache in active
+use. The kernel can drop that cache, so this number alone overstates what the
+app needs.
+
+`BLOCK I/O` shows the bytes the container has read from and written to disk
+since it started, as `read / written`. Reads served from the page cache do not
+count. Run the command twice, an hour apart, and subtract:
+
+ - Right after a start, reads climb fast while SQLite loads the database into
+   the cache.
+ - After that, expect tens to a few hundred MB of reads per hour.
+ - Several GB per hour means the cache has too little room for the database's
+   working set: shrink the database with
+   [`prune-old-data`](user_guide.md#pruning-old-data) or raise the memory cap.
+
+#### Process memory against cache
+
+```bash
+docker exec microblogpub sh -c 'grep -E "^(anon|file|active_file|inactive_file) " /sys/fs/cgroup/memory.stat'
+```
+
+ - `anon`: memory the processes allocated themselves. Watch this number.
+ - `file`: page cache (the database file and logs). The kernel reclaims it
+   under pressure.
+
+#### Memory per process
+
+The image ships without `ps`, so read `/proc` directly:
+
+```bash
+docker exec microblogpub sh -c 'for p in /proc/[0-9]*; do r=$(grep VmRSS $p/status 2>/dev/null | awk "{print \$2}"); [ -n "$r" ] && echo "$((r/1024)) MiB  $(tr "\0" " " < $p/cmdline | cut -c1-70)"; done | sort -rn'
+```
+
+The per-process figures add up to more than `anon`: each process also counts
+the shared database pages and libraries it has mapped.
+
+#### Out-of-memory kills
+
+```bash
+docker exec microblogpub grep oom_kill /sys/fs/cgroup/memory.events
+```
+
+Anything above 0 means the kernel killed a process at the cap and supervisord
+restarted it. Raise `mem_limit`.
+
+#### Reading the results
+
+Compare readings taken just after a start and a day later. Process memory
+should stay within a few tens of MiB of its starting value. If one process
+keeps growing, that process has a leak: note which one it is and open an
+issue.
+
 ### Updating 
 
 To update microblogpub, pull the latest changes, rebuild the Docker image and restart the process with `docker compose`.
