@@ -36,7 +36,7 @@ citizen.
 - Accessible: markup and styles follow WCAG guidance, follow the system dark
   mode, and respect `prefers-reduced-motion`
 - Lightweight
-  - Uses SQLite, and Python 3.12 (3.10+ supported)
+  - Uses SQLite, and Python 3.12 (3.11+ supported)
   - Can be deployed on a small VPS
 - Privacy-aware
   - microblog.pub strips EXIF metadata (like GPS location) before storage

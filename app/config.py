@@ -2,12 +2,12 @@ import hashlib
 import hmac
 import os
 import secrets
+import tomllib
 from pathlib import Path
 
 import bcrypt
 import itsdangerous
 import pydantic
-import tomli
 from fastapi import Form
 from fastapi import HTTPException
 from fastapi import Request
@@ -283,7 +283,7 @@ class Config(pydantic.BaseModel):
 def load_config() -> Config:
     try:
         return Config.model_validate(
-            tomli.loads((ROOT_DIR / "data" / _CONFIG_FILE).read_text())
+            tomllib.loads((ROOT_DIR / "data" / _CONFIG_FILE).read_text())
         )
     except FileNotFoundError:
         raise ValueError(

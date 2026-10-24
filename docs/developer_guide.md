@@ -280,7 +280,7 @@ touching the checkout.
 
 Running a local version requires:
 
- - Python 3.10+ (3.12 recommended: the project is developed and tested against it)
+ - Python 3.11+ (3.12 recommended: the project is developed against it; CI tests 3.11 to 3.14)
  - SQLite 3.35+
 
 You can follow the [Python developer version of the install instructions](install.md#python-developer-edition).

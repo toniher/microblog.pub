@@ -792,10 +792,17 @@ class Hub:
                     self._stop_event.set()
                 self._stop_event = None
         if task_to_stop is not None:
-            # wait_for cancels the task if it overruns, so a tick that hangs
-            # can delay teardown but can never leave a second pump polling.
-            with contextlib.suppress(asyncio.TimeoutError, asyncio.CancelledError):
-                await asyncio.wait_for(task_to_stop, timeout=5)
+            # A tick that hangs past the timeout gets cancelled, so it can
+            # delay teardown but never leave a second pump polling. Unlike
+            # wait_for, asyncio.wait doesn't forward *our* cancellation (the
+            # websocket handler being torn down) into the pump: cancelling it
+            # mid-query makes SQLAlchemy 1.4 close the aiosqlite connection
+            # yet still return it to the pool, so the next checkout fails
+            # with "Cannot operate on a closed database". The stop event is
+            # already set, so the pump finishes its tick and exits on its own.
+            done, _ = await asyncio.wait({task_to_stop}, timeout=5)
+            if not done:
+                task_to_stop.cancel()
 
     def publish(self, event: Event) -> None:
         for sub in list(self._subscribers):

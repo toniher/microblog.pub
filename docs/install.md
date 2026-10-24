@@ -266,9 +266,9 @@ docker compose up -d
 
 ## Python developer edition
 
-Assuming you have a working **Python 3.10+** environment (Python **3.12** is
-recommended: the project is developed and tested against it, and the Docker image
-ships it).
+Assuming you have a working **Python 3.11+** environment (Python **3.12** is
+recommended: the project is developed against it, and the Docker image ships it;
+CI tests 3.11 to 3.14).
 
 Setup [Poetry](https://python-poetry.org/docs/master/#installing-with-the-official-installer).
 

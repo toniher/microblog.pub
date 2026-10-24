@@ -79,7 +79,7 @@ templates, Alembic migrations, background workers for federation traffic.
 
 ### Conventions
 
-- Python **3.12** (min `^3.10`), Poetry for deps, **in-project `.venv/`**
+- Python **3.12** (min `^3.11`), Poetry for deps, **in-project `.venv/`**
   (`poetry.toml`), `package-mode = false`.
 - Lint stack = `black` (24.x), `isort --sl`, `flake8` (max line 120, ignore E203),
   `mypy` (with `sqlalchemy.ext.mypy.plugin` + `pydantic.mypy`).
