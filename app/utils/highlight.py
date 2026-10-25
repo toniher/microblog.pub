@@ -22,7 +22,8 @@ HIGHLIGHT_CSS_HASH = base64.b64encode(
 def highlight(html: str) -> str:
     soup = BeautifulSoup(html, "html5lib")
     for code in soup.find_all("code"):
-        if not code.parent.name == "pre":
+        parent = code.parent
+        if parent is None or parent.name != "pre":
             continue
 
         # Replace <br> tags with line breaks (Mastodon sends code like this)
@@ -44,13 +45,15 @@ def highlight(html: str) -> str:
                 .replace("&lt;", "<")
                 .replace("&amp;", "&")
             )
-            code.parent.replaceWith(
-                BeautifulSoup(
-                    phighlight(code_content, lexer, _FORMATTER), "html5lib"
-                ).body.next
-            )
+            highlighted = BeautifulSoup(
+                phighlight(code_content, lexer, _FORMATTER), "html5lib"
+            ).body
+            assert highlighted is not None  # html5lib always builds a <body>
+            parent.replace_with(highlighted.contents[0])
         else:
             code.name = "div"
-            code["class"] = code.get("class", []) + ["highlight"]
+            # class is multi-valued, so bs4 hands back a list
+            code["class"] = " ".join([*(code.get("class") or []), "highlight"])
 
+    assert soup.body is not None
     return soup.body.encode_contents().decode()

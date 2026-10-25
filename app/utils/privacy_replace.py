@@ -16,9 +16,11 @@ def replace_content(content: str) -> str:
         return content
 
     for link in links:
-        link.attrs["href"] = replace_url(link.attrs["href"])
+        link.attrs["href"] = replace_url(str(link.attrs["href"]))
 
-    return soup.find("body").decode_contents()
+    # html5lib always builds a <body>
+    assert soup.body is not None
+    return soup.body.decode_contents()
 
 
 def replace_url(u: str) -> str:

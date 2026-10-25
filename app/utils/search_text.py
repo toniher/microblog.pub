@@ -42,7 +42,7 @@ def object_search_text(ap_object: dict[str, Any]) -> str:
     content = ap_object.get("content") or ""
     soup = BeautifulSoup(content, "html5lib")
     parts = [soup.get_text(" ")]
-    parts.extend(a["href"] for a in soup.find_all("a", href=True))
+    parts.extend(str(a["href"]) for a in soup.find_all("a", href=True))
     return normalize(" ".join(parts))
 
 

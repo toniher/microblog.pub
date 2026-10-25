@@ -85,6 +85,12 @@ profile = "black"
 exclude = ["alembic/versions/"]
 plugins = ["sqlalchemy.ext.mypy.plugin", "pydantic.mypy"]
 
+# factory-boy ships py.typed since 3.3.2, but its metaclass __call__ is
+# unannotated, so mypy types SomeFactory() as the factory, not the model.
+[[tool.mypy.overrides]]
+module = ["factory", "factory.*"]
+follow_imports = "skip"
+
 [tool.black]
 extend-exclude = '''
 /(

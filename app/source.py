@@ -2,10 +2,10 @@ import re
 import typing
 
 from loguru import logger
-from mistletoe import Document  # type: ignore
-from mistletoe.block_token import CodeFence  # type: ignore
-from mistletoe.html_renderer import HTMLRenderer  # type: ignore
-from mistletoe.span_token import SpanToken  # type: ignore
+from mistletoe import Document
+from mistletoe.block_token import BlockCode
+from mistletoe.html_renderer import HTMLRenderer
+from mistletoe.span_token import SpanToken
 from pygments.formatters import HtmlFormatter  # type: ignore
 from pygments.lexers import get_lexer_by_name as get_lexer  # type: ignore
 from pygments.util import ClassNotFound  # type: ignore
@@ -63,7 +63,7 @@ class CustomRenderer(HTMLRenderer):
         enable_mentionify: bool = True,
         enable_hashtagify: bool = True,
     ) -> None:
-        extra_tokens = []
+        extra_tokens: list[type[SpanToken]] = []
         if enable_mentionify:
             extra_tokens.append(Mention)
         if enable_hashtagify:
@@ -73,7 +73,8 @@ class CustomRenderer(HTMLRenderer):
         self.tags: list[dict[str, str]] = []
         self.mentioned_actors = mentioned_actors
 
-    def render_auto_link(self, token: AutoLink) -> str:
+    # Our AutoLink replaces mistletoe's, which is what the base class names.
+    def render_auto_link(self, token: AutoLink) -> str:  # type: ignore[override]
         template = '<a href="{target}" rel="noopener">{inner}</a>'
         target = self.escape_url(token.target)
         return template.format(target=target, inner=target)
@@ -105,7 +106,7 @@ class CustomRenderer(HTMLRenderer):
         )
         return link
 
-    def render_block_code(self, token: CodeFence) -> str:
+    def render_block_code(self, token: BlockCode) -> str:
         lexer_attr = ""
         try:
             lexer = get_lexer(token.language)
@@ -113,7 +114,7 @@ class CustomRenderer(HTMLRenderer):
         except ClassNotFound:
             pass
 
-        code = token.children[0].content
+        code = token.content
         return f"<pre><code{lexer_attr}>\n{code}\n</code></pre>"
 
 

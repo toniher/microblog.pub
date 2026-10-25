@@ -35,7 +35,7 @@ async def _discover_webmention_endoint(url: str) -> str | None:
     wlinks = soup.find_all(["link", "a"], attrs={"rel": "webmention"})
     for wlink in wlinks:
         if "href" in wlink.attrs:
-            return make_abs(wlink.attrs["href"], url)
+            return make_abs(str(wlink.attrs["href"]), url)
 
     return None
 

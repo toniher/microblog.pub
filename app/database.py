@@ -22,7 +22,11 @@ DATABASE_URL = f"sqlite+aiosqlite:///{DB_PATH}"
 async_engine = create_async_engine(
     DATABASE_URL, future=True, echo=DEBUG, connect_args={"timeout": 15}
 )
-async_session = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+# The SQLAlchemy 1.4 stubs only type sessionmaker for sync Session; this is the
+# documented 1.4 way to build AsyncSessions.
+async_session = sessionmaker(  # type: ignore[type-var]
+    async_engine, class_=AsyncSession, expire_on_commit=False
+)
 
 
 @event.listens_for(engine, "connect")

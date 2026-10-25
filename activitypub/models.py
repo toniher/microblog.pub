@@ -52,9 +52,9 @@ class Actor(Base, BaseActor):
 
     ap_id: Mapped[str] = Column(String, unique=True, nullable=False, index=True)
     ap_actor: Mapped[ap.RawObject] = Column(JSON, nullable=False)
-    ap_type = Column(String, nullable=False)
+    ap_type: Mapped[str] = Column(String, nullable=False)
 
-    handle = Column(String, nullable=True, index=True)
+    handle: Mapped[str] = Column(String, nullable=True, index=True)
 
     is_blocked = Column(Boolean, nullable=False, default=False, server_default="0")
     is_deleted = Column(Boolean, nullable=False, default=False, server_default="0")
@@ -245,8 +245,8 @@ class InboxObject(Base, BaseObject):
 
     is_hidden_from_stream = Column(Boolean, nullable=False, default=False)
 
-    ap_actor_id = Column(String, nullable=False)
-    ap_type = Column(String, nullable=False, index=True)
+    ap_actor_id: Mapped[str] = Column(String, nullable=False)
+    ap_type: Mapped[str] = Column(String, nullable=False, index=True)
     ap_id: Mapped[str] = Column(String, nullable=False, unique=True, index=True)
     ap_context = Column(String, nullable=True)
     ap_published_at = Column(DateTime(timezone=True), nullable=False)
@@ -255,7 +255,9 @@ class InboxObject(Base, BaseObject):
     # Only set for activities
     activity_object_ap_id = Column(String, nullable=True, index=True)
 
-    visibility = Column(Enum(ap.VisibilityEnum), nullable=False)
+    visibility: Mapped[ap.VisibilityEnum] = Column(
+        Enum(ap.VisibilityEnum), nullable=False
+    )
     conversation = Column(String, nullable=True, index=True)
 
     has_local_mention = Column(
@@ -393,7 +395,7 @@ class OutboxObject(Base, BaseObject):
     # unlimited NULLs under it, so unaliased rows are unaffected.
     alias = Column(String, nullable=True, index=True, unique=True)
 
-    ap_type = Column(String, nullable=False, index=True)
+    ap_type: Mapped[str] = Column(String, nullable=False, index=True)
     ap_id: Mapped[str] = Column(String, nullable=False, unique=True, index=True)
     ap_context = Column(String, nullable=True)
     ap_object: Mapped[ap.RawObject] = Column(JSON, nullable=False)
@@ -405,7 +407,9 @@ class OutboxObject(Base, BaseObject):
     revisions: Mapped[list[dict[str, Any]] | None] = Column(JSON, nullable=True)
 
     ap_published_at = Column(DateTime(timezone=True), nullable=False, default=now)
-    visibility = Column(Enum(ap.VisibilityEnum), nullable=False)
+    visibility: Mapped[ap.VisibilityEnum] = Column(
+        Enum(ap.VisibilityEnum), nullable=False
+    )
     conversation = Column(String, nullable=True, index=True)
 
     likes_count = Column(Integer, nullable=False, default=0)

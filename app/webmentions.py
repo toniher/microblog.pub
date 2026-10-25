@@ -37,7 +37,7 @@ def is_source_containing_target(source_html: str, target_url: str) -> bool:
     soup = BeautifulSoup(source_html, "html5lib")
     for link in soup.find_all("a"):
         h = link.get("href")
-        if not is_url_valid(h):
+        if not isinstance(h, str) or not is_url_valid(h):
             continue
 
         if h == target_url:

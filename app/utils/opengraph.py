@@ -40,14 +40,18 @@ def _scrap_og_meta(url: str, html: str) -> OpenGraphMeta | None:
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
 
     soup = BeautifulSoup(html, "html5lib")
-    ogs = {
-        og.attrs["property"]: og.attrs.get("content")
-        for og in soup.html.head.findAll(property=re.compile(r"^og"))
+    assert soup.head is not None  # html5lib always builds a <head>
+    # content is a single-valued attribute, so it is a str (or missing)
+    ogs: dict[str, Any] = {
+        str(og.attrs["property"]): og.get("content")
+        for og in soup.head.find_all(property=re.compile(r"^og"))
     }
-    # FIXME some page have no <title>
+    title = soup.find("title")
+    if title is None:
+        return None
     raw = {
         "url": url,
-        "title": soup.find("title").text.strip(),
+        "title": title.text.strip(),
         "image": None,
         "description": None,
         "site_name": urlparse(url).hostname,
@@ -64,7 +68,7 @@ def _scrap_og_meta(url: str, html: str) -> OpenGraphMeta | None:
         if u := raw.get(maybe_rel):
             raw[maybe_rel] = make_abs(u, url)
 
-            if not is_url_valid(raw[maybe_rel]):
+            if not is_url_valid(raw[maybe_rel] or ""):
                 logger.info(f"Invalid url {raw[maybe_rel]}")
                 if maybe_rel == "url":
                     raw["url"] = url

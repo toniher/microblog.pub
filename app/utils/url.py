@@ -39,7 +39,7 @@ def _getaddrinfo(hostname: str, port: int) -> str:
         ip_address = str(ipaddress.ip_address(hostname))
     except ValueError:
         try:
-            ip_address = socket.getaddrinfo(hostname, port)[0][4][0]
+            ip_address = str(socket.getaddrinfo(hostname, port)[0][4][0])
             logger.debug(f"DNS lookup: {hostname} -> {ip_address}")
         except socket.gaierror:
             logger.exception(f"failed to lookup addr info for {hostname}")

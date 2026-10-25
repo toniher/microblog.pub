@@ -112,7 +112,7 @@ class Object:
             if not img.attrs.get("src"):
                 continue
 
-            image_urls.add(img.attrs["src"])
+            image_urls.add(str(img.attrs["src"]))
 
         return image_urls
 
