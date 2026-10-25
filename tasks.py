@@ -67,10 +67,29 @@ def compile_scss(ctx, watch=False):
     # route in app/main.py), so it no longer needs to be copied here.
     build_favicon()
 
-    if watch:
-        run("boussole watch", echo=True)
-    else:
-        run("boussole compile", echo=True)
+    import time
+
+    import sass  # type: ignore
+
+    def _compile():
+        # type: () -> None
+        # Compiles every non-partial app/scss/*.scss into app/static/css/*.css.
+        sass.compile(dirname=("app/scss", "app/static/css"), output_style="nested")
+        print("compiled app/scss -> app/static/css")
+
+    _compile()
+    # ponytail: 1s mtime polling, fine for two source files
+    last = None
+    while watch:
+        # stat() follows the _theme.scss symlink, so data/_theme.scss edits count
+        mtimes = [p.stat().st_mtime for p in Path("app/scss").glob("*.scss")]
+        if last is not None and mtimes != last:
+            try:
+                _compile()
+            except sass.CompileError as exc:
+                print(exc)
+        last = mtimes
+        time.sleep(1)
 
 
 @task

@@ -82,7 +82,7 @@ inv -l
 Tasks for local development:
 
 ```bash
-inv compile-scss [--watch]          # build the CSS (--watch rebuilds on change)
+inv compile-scss [--watch]          # build the CSS with libsass (--watch rebuilds when app/scss or data/_theme.scss changes; Ctrl-C to stop)
 inv uvicorn                         # web server
 inv process-incoming-activities     # inbox worker
 inv process-outgoing-activities     # outbox worker (also runs scheduled statuses and poll notifications)
