@@ -81,7 +81,7 @@ templates, Alembic migrations, background workers for federation traffic.
 
 - Python **3.12** (min `^3.11`), Poetry for deps, **in-project `.venv/`**
   (`poetry.toml`), `package-mode = false`.
-- Lint stack = `black` (24.x), `isort --sl`, `flake8` (max line 120, ignore E203),
+- Lint stack = `black` (26.x), `isort --sl`, `flake8` (max line 120, ignore E203),
   `mypy` (with `sqlalchemy.ext.mypy.plugin` + `pydantic.mypy`).
 - pydantic **v2** idioms (`model_validate`, `model_dump`, `ConfigDict`).
 - SQLAlchemy queries use the 1.4 async style (`select()` + `session.scalar/execute`).

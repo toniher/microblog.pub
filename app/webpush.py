@@ -54,10 +54,12 @@ def _b64url_encode(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
 
 
-def _hkdf(master: bytes, key_len: int, salt: bytes, context: bytes) -> bytes:
+def _hkdf(
+    master: bytes | bytearray | memoryview, key_len: int, salt: bytes, context: bytes
+) -> bytes:
     # `num_keys` defaults to 1, but the stub still types the return as
     # `bytes | tuple[bytes, ...]` — narrow it back for mypy.
-    derived = HKDF(master, key_len, salt, SHA256, context=context)
+    derived = HKDF(bytes(master), key_len, salt, SHA256, context=context)
     assert isinstance(derived, bytes)
     return derived
 
