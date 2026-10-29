@@ -106,12 +106,8 @@ def test_document_loader_has_a_timeout() -> None:
     a host that accepts the connection and stays silent parks the caller for
     good.
     """
-    kwargs = [
-        c.cell_contents
-        for c in ldsig.requests_loader.__closure__ or ()
-        if isinstance(c.cell_contents, dict)
-    ]
-    assert any("timeout" in kw for kw in kwargs), (
+    # pyld's RequestsDocumentLoader passes .kwargs to session.get()
+    assert "timeout" in ldsig.requests_loader.kwargs, (
         "requests_document_loader() must be built with a timeout= kwarg; it "
         "forwards kwargs straight to requests.get()"
     )

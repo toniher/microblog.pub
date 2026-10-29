@@ -37,3 +37,18 @@ def test_webmention__resolves_target_by_alias(db: Session, client: TestClient) -
     assert webmention.outbox_object_id == note.id
     assert webmention.source == source
     assert webmention.target == target
+
+
+def test_microformats_img_alt_is_flattened_to_url() -> None:
+    import mf2py  # type: ignore
+
+    from app.utils.microformats import _drop_img_alt
+
+    parsed = _drop_img_alt(
+        mf2py.parse(
+            doc='<div class="h-card"><span class="p-name">A</span>'
+            '<img class="u-photo" src="https://a.ex/a.jpg" alt="A"></div>'
+        )
+    )
+
+    assert parsed["items"][0]["properties"]["photo"] == ["https://a.ex/a.jpg"]

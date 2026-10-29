@@ -10,3 +10,9 @@ requirements.txt
 app/static/favicon.ico
 misc/dev-supervisord.conf
 app/translations/**/*.mo
+
+# tokenade — per-project cache / scaffold flag / dedup refs
+.tokenade/
+
+# tokenade — legacy per-project embedding model cache (now global)
+.fastembed_cache/

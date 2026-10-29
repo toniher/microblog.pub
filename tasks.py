@@ -396,7 +396,9 @@ def reset_password(ctx):
     from prompt_toolkit import prompt
 
     new_password = bcrypt.hashpw(
-        prompt("New admin password: ", is_password=True).encode(), bcrypt.gensalt()
+        # bcrypt only uses the first 72 bytes (and bcrypt 5 raises on more)
+        prompt("New admin password: ", is_password=True).encode()[:72],
+        bcrypt.gensalt(),
     ).decode()
 
     print()

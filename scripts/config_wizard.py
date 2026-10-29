@@ -78,7 +78,9 @@ def main() -> None:
     dat["domain"] = prompt("domain: ")
     dat["username"] = prompt("username: ")
     dat["admin_password"] = bcrypt.hashpw(
-        prompt("admin password: ", is_password=True).encode(), bcrypt.gensalt()
+        # bcrypt only uses the first 72 bytes (and bcrypt 5 raises on more)
+        prompt("admin password: ", is_password=True).encode()[:72],
+        bcrypt.gensalt(),
     ).decode()
     dat["name"] = prompt("name (e.g. John Doe): ", default=dat["username"])
     dat["summary"] = prompt(

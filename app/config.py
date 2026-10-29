@@ -306,7 +306,10 @@ def is_activitypub_requested(req: Request) -> bool:
 
 
 def verify_password(pwd: str) -> bool:
-    return bcrypt.checkpw(pwd.encode(), CONFIG.admin_password)
+    # bcrypt only uses the first 72 bytes. bcrypt < 5 truncated silently and
+    # bcrypt 5 raises instead, so truncate here to keep existing long
+    # passwords working and the login form from erroring on long input.
+    return bcrypt.checkpw(pwd.encode()[:72], CONFIG.admin_password)
 
 
 CONFIG = load_config()

@@ -27,3 +27,17 @@ def test_alias_url_prefix_rejects_a_reserved_segment(prefix: str) -> None:
 def test_alias_url_prefix_accepts_a_custom_value() -> None:
     config = Config.model_validate({**_BASE_KWARGS, "alias_url_prefix": "blog"})
     assert config.alias_url_prefix == "blog"
+
+
+def test_verify_password_handles_passwords_over_72_bytes(monkeypatch) -> None:
+    import bcrypt
+
+    from app import config
+
+    long_pwd = "x" * 80
+    # A hash made by bcrypt < 5, which silently used the first 72 bytes.
+    hashed = bcrypt.hashpw(long_pwd.encode()[:72], bcrypt.gensalt())
+    monkeypatch.setattr(config.CONFIG, "admin_password", hashed)
+
+    assert config.verify_password(long_pwd)
+    assert not config.verify_password("y" * 80)
