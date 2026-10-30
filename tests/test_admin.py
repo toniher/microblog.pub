@@ -1104,6 +1104,7 @@ def test_admin_edit_text__alias_only_change_preserves_question_poll_answers(
 
     outbox_object = db.query(activitypub.models.OutboxObject).one()
     assert outbox_object.ap_type == "Question"
+    assert outbox_object.poll_items is not None
     assert len(outbox_object.poll_items) == 2
 
     response = client.post(
@@ -1122,6 +1123,7 @@ def test_admin_edit_text__alias_only_change_preserves_question_poll_answers(
     assert outbox_object.alias == "poll-1"
     # Alias-only edits skip `send_update`, which would otherwise rebuild the
     # note from scratch and silently drop the poll answers.
+    assert outbox_object.poll_items is not None
     assert len(outbox_object.poll_items) == 2
     assert {pi["name"] for pi in outbox_object.poll_items} == {"A", "B"}
 

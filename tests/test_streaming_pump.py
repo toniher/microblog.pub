@@ -11,6 +11,7 @@ why that matters).
 import json
 
 import pytest
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
@@ -387,7 +388,7 @@ async def test_hard_deleted_tracked_row_produces_no_event(
     assert obj_id in pump._tracked_outbox
 
     db.execute(
-        activitypub.models.OutboxObject.__table__.delete().where(
+        delete(activitypub.models.OutboxObject).where(
             activitypub.models.OutboxObject.id == obj_id
         )
     )

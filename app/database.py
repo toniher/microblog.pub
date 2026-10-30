@@ -4,29 +4,38 @@ from typing import AsyncGenerator
 from sqlalchemy import MetaData
 from sqlalchemy import create_engine
 from sqlalchemy import event
+from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import sessionmaker
 
 from app.config import DB_PATH
 from app.config import DEBUG
 from app.config import SQLALCHEMY_DATABASE_URL
 
+# SQLAlchemy 2.x pools file DBs (QueuePool) where 1.4 opened one connection
+# per session (NullPool), and deprecates its implicit pick for in-memory DBs.
+# Pin the 1.4 choices: the PRAGMA note below relies on NullPool, and the
+# in-memory test DB must stay a single shared connection.
+_IS_MEMORY_DB = "mode=memory" in str(DB_PATH) or str(DB_PATH) == ":memory:"
+
 engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False, "timeout": 15}
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False, "timeout": 15},
+    poolclass=pool.SingletonThreadPool if _IS_MEMORY_DB else pool.NullPool,
 )
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+SessionLocal = sessionmaker(autoflush=False, bind=engine)
 
 DATABASE_URL = f"sqlite+aiosqlite:///{DB_PATH}"
 async_engine = create_async_engine(
-    DATABASE_URL, future=True, echo=DEBUG, connect_args={"timeout": 15}
+    DATABASE_URL,
+    echo=DEBUG,
+    connect_args={"timeout": 15},
+    poolclass=pool.StaticPool if _IS_MEMORY_DB else pool.NullPool,
 )
-# The SQLAlchemy 1.4 stubs only type sessionmaker for sync Session; this is the
-# documented 1.4 way to build AsyncSessions.
-async_session = sessionmaker(  # type: ignore[type-var]
-    async_engine, class_=AsyncSession, expire_on_commit=False
-)
+async_session = async_sessionmaker(async_engine, expire_on_commit=False)
 
 
 @event.listens_for(engine, "connect")
@@ -49,7 +58,10 @@ def _set_sqlite_pragmas(dbapi_connection: Any, connection_record: Any) -> None:
     cursor.close()
 
 
-Base: Any = declarative_base()
+class Base(DeclarativeBase):
+    pass
+
+
 metadata_obj = MetaData()
 
 

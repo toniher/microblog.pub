@@ -124,7 +124,7 @@ async def _prefetch_mentioned_actors(
 ) -> dict[str, "Actor"]:
     from activitypub.actor import fetch_actor
 
-    actors = {}
+    actors: dict[str, "Actor"] = {}
 
     for mention in re.findall(_MENTION_REGEX, content):
         if mention in actors:

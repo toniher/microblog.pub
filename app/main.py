@@ -11,6 +11,7 @@ from typing import Any
 from typing import AsyncGenerator
 from typing import MutableMapping
 from typing import Type
+from typing import TypeVar
 
 import fastapi
 import httpx
@@ -521,9 +522,14 @@ async def about(
     )
 
 
+_FollowX = TypeVar(
+    "_FollowX", activitypub.models.Following, activitypub.models.Follower
+)
+
+
 async def _build_followx_collection(
     db_session: AsyncSession,
-    model_cls: Type[activitypub.models.Following | activitypub.models.Follower],
+    model_cls: Type[_FollowX],
     path: str,
     page: bool | None,
     next_cursor: str | None,
@@ -541,11 +547,9 @@ async def _build_followx_collection(
             "totalItems": total_items,
         }
 
-    q = select(model_cls).order_by(model_cls.created_at.desc())  # type: ignore
+    q = select(model_cls).order_by(model_cls.created_at.desc())
     if next_cursor:
-        q = q.where(
-            model_cls.created_at < pagination.decode_cursor(next_cursor)  # type: ignore
-        )
+        q = q.where(model_cls.created_at < pagination.decode_cursor(next_cursor))
     q = q.limit(20)
 
     items = [followx for followx in (await db_session.scalars(q)).all()]
@@ -906,7 +910,7 @@ async def _fetch_likes(
     db_session: AsyncSession,
     outbox_object: activitypub.models.OutboxObject,
 ) -> list[activitypub.models.InboxObject]:
-    return (
+    return list(
         (
             await db_session.scalars(
                 select(activitypub.models.InboxObject)
@@ -930,7 +934,7 @@ async def _fetch_shares(
     db_session: AsyncSession,
     outbox_object: activitypub.models.OutboxObject,
 ) -> list[activitypub.models.InboxObject]:
-    return (
+    return list(
         (
             await db_session.scalars(
                 select(activitypub.models.InboxObject)
@@ -954,16 +958,18 @@ async def _fetch_webmentions(
     db_session: AsyncSession,
     outbox_object: activitypub.models.OutboxObject,
 ) -> list[models.Webmention]:
-    return (
-        await db_session.scalars(
-            select(models.Webmention)
-            .filter(
-                models.Webmention.outbox_object_id == outbox_object.id,
-                models.Webmention.is_deleted.is_(False),
+    return list(
+        (
+            await db_session.scalars(
+                select(models.Webmention)
+                .filter(
+                    models.Webmention.outbox_object_id == outbox_object.id,
+                    models.Webmention.is_deleted.is_(False),
+                )
+                .limit(50)
             )
-            .limit(50)
-        )
-    ).all()
+        ).all()
+    )
 
 
 @app.get("/o/{public_id}", response_model=None)
@@ -1430,10 +1436,14 @@ async def get_inbox(
     next_cursor = None
     if (
         items
-        and await db_session.scalar(
-            select(func.count(activitypub.models.InboxObject.id)).where(
-                *where, activitypub.models.InboxObject.created_at < items[-1].created_at
+        and (
+            await db_session.scalar(
+                select(func.count(activitypub.models.InboxObject.id)).where(
+                    *where,
+                    activitypub.models.InboxObject.created_at < items[-1].created_at,
+                )
             )
+            or 0
         )
         > 0
     ):
@@ -1956,7 +1966,7 @@ Disallow: /remote_follow"""
 async def _get_outbox_for_feed(
     db_session: AsyncSession,
 ) -> list[activitypub.models.OutboxObject]:
-    return (
+    return list(
         (
             await db_session.scalars(
                 select(activitypub.models.OutboxObject)

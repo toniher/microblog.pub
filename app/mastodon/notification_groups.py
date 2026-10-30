@@ -403,7 +403,7 @@ async def fetch_group_account_ids(
     seen: set[int] = set()
     ordered: list[int] = []
     for actor_id in actor_ids:
-        if actor_id not in seen:
+        if actor_id is not None and actor_id not in seen:
             seen.add(actor_id)
             ordered.append(actor_id)
     return ordered

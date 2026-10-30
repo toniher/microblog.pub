@@ -198,7 +198,7 @@ def has_tag(obj: AnyboxObject, wanted: str) -> bool:
 
 
 async def dm_thread_unread_contexts(db_session: AsyncSession) -> set[str]:
-    return set(
+    contexts = (
         (
             await db_session.execute(
                 select(activitypub.models.InboxObject.ap_context)
@@ -221,6 +221,7 @@ async def dm_thread_unread_contexts(db_session: AsyncSession) -> set[str]:
         .scalars()
         .all()
     )
+    return {context for context in contexts if context is not None}
 
 
 async def dm_threads(
@@ -274,7 +275,9 @@ async def dm_threads(
     unread_contexts = await dm_thread_unread_contexts(db_session)
 
     by_context: dict[str, dict] = {}
-    for obj in [*inbox_objects, *outbox_objects]:
+    anybox_objects: list[AnyboxObject] = [*inbox_objects, *outbox_objects]
+    for obj in anybox_objects:
+        assert obj.ap_context is not None  # excluded by both queries
         thread = by_context.setdefault(
             obj.ap_context, {"objects": [], "actor_ids": set()}
         )

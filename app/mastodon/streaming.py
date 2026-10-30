@@ -226,14 +226,23 @@ class EventPump:
         just loaded its REST timeline is looking at — and thus what the owner
         is about to delete or edit.
         """
-        self._inbox_cursor = await db_session.scalar(
-            select(func.coalesce(func.max(activitypub.models.InboxObject.id), 0))
+        self._inbox_cursor = (
+            await db_session.scalar(
+                select(func.coalesce(func.max(activitypub.models.InboxObject.id), 0))
+            )
+            or 0
         )
-        self._outbox_cursor = await db_session.scalar(
-            select(func.coalesce(func.max(activitypub.models.OutboxObject.id), 0))
+        self._outbox_cursor = (
+            await db_session.scalar(
+                select(func.coalesce(func.max(activitypub.models.OutboxObject.id), 0))
+            )
+            or 0
         )
-        self._notification_cursor = await db_session.scalar(
-            select(func.coalesce(func.max(models.Notification.id), 0))
+        self._notification_cursor = (
+            await db_session.scalar(
+                select(func.coalesce(func.max(models.Notification.id), 0))
+            )
+            or 0
         )
 
         self._tracked_inbox.clear()
@@ -517,7 +526,7 @@ class EventPump:
         if not new_inbox_ids and not new_outbox_ids:
             return []
 
-        contexts: set[str] = set()
+        contexts: set[str | None] = set()
         if new_inbox_ids:
             contexts.update(
                 (
