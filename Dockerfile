@@ -30,13 +30,12 @@ RUN apt-get install -y --no-install-recommends libjpeg-dev libxslt1-dev libxml2-
 RUN groupadd --gid 1000 microblogpub \
   && useradd --uid 1000 --gid microblogpub --shell /bin/bash microblogpub
 COPY --from=builder-base $PYSETUP_PATH $PYSETUP_PATH
-COPY . /app/
+COPY --chown=1000:1000 . /app/
 # Keep a pristine copy of the bundled static assets. app/static is mounted as a
 # Docker volume at runtime (so generated CSS/favicon/emoji persist), and the
 # entrypoint repopulates that volume from this snapshot whenever it is empty —
 # e.g. after the volume has been removed. See misc/docker_start.sh.
 RUN cp -a /app/app/static /app/app/static.dist
-RUN chown -R 1000:1000 /app
 USER microblogpub
 WORKDIR /app
 EXPOSE 8000

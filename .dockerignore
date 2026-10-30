@@ -8,3 +8,14 @@ docs/
 .mypy_cache
 .pytest_cache
 docker-compose.yml
+# local databases (prod copies, WAL/SHM sidecars)
+*.db
+*.db-*
+# untracked media dropped in the checkout
+*.mp4
+# dev tooling, not needed at runtime
+.claude
+.agents
+.tokenade
+.github
+tests/
