@@ -128,7 +128,7 @@ poetry run inv update-translations            # merge new msgids into existing .
 poetry run inv compile-translations           # .po -> .mo (also runs as part of `inv update`)
 
 # docker
-make build        # build image (python:3.12-slim base)
+make build        # build image (python:3.14-slim base)
 make config       # configuration wizard
 ```
 

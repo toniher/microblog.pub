@@ -44,7 +44,7 @@ Setup a reverse proxy (see the [Reverse Proxy section](#reverse-proxy)).
 
 ### What runs inside the container
 
-The image is built from `python:3.12-slim` and a single container runs **four
+The image is built from `python:3.14-slim` and a single container runs **four
 processes** under [supervisord](http://supervisord.org/) (see `misc/docker-supervisord.conf`):
 
  - `uvicorn`: the web server, listening on `0.0.0.0:8000`

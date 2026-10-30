@@ -1,4 +1,4 @@
-FROM python:3.12-slim AS python-base
+FROM python:3.14-slim AS python-base
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     POETRY_HOME="/opt/poetry" \
@@ -18,6 +18,8 @@ RUN curl -sSL https://install.python-poetry.org | python3 -
 WORKDIR $PYSETUP_PATH
 COPY poetry.lock pyproject.toml ./
 RUN poetry install --only main
+# Fail the build if SQLAlchemy fell back to pure Python (no matching wheel)
+RUN python -c "from sqlalchemy.util import has_compiled_ext; assert has_compiled_ext()"
 
 FROM python-base AS production
 RUN apt-get update
