@@ -14,6 +14,7 @@ from fastapi import UploadFile
 from fastapi.exceptions import HTTPException
 from fastapi.responses import RedirectResponse
 from loguru import logger
+from sqlalchemy import ColumnElement
 from sqlalchemy import and_
 from sqlalchemy import delete
 from sqlalchemy import func
@@ -414,7 +415,7 @@ async def admin_blocks(
     db_session: AsyncSession = Depends(get_db_session),
     cursor: str | None = None,
 ) -> templates.TemplateResponse:
-    where = [
+    where: list[ColumnElement[bool]] = [
         activitypub.models.Actor.is_blocked.is_(True),
         activitypub.models.Actor.is_deleted.is_(False),
     ]
@@ -424,8 +425,11 @@ async def admin_blocks(
         )
 
     page_size = 20
-    blocks_count = await db_session.scalar(
-        select(func.count(activitypub.models.Actor.id)).where(*where)
+    blocks_count = (
+        await db_session.scalar(
+            select(func.count(activitypub.models.Actor.id)).where(*where)
+        )
+        or 0
     )
 
     blocked_actors = (
@@ -468,7 +472,7 @@ async def admin_mutes(
     db_session: AsyncSession = Depends(get_db_session),
     cursor: str | None = None,
 ) -> templates.TemplateResponse:
-    where = [
+    where: list[ColumnElement[bool]] = [
         activitypub.models.Actor.id.in_(activitypub.models.muted_actor_ids()),
         activitypub.models.Actor.is_deleted.is_(False),
     ]
@@ -478,8 +482,11 @@ async def admin_mutes(
         )
 
     page_size = 20
-    mutes_count = await db_session.scalar(
-        select(func.count(activitypub.models.Actor.id)).where(*where)
+    mutes_count = (
+        await db_session.scalar(
+            select(func.count(activitypub.models.Actor.id)).where(*where)
+        )
+        or 0
     )
 
     muted_actors = (
@@ -532,8 +539,11 @@ async def _render_inbox_page(
         )
 
     page_size = 20
-    remaining_count = await db_session.scalar(
-        select(func.count(activitypub.models.InboxObject.id)).where(*where)
+    remaining_count = (
+        await db_session.scalar(
+            select(func.count(activitypub.models.InboxObject.id)).where(*where)
+        )
+        or 0
     )
     q = select(activitypub.models.InboxObject).where(*where)
 
@@ -620,7 +630,7 @@ async def admin_inbox(
     filter_by: str | None = None,
     cursor: str | None = None,
 ) -> templates.TemplateResponse:
-    where = [
+    where: list[ColumnElement[bool]] = [
         activitypub.models.InboxObject.ap_type.not_in(
             [
                 "Accept",
@@ -806,8 +816,9 @@ async def admin_direct_messages(
 
     # Build the template response
     threads = []
+    anybox_objects: list[boxes.AnyboxObject] = [*last_from_inbox, *last_from_outbox]
     for anybox_object in sorted(
-        last_from_inbox + last_from_outbox,
+        anybox_objects,
         key=lambda x: x.ap_published_at,
         reverse=True,
     ):
@@ -854,7 +865,7 @@ async def admin_outbox(
     filter_by: str | None = None,
     cursor: str | None = None,
 ) -> templates.TemplateResponse:
-    where = [
+    where: list[ColumnElement[bool]] = [
         activitypub.models.OutboxObject.ap_type.not_in(["Accept", "Delete", "Update"]),
         activitypub.models.OutboxObject.is_deleted.is_(False),
         activitypub.models.OutboxObject.is_transient.is_(False),
@@ -868,8 +879,11 @@ async def admin_outbox(
         )
 
     page_size = 20
-    remaining_count = await db_session.scalar(
-        select(func.count(activitypub.models.OutboxObject.id)).where(*where)
+    remaining_count = (
+        await db_session.scalar(
+            select(func.count(activitypub.models.OutboxObject.id)).where(*where)
+        )
+        or 0
     )
     q = select(activitypub.models.OutboxObject).where(*where)
 
@@ -942,8 +956,11 @@ async def get_notifications(
         where.append(models.Notification.created_at < decoded_cursor)
 
     page_size = 20
-    remaining_count = await db_session.scalar(
-        select(func.count(models.Notification.id)).where(*where)
+    remaining_count = (
+        await db_session.scalar(
+            select(func.count(models.Notification.id)).where(*where)
+        )
+        or 0
     )
 
     notifications = (
@@ -984,13 +1001,16 @@ async def get_notifications(
 
         # If on the "see more" page there's more unread notification, we want
         # to display it next to the link
-        more_unread_count = await db_session.scalar(
-            select(func.count(models.Notification.id)).where(
-                models.Notification.is_new.is_(True),
-                models.Notification.created_at < decoded_next_cursor,
-                models.notification_not_muted(),
-                models.notification_not_in_muted_conversation(),
+        more_unread_count = (
+            await db_session.scalar(
+                select(func.count(models.Notification.id)).where(
+                    models.Notification.is_new.is_(True),
+                    models.Notification.created_at < decoded_next_cursor,
+                    models.notification_not_muted(),
+                    models.notification_not_in_muted_conversation(),
+                )
             )
+            or 0
         )
 
     # Render the template before we change the new flag on notifications
@@ -1078,8 +1098,11 @@ async def admin_profile(
         where.append(activitypub.models.InboxObject.ap_published_at < decoded_cursor)
 
     page_size = 20
-    remaining_count = await db_session.scalar(
-        select(func.count(activitypub.models.InboxObject.id)).where(*where)
+    remaining_count = (
+        await db_session.scalar(
+            select(func.count(activitypub.models.InboxObject.id)).where(*where)
+        )
+        or 0
     )
 
     inbox_objects = (
@@ -1482,10 +1505,13 @@ async def admin_actions_pin(
     if not outbox_object:
         raise ValueError("Should never happen")
     if not outbox_object.is_pinned:
-        pinned_count = await db_session.scalar(
-            select(func.count(activitypub.models.OutboxObject.id)).where(
-                activitypub.models.OutboxObject.is_pinned.is_(True)
+        pinned_count = (
+            await db_session.scalar(
+                select(func.count(activitypub.models.OutboxObject.id)).where(
+                    activitypub.models.OutboxObject.is_pinned.is_(True)
+                )
             )
+            or 0
         )
         if pinned_count >= activitypub.models.MAX_PINNED_OBJECTS:
             raise HTTPException(

@@ -406,7 +406,7 @@ async def unmute_actor(db_session: AsyncSession, actor: "ActorModel") -> None:
 
 async def list_actors(db_session: AsyncSession, limit: int = 100) -> list["ActorModel"]:
 
-    return (
+    return list(
         (
             await db_session.scalars(
                 select(activitypub.models.Actor)

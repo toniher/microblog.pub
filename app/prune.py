@@ -7,6 +7,7 @@ from sqlalchemy import func
 from sqlalchemy import not_
 from sqlalchemy import or_
 from sqlalchemy import select
+from sqlalchemy import text
 
 import activitypub.models
 from activitypub import activitypub as ap
@@ -30,7 +31,7 @@ async def prune_old_data(
 
     await db_session.commit()
     # Reclaim disk space
-    await db_session.execute("VACUUM")  # type: ignore
+    await db_session.execute(text("VACUUM"))
 
 
 async def _prune_old_incoming_activities(

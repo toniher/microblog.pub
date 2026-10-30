@@ -224,12 +224,15 @@ async def _handle_webmention_side_effects(
 ) -> None:
     if webmention.webmention_type == models.WebmentionType.UNKNOWN:
         # TODO: recount everything
-        mentioned_object.webmentions_count = await db_session.scalar(
-            select(func.count(models.Webmention.id)).where(
-                models.Webmention.is_deleted.is_(False),
-                models.Webmention.outbox_object_id == mentioned_object.id,
-                models.Webmention.webmention_type == models.WebmentionType.UNKNOWN,
+        mentioned_object.webmentions_count = (
+            await db_session.scalar(
+                select(func.count(models.Webmention.id)).where(
+                    models.Webmention.is_deleted.is_(False),
+                    models.Webmention.outbox_object_id == mentioned_object.id,
+                    models.Webmention.webmention_type == models.WebmentionType.UNKNOWN,
+                )
             )
+            or 0
         )
     elif webmention.webmention_type == models.WebmentionType.LIKE:
         mentioned_object.likes_count = await _get_outbox_likes_count(

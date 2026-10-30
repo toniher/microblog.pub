@@ -7,7 +7,6 @@ from typing import Union
 from sqlalchemy import DDL
 from sqlalchemy import JSON
 from sqlalchemy import Boolean
-from sqlalchemy import Column
 from sqlalchemy import DateTime
 from sqlalchemy import Enum
 from sqlalchemy import Float
@@ -26,6 +25,7 @@ from sqlalchemy import table
 from sqlalchemy import text
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import aliased
+from sqlalchemy.orm import mapped_column
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import Select
 
@@ -46,18 +46,26 @@ from app.utils.datetime import now
 class Actor(Base, BaseActor):
     __tablename__ = "actor"
 
-    id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
-    updated_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now
+    )
 
-    ap_id: Mapped[str] = Column(String, unique=True, nullable=False, index=True)
-    ap_actor: Mapped[ap.RawObject] = Column(JSON, nullable=False)
-    ap_type: Mapped[str] = Column(String, nullable=False)
+    ap_id: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
+    ap_actor: Mapped[ap.RawObject] = mapped_column(JSON, nullable=False)
+    ap_type: Mapped[str] = mapped_column(String, nullable=False)
 
-    handle: Mapped[str] = Column(String, nullable=True, index=True)
+    handle: Mapped[str] = mapped_column(String, nullable=True, index=True)
 
-    is_blocked = Column(Boolean, nullable=False, default=False, server_default="0")
-    is_deleted = Column(Boolean, nullable=False, default=False, server_default="0")
+    is_blocked: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    is_deleted: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
 
     # Muting is purely local (nothing is federated, unlike a block): the actor
     # keeps following/being followed, their posts just stop showing up.
@@ -69,17 +77,19 @@ class Actor(Base, BaseActor):
     # SCAN actor on every execution (measured over 5k actors, 1% muted: 0.386ms
     # -> 0.178ms/query, both scans gone, with the index). Plain, not partial —
     # see the note on `5eabb060f447`.
-    is_muted = Column(
+    is_muted: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0", index=True
     )
     # Null while muted means "until I unmute"; a timestamp makes the mute
     # lapse on its own (Mastodon's `duration` parameter). Nothing sweeps
     # expired rows — `is_muted_now`/`muted_actor_ids()` apply the expiry at
     # read time, and unmuting clears the flag.
-    muted_until = Column(DateTime(timezone=True), nullable=True)
+    muted_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # Whether the mute also hides notifications from this actor (Mastodon's
     # `notifications` parameter, `muting_notifications` in a relationship).
-    are_notifications_muted = Column(
+    are_notifications_muted: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
 
@@ -92,37 +102,41 @@ class Actor(Base, BaseActor):
     # PARTIAL COVERING INDEX over the whole actor table on each execution
     # (measured at +0.25ms/query over 5k actors, vs +0.006ms with the index).
     # Plain, not partial — see the note on `5eabb060f447`.
-    are_announces_hidden_from_stream = Column(
+    are_announces_hidden_from_stream: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0", index=True
     )
     # Whether a new top-level post from this actor generates a `status`
     # notification (Mastodon's `notify` follow parameter).
-    are_new_posts_notified = Column(
+    are_new_posts_notified: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
 
     # A personal note about this actor (Mastodon's `accounts/{id}/note`).
     # Purely local, nothing federated. Null/empty means no note.
-    note = Column(String, nullable=True)
+    note: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # Last time we tried to backfill this actor's outbox on demand (e.g. a
     # Mastodon client viewing a non-followed actor's profile). Throttles
     # repeat live fetches from the same actor across requests.
-    outbox_backfilled_at = Column(DateTime(timezone=True), nullable=True)
+    outbox_backfilled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Cached from the actor's followers/following/outbox collections (we
     # never store a remote actor's own social graph/posts otherwise). Null
     # means "never fetched"; the Mastodon API serializer falls back to 0.
-    followers_count = Column(Integer, nullable=True)
-    following_count = Column(Integer, nullable=True)
-    statuses_count = Column(Integer, nullable=True)
-    counts_refreshed_at = Column(DateTime(timezone=True), nullable=True)
+    followers_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    following_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    statuses_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    counts_refreshed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Normalized (NFC + casefold) handle/name/ID, kept in sync by the mapper
     # events below and indexed by `actor_search`'s FTS5 trigram index -- see
     # `app/utils/search_text.py`. Nullable so a row written before this
     # column existed degrades to "not indexed" rather than breaking.
-    search_text = Column(String, nullable=True)
+    search_text: Mapped[str | None] = mapped_column(String, nullable=True)
 
     @property
     def is_from_db(self) -> bool:
@@ -234,38 +248,50 @@ class InboxObject(Base, BaseObject):
         Index("ix_inbox_quote_ap_id", "quote_ap_id"),
     )
 
-    id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
-    updated_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now
+    )
 
-    actor_id = Column(Integer, ForeignKey("actor.id"), nullable=False, index=True)
+    actor_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("actor.id"), nullable=False, index=True
+    )
     actor: Mapped[Actor] = relationship(Actor, uselist=False)
 
-    server = Column(String, nullable=False)
+    server: Mapped[str] = mapped_column(String, nullable=False)
 
-    is_hidden_from_stream = Column(Boolean, nullable=False, default=False)
+    is_hidden_from_stream: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
 
-    ap_actor_id: Mapped[str] = Column(String, nullable=False)
-    ap_type: Mapped[str] = Column(String, nullable=False, index=True)
-    ap_id: Mapped[str] = Column(String, nullable=False, unique=True, index=True)
-    ap_context = Column(String, nullable=True)
-    ap_published_at = Column(DateTime(timezone=True), nullable=False)
-    ap_object: Mapped[ap.RawObject] = Column(JSON, nullable=False)
+    ap_actor_id: Mapped[str] = mapped_column(String, nullable=False)
+    ap_type: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    ap_id: Mapped[str] = mapped_column(String, nullable=False, unique=True, index=True)
+    ap_context: Mapped[str | None] = mapped_column(String, nullable=True)
+    ap_published_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    ap_object: Mapped[ap.RawObject] = mapped_column(JSON, nullable=False)
 
     # Only set for activities
-    activity_object_ap_id = Column(String, nullable=True, index=True)
+    activity_object_ap_id: Mapped[str | None] = mapped_column(
+        String, nullable=True, index=True
+    )
 
-    visibility: Mapped[ap.VisibilityEnum] = Column(
+    visibility: Mapped[ap.VisibilityEnum] = mapped_column(
         Enum(ap.VisibilityEnum), nullable=False
     )
-    conversation = Column(String, nullable=True, index=True)
+    conversation: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
 
-    has_local_mention = Column(
+    has_local_mention: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
 
     # Used for Like, Announce and Undo activities
-    relates_to_inbox_object_id = Column(
+    relates_to_inbox_object_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("inbox.id"),
         nullable=True,
@@ -277,7 +303,7 @@ class InboxObject(Base, BaseObject):
         remote_side=id,
         uselist=False,
     )
-    relates_to_outbox_object_id = Column(
+    relates_to_outbox_object_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("outbox.id"),
         nullable=True,
@@ -289,41 +315,47 @@ class InboxObject(Base, BaseObject):
         uselist=False,
     )
 
-    undone_by_inbox_object_id = Column(
+    undone_by_inbox_object_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("inbox.id"), nullable=True, index=True
     )
 
     # Link the oubox AP ID to allow undo without any extra query
-    liked_via_outbox_object_ap_id = Column(String, nullable=True)
-    announced_via_outbox_object_ap_id = Column(String, nullable=True)
-    voted_for_answers: Mapped[list[str] | None] = Column(JSON, nullable=True)
+    liked_via_outbox_object_ap_id: Mapped[str | None] = mapped_column(
+        String, nullable=True
+    )
+    announced_via_outbox_object_ap_id: Mapped[str | None] = mapped_column(
+        String, nullable=True
+    )
+    voted_for_answers: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
 
-    is_bookmarked = Column(Boolean, nullable=False, default=False)
+    is_bookmarked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # Used to mark deleted objects, but also activities that were undone
-    is_deleted = Column(Boolean, nullable=False, default=False)
-    is_transient = Column(Boolean, nullable=False, default=False, server_default="0")
+    is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_transient: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
 
-    replies_count: Mapped[int] = Column(Integer, nullable=False, default=0)
+    replies_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     # FEP-044f quote posts (see ap_object.Object.quote_ap_id/quote_authorization_ap_id
     # for the tolerant parsing of the various wire aliases). Columns rather than a
     # json_extract() lookup, per the ix_*_in_reply_to lesson above -- maintaining
     # OutboxObject.quotes_count queries quote_ap_id, and that must not scan `ap_object`.
-    quote_ap_id = Column(String, nullable=True)
-    quote_authorization_ap_id = Column(String, nullable=True)
-    quote_is_verified = Column(
+    quote_ap_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    quote_authorization_ap_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    quote_is_verified: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
 
-    og_meta: Mapped[list[dict[str, Any]] | None] = Column(JSON, nullable=True)
+    og_meta: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
 
     # Normalized (NFC + casefold) visible content plus link targets, kept in
     # sync by the mapper events below and indexed by `inbox_search`'s FTS5
     # trigram index -- see `app/utils/search_text.py`. Nullable so a row
     # written before this column existed degrades to "not indexed" rather
     # than breaking.
-    search_text = Column(String, nullable=True)
+    search_text: Mapped[str | None] = mapped_column(String, nullable=True)
 
     @property
     def relates_to_anybox_object(self) -> Union["InboxObject", "OutboxObject"] | None:
@@ -380,64 +412,78 @@ class OutboxObject(Base, BaseObject):
         Index("ix_outbox_in_reply_to", text(_IN_REPLY_TO_INDEX_EXPR)),
     )
 
-    id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
-    updated_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now
+    )
 
-    is_hidden_from_homepage = Column(Boolean, nullable=False, default=False)
+    is_hidden_from_homepage: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
 
-    public_id = Column(String, nullable=False, index=True)
-    slug = Column(String, nullable=True, index=True)
+    public_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    slug: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     # Human-readable alias overriding the permalink, see the `url` property
     # below. One unique index serves both the uniqueness and the lookup --
     # a separate non-unique index alongside a UNIQUE constraint would build a
     # second B-tree over the same column for no read benefit. SQLite allows
     # unlimited NULLs under it, so unaliased rows are unaffected.
-    alias = Column(String, nullable=True, index=True, unique=True)
+    alias: Mapped[str | None] = mapped_column(
+        String, nullable=True, index=True, unique=True
+    )
 
-    ap_type: Mapped[str] = Column(String, nullable=False, index=True)
-    ap_id: Mapped[str] = Column(String, nullable=False, unique=True, index=True)
-    ap_context = Column(String, nullable=True)
-    ap_object: Mapped[ap.RawObject] = Column(JSON, nullable=False)
+    ap_type: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    ap_id: Mapped[str] = mapped_column(String, nullable=False, unique=True, index=True)
+    ap_context: Mapped[str | None] = mapped_column(String, nullable=True)
+    ap_object: Mapped[ap.RawObject] = mapped_column(JSON, nullable=False)
 
-    activity_object_ap_id = Column(String, nullable=True, index=True)
+    activity_object_ap_id: Mapped[str | None] = mapped_column(
+        String, nullable=True, index=True
+    )
 
     # Source content for activities (like Notes)
-    source = Column(String, nullable=True)
-    revisions: Mapped[list[dict[str, Any]] | None] = Column(JSON, nullable=True)
+    source: Mapped[str | None] = mapped_column(String, nullable=True)
+    revisions: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
 
-    ap_published_at = Column(DateTime(timezone=True), nullable=False, default=now)
-    visibility: Mapped[ap.VisibilityEnum] = Column(
+    ap_published_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now
+    )
+    visibility: Mapped[ap.VisibilityEnum] = mapped_column(
         Enum(ap.VisibilityEnum), nullable=False
     )
-    conversation = Column(String, nullable=True, index=True)
+    conversation: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
 
-    likes_count = Column(Integer, nullable=False, default=0)
-    announces_count = Column(Integer, nullable=False, default=0)
-    replies_count: Mapped[int] = Column(Integer, nullable=False, default=0)
-    webmentions_count: Mapped[int] = Column(
+    likes_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    announces_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    replies_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    webmentions_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
-    # reactions: Mapped[list[dict[str, Any]] | None] = Column(JSON, nullable=True)
+    # reactions: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
 
-    og_meta: Mapped[list[dict[str, Any]] | None] = Column(JSON, nullable=True)
+    og_meta: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
 
     # Normalized (NFC + casefold) visible content plus link targets, kept in
     # sync by the mapper events below and indexed by `outbox_search`'s FTS5
     # trigram index -- see `app/utils/search_text.py`. Nullable so a row
     # written before this column existed degrades to "not indexed" rather
     # than breaking.
-    search_text = Column(String, nullable=True)
+    search_text: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # For the featured collection
-    is_pinned = Column(Boolean, nullable=False, default=False)
-    is_transient = Column(Boolean, nullable=False, default=False, server_default="0")
+    is_pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_transient: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
 
     # Never actually delete from the outbox
-    is_deleted = Column(Boolean, nullable=False, default=False)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # Used for Create, Like, Announce and Undo activities
-    relates_to_inbox_object_id = Column(
+    relates_to_inbox_object_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("inbox.id"),
         nullable=True,
@@ -448,7 +494,7 @@ class OutboxObject(Base, BaseObject):
         foreign_keys=[relates_to_inbox_object_id],
         uselist=False,
     )
-    relates_to_outbox_object_id = Column(
+    relates_to_outbox_object_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("outbox.id"),
         nullable=True,
@@ -461,7 +507,7 @@ class OutboxObject(Base, BaseObject):
         uselist=False,
     )
     # For Follow activies
-    relates_to_actor_id = Column(
+    relates_to_actor_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("actor.id"),
         nullable=True,
@@ -473,7 +519,7 @@ class OutboxObject(Base, BaseObject):
         uselist=False,
     )
 
-    undone_by_outbox_object_id = Column(
+    undone_by_outbox_object_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("outbox.id"), nullable=True, index=True
     )
 
@@ -481,14 +527,16 @@ class OutboxObject(Base, BaseObject):
     # the stamp we received back, and where the request stands). Also reused
     # for the stamp itself when this row is an outbound `QuoteAuthorization`
     # (an OutboxObject with ap_type="QuoteAuthorization").
-    quote_ap_id = Column(String, nullable=True)
-    quote_authorization_ap_id = Column(String, nullable=True)
-    quote_state = Column(String, nullable=True)
+    quote_ap_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    quote_authorization_ap_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    quote_state: Mapped[str | None] = mapped_column(String, nullable=True)
     # Authorized *remote* quotes of this post (maintained on the quoted side,
     # not the quoting side). Recomputed from `inbox.quote_ap_id` by
     # `boxes._get_quotes_count` rather than incremented, so a deleted quote
     # does not leave the count drifting upward.
-    quotes_count = Column(Integer, nullable=False, default=0, server_default="0")
+    quotes_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
 
     @property
     def actor(self) -> BaseActor:
@@ -712,33 +760,49 @@ del _box_model
 class Follower(Base):
     __tablename__ = "follower"
 
-    id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
-    updated_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now
+    )
 
-    actor_id = Column(Integer, ForeignKey("actor.id"), nullable=False, unique=True)
+    actor_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("actor.id"), nullable=False, unique=True
+    )
     actor: Mapped[Actor] = relationship(Actor, uselist=False)
 
-    inbox_object_id = Column(Integer, ForeignKey("inbox.id"), nullable=False)
-    inbox_object = relationship(InboxObject, uselist=False)
+    inbox_object_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("inbox.id"), nullable=False
+    )
+    inbox_object: Mapped[InboxObject] = relationship(InboxObject, uselist=False)
 
-    ap_actor_id = Column(String, nullable=False, unique=True)
+    ap_actor_id: Mapped[str] = mapped_column(String, nullable=False, unique=True)
 
 
 class Following(Base):
     __tablename__ = "following"
 
-    id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
-    updated_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now
+    )
 
-    actor_id = Column(Integer, ForeignKey("actor.id"), nullable=False, unique=True)
-    actor = relationship(Actor, uselist=False)
+    actor_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("actor.id"), nullable=False, unique=True
+    )
+    actor: Mapped[Actor] = relationship(Actor, uselist=False)
 
-    outbox_object_id = Column(Integer, ForeignKey("outbox.id"), nullable=False)
-    outbox_object = relationship(OutboxObject, uselist=False)
+    outbox_object_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("outbox.id"), nullable=False
+    )
+    outbox_object: Mapped[OutboxObject] = relationship(OutboxObject, uselist=False)
 
-    ap_actor_id = Column(String, nullable=False, unique=True)
+    ap_actor_id: Mapped[str] = mapped_column(String, nullable=False, unique=True)
 
 
 class IncomingActivity(Base):
@@ -752,24 +816,30 @@ class IncomingActivity(Base):
         ),
     )
 
-    id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now
+    )
 
     # An incoming activity can be a webmention
-    webmention_source = Column(String, nullable=True)
+    webmention_source: Mapped[str | None] = mapped_column(String, nullable=True)
     # or an AP object
-    sent_by_ap_actor_id = Column(String, nullable=True)
-    ap_id = Column(String, nullable=True, index=True)
-    ap_object: Mapped[ap.RawObject] = Column(JSON, nullable=True)
+    sent_by_ap_actor_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    ap_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    ap_object: Mapped[ap.RawObject] = mapped_column(JSON, nullable=True)
 
-    tries: Mapped[int] = Column(Integer, nullable=False, default=0)
-    next_try = Column(DateTime(timezone=True), nullable=True, default=now)
+    tries: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    next_try: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=now
+    )
 
-    last_try = Column(DateTime(timezone=True), nullable=True)
+    last_try: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
-    is_processed = Column(Boolean, nullable=False, default=False)
-    is_errored = Column(Boolean, nullable=False, default=False)
-    error = Column(String, nullable=True)
+    is_processed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_errored: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    error: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class OutgoingActivity(Base):
@@ -783,33 +853,43 @@ class OutgoingActivity(Base):
         ),
     )
 
-    id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now
+    )
 
-    recipient = Column(String, nullable=False)
+    recipient: Mapped[str] = mapped_column(String, nullable=False)
 
-    outbox_object_id = Column(
+    outbox_object_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("outbox.id"), nullable=True, index=True
     )
-    outbox_object = relationship(OutboxObject, uselist=False)
+    outbox_object: Mapped[OutboxObject | None] = relationship(
+        OutboxObject, uselist=False
+    )
 
     # Can also reference an inbox object if it needds to be forwarded
-    inbox_object_id = Column(Integer, ForeignKey("inbox.id"), nullable=True, index=True)
-    inbox_object = relationship(InboxObject, uselist=False)
+    inbox_object_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("inbox.id"), nullable=True, index=True
+    )
+    inbox_object: Mapped[InboxObject | None] = relationship(InboxObject, uselist=False)
 
     # The source will be the outbox object URL
-    webmention_target = Column(String, nullable=True)
+    webmention_target: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    tries = Column(Integer, nullable=False, default=0)
-    next_try = Column(DateTime(timezone=True), nullable=True, default=now)
+    tries: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    next_try: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=now
+    )
 
-    last_try = Column(DateTime(timezone=True), nullable=True)
-    last_status_code = Column(Integer, nullable=True)
-    last_response = Column(String, nullable=True)
+    last_try: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_status_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_response: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    is_sent = Column(Boolean, nullable=False, default=False)
-    is_errored = Column(Boolean, nullable=False, default=False)
-    error = Column(String, nullable=True)
+    is_sent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_errored: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    error: Mapped[str | None] = mapped_column(String, nullable=True)
 
     @property
     def anybox_object(self) -> OutboxObject | InboxObject:
@@ -849,46 +929,50 @@ class TaggedOutboxObject(Base):
         UniqueConstraint("outbox_object_id", "tag", name="uix_tagged_object"),
     )
 
-    id = Column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
-    outbox_object_id = Column(Integer, ForeignKey("outbox.id"), nullable=False)
-    outbox_object = relationship(OutboxObject, uselist=False)
+    outbox_object_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("outbox.id"), nullable=False
+    )
+    outbox_object: Mapped[OutboxObject] = relationship(OutboxObject, uselist=False)
 
-    tag = Column(String, nullable=False, index=True)
+    tag: Mapped[str] = mapped_column(String, nullable=False, index=True)
 
 
 class Upload(Base):
     __tablename__ = "upload"
 
-    id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now
+    )
 
-    content_type: Mapped[str] = Column(String, nullable=False)
-    content_hash = Column(String, nullable=False, unique=True)
+    content_type: Mapped[str] = mapped_column(String, nullable=False)
+    content_hash: Mapped[str] = mapped_column(String, nullable=False, unique=True)
 
-    has_thumbnail = Column(Boolean, nullable=False)
+    has_thumbnail: Mapped[bool] = mapped_column(Boolean, nullable=False)
 
     # Alt text set via the Mastodon media API (POST/PUT /api/v1/media), which
     # uploads media before a status exists to attach it to — unlike
     # OutboxObjectAttachment.alt, this must survive independently of any post.
-    description = Column(String, nullable=True)
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # Only set for images and video (blurhash), or video/audio (width/height,
     # video only)
-    blurhash = Column(String, nullable=True)
-    width = Column(Integer, nullable=True)
-    height = Column(Integer, nullable=True)
+    blurhash: Mapped[str | None] = mapped_column(String, nullable=True)
+    width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    height: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Only set for video/audio; NULL when ffmpeg is unavailable or the probe
     # failed.
-    duration = Column(Float, nullable=True)
-    has_audio = Column(Boolean, nullable=True)
+    duration: Mapped[float | None] = mapped_column(Float, nullable=True)
+    has_audio: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     # Client-supplied cropping hint (Mastodon's `focus` media param), each in
     # [-1.0, 1.0] with (0, 0) as center. Set via POST/PUT /api/v1/media, never
     # derived from the file itself.
-    focus_x = Column(Float, nullable=True)
-    focus_y = Column(Float, nullable=True)
+    focus_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    focus_y: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     @property
     def is_image(self) -> bool:
@@ -898,14 +982,20 @@ class Upload(Base):
 class OutboxObjectAttachment(Base):
     __tablename__ = "outbox_object_attachment"
 
-    id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
-    filename = Column(String, nullable=False)
-    alt = Column(String, nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now
+    )
+    filename: Mapped[str] = mapped_column(String, nullable=False)
+    alt: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    outbox_object_id = Column(Integer, ForeignKey("outbox.id"), nullable=False)
+    outbox_object_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("outbox.id"), nullable=False
+    )
 
-    upload_id = Column(Integer, ForeignKey("upload.id"), nullable=False)
+    upload_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("upload.id"), nullable=False
+    )
     upload: Mapped["Upload"] = relationship(Upload, uselist=False)
 
 
@@ -929,19 +1019,27 @@ class PollAnswer(Base):
         ),
     )
 
-    id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now
+    )
 
-    outbox_object_id = Column(Integer, ForeignKey("outbox.id"), nullable=False)
-    outbox_object = relationship(OutboxObject, uselist=False)
+    outbox_object_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("outbox.id"), nullable=False
+    )
+    outbox_object: Mapped[OutboxObject] = relationship(OutboxObject, uselist=False)
 
     # oneOf|anyOf
-    poll_type = Column(String, nullable=False)
+    poll_type: Mapped[str] = mapped_column(String, nullable=False)
 
-    inbox_object_id = Column(Integer, ForeignKey("inbox.id"), nullable=False)
-    inbox_object = relationship(InboxObject, uselist=False)
+    inbox_object_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("inbox.id"), nullable=False
+    )
+    inbox_object: Mapped[InboxObject] = relationship(InboxObject, uselist=False)
 
-    actor_id = Column(Integer, ForeignKey("actor.id"), nullable=False)
-    actor = relationship(Actor, uselist=False)
+    actor_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("actor.id"), nullable=False
+    )
+    actor: Mapped[Actor] = relationship(Actor, uselist=False)
 
-    name = Column(String, nullable=False)
+    name: Mapped[str] = mapped_column(String, nullable=False)

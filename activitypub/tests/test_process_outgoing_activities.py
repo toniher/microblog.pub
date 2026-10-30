@@ -95,7 +95,7 @@ async def test_process_next_outgoing_activity__server_200(
     recipient_inbox_url = "https://example.com/users/toto/inbox"
     respx_mock.post(recipient_inbox_url).mock(return_value=httpx.Response(204))
 
-    outgoing_activity = factories.OutgoingActivityFactory(
+    outgoing_activity = factories.OutgoingActivityFactory.create(
         recipient=recipient_inbox_url,
         outbox_object_id=outbox_object.id,
         inbox_object_id=None,
@@ -130,7 +130,7 @@ async def test_process_next_outgoing_activity__webmention(
     recipient_url = "https://example.com/webmention"
     respx_mock.post(recipient_url).mock(return_value=httpx.Response(204))
 
-    outgoing_activity = factories.OutgoingActivityFactory(
+    outgoing_activity = factories.OutgoingActivityFactory.create(
         recipient=recipient_url,
         outbox_object_id=outbox_object.id,
         inbox_object_id=None,
@@ -166,7 +166,7 @@ async def test_process_next_outgoing_activity__error_500(
     )
 
     # And an outgoing activity
-    outgoing_activity = factories.OutgoingActivityFactory(
+    outgoing_activity = factories.OutgoingActivityFactory.create(
         recipient=recipient_inbox_url,
         outbox_object_id=outbox_object.id,
         inbox_object_id=None,
@@ -247,7 +247,7 @@ async def test_process_next_outgoing_activity__connect_error(
     respx_mock.post(recipient_inbox_url).mock(side_effect=httpx.ConnectError)
 
     # And an outgoing activity
-    outgoing_activity = factories.OutgoingActivityFactory(
+    outgoing_activity = factories.OutgoingActivityFactory.create(
         recipient=recipient_inbox_url,
         outbox_object_id=outbox_object.id,
         inbox_object_id=None,

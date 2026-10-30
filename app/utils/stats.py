@@ -66,42 +66,34 @@ async def get_outgoing_activity_stats(
                     ),
                     func.sum(
                         case(
-                            [
-                                (
-                                    or_(
-                                        activitypub.models.OutgoingActivity.next_try
-                                        > now(),
-                                        activitypub.models.OutgoingActivity.tries == 0,
-                                    ),
-                                    1,
+                            (
+                                or_(
+                                    activitypub.models.OutgoingActivity.next_try
+                                    > now(),
+                                    activitypub.models.OutgoingActivity.tries == 0,
                                 ),
-                            ],
+                                1,
+                            ),
                             else_=0,
                         )
                     ).label("waiting_count"),
                     func.sum(
                         case(
-                            [
-                                (
-                                    activitypub.models.OutgoingActivity.is_sent.is_(
-                                        True
-                                    ),
-                                    1,
-                                ),
-                            ],
+                            (
+                                activitypub.models.OutgoingActivity.is_sent.is_(True),
+                                1,
+                            ),
                             else_=0,
                         )
                     ).label("sent_count"),
                     func.sum(
                         case(
-                            [
-                                (
-                                    activitypub.models.OutgoingActivity.is_errored.is_(
-                                        True
-                                    ),
-                                    1,
+                            (
+                                activitypub.models.OutgoingActivity.is_errored.is_(
+                                    True
                                 ),
-                            ],
+                                1,
+                            ),
                             else_=0,
                         )
                     ).label("errored_count"),

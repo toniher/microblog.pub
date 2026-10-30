@@ -35,7 +35,7 @@ Pleroma, PeerTube, PixelFed…) and doubles as an IndieWeb citizen.
 
 ## Architecture
 
-FastAPI ASGI app on async SQLAlchemy (1.4) + SQLite (via `aiosqlite`), Jinja2
+FastAPI ASGI app on async SQLAlchemy (2.1) + SQLite (via `aiosqlite`), Jinja2
 templates, Alembic migrations, background workers for federation traffic.
 
 - `app/` — the web application
@@ -82,9 +82,10 @@ templates, Alembic migrations, background workers for federation traffic.
 - Python **3.12** (min `^3.11`), Poetry for deps, **in-project `.venv/`**
   (`poetry.toml`), `package-mode = false`.
 - Lint stack = `black` (26.x), `isort --sl`, `flake8` (max line 120, ignore E203),
-  `mypy` (with `sqlalchemy.ext.mypy.plugin` + `pydantic.mypy`).
+  `mypy` (with the `pydantic.mypy` plugin; SQLAlchemy types come from `Mapped[]` annotations).
 - pydantic **v2** idioms (`model_validate`, `model_dump`, `ConfigDict`).
-- SQLAlchemy queries use the 1.4 async style (`select()` + `session.scalar/execute`).
+- SQLAlchemy 2.x style: models declare columns as `Mapped[...] = mapped_column(...)`;
+  queries use `select()` + `session.scalar/scalars/execute`.
 - **Never reference `PLAN*.md` files** from comments, docstrings, migrations or
   tracked docs. Those are local, untracked working documents that never ship with
   the repo, so a `see PLAN-quote.md` pointer is dangling for every reader. Inline

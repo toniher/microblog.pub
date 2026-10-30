@@ -19,6 +19,7 @@ from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import aliased
+from sqlalchemy.orm import mapped_column
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import Select
 
@@ -43,62 +44,76 @@ class ObjectRevision(pydantic.BaseModel):
 class IndieAuthAuthorizationRequest(Base):
     __tablename__ = "indieauth_authorization_request"
 
-    id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now
+    )
 
-    code = Column(String, nullable=False, unique=True, index=True)
-    scope = Column(String, nullable=False)
-    redirect_uri = Column(String, nullable=False)
-    client_id = Column(String, nullable=False)
-    code_challenge = Column(String, nullable=True)
-    code_challenge_method = Column(String, nullable=True)
+    code: Mapped[str] = mapped_column(String, nullable=False, unique=True, index=True)
+    scope: Mapped[str] = mapped_column(String, nullable=False)
+    redirect_uri: Mapped[str] = mapped_column(String, nullable=False)
+    client_id: Mapped[str] = mapped_column(String, nullable=False)
+    code_challenge: Mapped[str | None] = mapped_column(String, nullable=True)
+    code_challenge_method: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    is_used = Column(Boolean, nullable=False, default=False)
+    is_used: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 class IndieAuthAccessToken(Base):
     __tablename__ = "indieauth_access_token"
 
-    id = Column(Integer, primary_key=True, index=True)
-    created_at: Mapped[datetime] = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=now
     )
 
     # Will be null for personal access tokens
-    indieauth_authorization_request_id = Column(
+    indieauth_authorization_request_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("indieauth_authorization_request.id"), nullable=True
     )
-    indieauth_authorization_request = relationship(
-        IndieAuthAuthorizationRequest,
-        uselist=False,
+    indieauth_authorization_request: Mapped[IndieAuthAuthorizationRequest | None] = (
+        relationship(
+            IndieAuthAuthorizationRequest,
+            uselist=False,
+        )
     )
 
-    access_token: Mapped[str] = Column(String, nullable=False, unique=True, index=True)
-    refresh_token = Column(String, nullable=True, unique=True, index=True)
-    expires_in: Mapped[int] = Column(Integer, nullable=False)
-    scope = Column(String, nullable=False)
-    is_revoked = Column(Boolean, nullable=False, default=False)
-    was_refreshed = Column(Boolean, nullable=False, default=False, server_default="0")
+    access_token: Mapped[str] = mapped_column(
+        String, nullable=False, unique=True, index=True
+    )
+    refresh_token: Mapped[str | None] = mapped_column(
+        String, nullable=True, unique=True, index=True
+    )
+    expires_in: Mapped[int] = mapped_column(Integer, nullable=False)
+    scope: Mapped[str] = mapped_column(String, nullable=False)
+    is_revoked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    was_refreshed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
 
 
 class OAuthClient(Base):
     __tablename__ = "oauth_client"
 
-    id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now
+    )
 
     # Request
-    client_name = Column(String, nullable=False)
-    redirect_uris: Mapped[list[str]] = Column(JSON, nullable=True)
+    client_name: Mapped[str] = mapped_column(String, nullable=False)
+    redirect_uris: Mapped[list[str]] = mapped_column(JSON, nullable=True)
 
     # Optional from request
-    client_uri = Column(String, nullable=True)
-    logo_uri = Column(String, nullable=True)
-    scope = Column(String, nullable=True)
+    client_uri: Mapped[str | None] = mapped_column(String, nullable=True)
+    logo_uri: Mapped[str | None] = mapped_column(String, nullable=True)
+    scope: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # Response
-    client_id = Column(String, nullable=False, unique=True, index=True)
-    client_secret = Column(String, nullable=False, unique=True)
+    client_id: Mapped[str] = mapped_column(
+        String, nullable=False, unique=True, index=True
+    )
+    client_secret: Mapped[str] = mapped_column(String, nullable=False, unique=True)
 
 
 @enum.unique
@@ -113,19 +128,27 @@ class Webmention(Base):
     __tablename__ = "webmention"
     __table_args__ = (UniqueConstraint("source", "target", name="uix_source_target"),)
 
-    id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now
+    )
 
-    is_deleted = Column(Boolean, nullable=False, default=False)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
-    source: Mapped[str] = Column(String, nullable=False, index=True, unique=True)
-    source_microformats: Mapped[dict[str, Any] | None] = Column(JSON, nullable=True)
+    source: Mapped[str] = mapped_column(String, nullable=False, index=True, unique=True)
+    source_microformats: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True
+    )
 
-    target = Column(String, nullable=False, index=True)
-    outbox_object_id = Column(Integer, ForeignKey("outbox.id"), nullable=False)
-    outbox_object = relationship(OutboxObject, uselist=False)
+    target: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    outbox_object_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("outbox.id"), nullable=False
+    )
+    outbox_object: Mapped[OutboxObject] = relationship(OutboxObject, uselist=False)
 
-    webmention_type = Column(Enum(WebmentionType), nullable=True)
+    webmention_type: Mapped[WebmentionType | None] = mapped_column(
+        Enum(WebmentionType), nullable=True
+    )
 
     @property
     def as_facepile_item(self) -> webmentions.Webmention | None:
@@ -200,33 +223,43 @@ class NotificationType(str, enum.Enum):
 class Notification(Base):
     __tablename__ = "notifications"
 
-    id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
-    notification_type = Column(Enum(NotificationType), nullable=True)
-    is_new = Column(Boolean, nullable=False, default=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now
+    )
+    notification_type: Mapped[NotificationType] = mapped_column(
+        Enum(NotificationType), nullable=True
+    )
+    is_new: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
-    actor_id = Column(Integer, ForeignKey("actor.id"), nullable=True)
-    actor = relationship(Actor, uselist=False)
+    actor_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("actor.id"), nullable=True
+    )
+    actor: Mapped[Actor | None] = relationship(Actor, uselist=False)
 
     # Indexed for the `poll` sweep's watermark check
     # (`app.poll_notifications`), which correlates a NOT EXISTS on these
     # columns every few seconds; unindexed they turned into a full scan of
     # this table per candidate poll, growing with the notification history.
-    outbox_object_id = Column(
+    outbox_object_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("outbox.id"), nullable=True, index=True
     )
-    outbox_object = relationship(OutboxObject, uselist=False)
+    outbox_object: Mapped[OutboxObject | None] = relationship(
+        OutboxObject, uselist=False
+    )
 
-    inbox_object_id = Column(Integer, ForeignKey("inbox.id"), nullable=True, index=True)
-    inbox_object = relationship(InboxObject, uselist=False)
+    inbox_object_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("inbox.id"), nullable=True, index=True
+    )
+    inbox_object: Mapped[InboxObject | None] = relationship(InboxObject, uselist=False)
 
-    webmention_id = Column(
+    webmention_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("webmention.id", name="fk_webmention_id"), nullable=True
     )
-    webmention = relationship(Webmention, uselist=False)
+    webmention: Mapped[Webmention | None] = relationship(Webmention, uselist=False)
 
-    is_accepted = Column(Boolean, nullable=True)
-    is_rejected = Column(Boolean, nullable=True)
+    is_accepted: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    is_rejected: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
 
 class Marker(Base):
@@ -238,11 +271,15 @@ class Marker(Base):
 
     __tablename__ = "marker"
 
-    id = Column(Integer, primary_key=True, index=True)
-    timeline = Column(String, nullable=False, unique=True, index=True)
-    last_read_id = Column(String, nullable=False)
-    version = Column(Integer, nullable=False, default=1)
-    updated_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    timeline: Mapped[str] = mapped_column(
+        String, nullable=False, unique=True, index=True
+    )
+    last_read_id: Mapped[str] = mapped_column(String, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now
+    )
 
 
 class MutedConversation(Base):
@@ -256,9 +293,13 @@ class MutedConversation(Base):
 
     __tablename__ = "muted_conversation"
 
-    id = Column(Integer, primary_key=True, index=True)
-    conversation = Column(String, nullable=False, unique=True, index=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    conversation: Mapped[str] = mapped_column(
+        String, nullable=False, unique=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now
+    )
 
 
 class MastodonList(Base):
@@ -270,15 +311,21 @@ class MastodonList(Base):
 
     __tablename__ = "mastodon_list"
 
-    id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
-    updated_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now
+    )
 
-    title = Column(String, nullable=False)
-    replies_policy = Column(
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    replies_policy: Mapped[str] = mapped_column(
         String, nullable=False, default="list", server_default="list"
     )
-    exclusive = Column(Boolean, nullable=False, default=False, server_default="0")
+    exclusive: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
 
 
 class MastodonListMember(Base):
@@ -294,15 +341,17 @@ class MastodonListMember(Base):
         UniqueConstraint("list_id", "actor_id", name="uix_mastodon_list_member"),
     )
 
-    id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now
+    )
 
-    list_id = Column(
+    list_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("mastodon_list.id", name="fk_mastodon_list_member_list_id"),
         nullable=False,
     )
-    actor_id = Column(
+    actor_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("actor.id", name="fk_mastodon_list_member_actor_id"),
         nullable=False,
@@ -387,17 +436,21 @@ class ScheduledStatus(Base):
 
     __tablename__ = "scheduled_status"
 
-    id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now
+    )
 
-    scheduled_at: Mapped[datetime] = Column(
+    scheduled_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, index=True
     )
-    params: Mapped[dict[str, Any]] = Column(JSON, nullable=False)
+    params: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
 
-    tries = Column(Integer, nullable=False, default=0)
-    next_try = Column(DateTime(timezone=True), nullable=True, index=True)
-    last_error = Column(String, nullable=True)
+    tries: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    next_try: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    last_error: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class PushSubscription(Base):
@@ -416,10 +469,12 @@ class PushSubscription(Base):
 
     __tablename__ = "push_subscription"
 
-    id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now
+    )
 
-    access_token_id = Column(
+    access_token_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey(
             "indieauth_access_token.id", name="fk_push_subscription_access_token_id"
@@ -428,39 +483,51 @@ class PushSubscription(Base):
         unique=True,
         index=True,
     )
-    access_token = relationship(IndieAuthAccessToken, uselist=False)
+    access_token: Mapped[IndieAuthAccessToken] = relationship(
+        IndieAuthAccessToken, uselist=False
+    )
 
-    endpoint = Column(String, nullable=False)
+    endpoint: Mapped[str] = mapped_column(String, nullable=False)
     # `p256dh` (65-byte uncompressed EC point) and `auth` (16-byte secret),
     # both stored base64url-encoded — see `app.webpush.parse_p256dh` /
     # `parse_auth_secret` for the decoded form the worker actually uses.
-    p256dh = Column(String, nullable=False)
-    auth = Column(String, nullable=False)
+    p256dh: Mapped[str] = mapped_column(String, nullable=False)
+    auth: Mapped[str] = mapped_column(String, nullable=False)
 
-    alert_mention = Column(Boolean, nullable=False, default=True)
-    alert_status = Column(Boolean, nullable=False, default=True)
-    alert_reblog = Column(Boolean, nullable=False, default=True)
-    alert_follow = Column(Boolean, nullable=False, default=True)
-    alert_follow_request = Column(Boolean, nullable=False, default=True)
-    alert_favourite = Column(Boolean, nullable=False, default=True)
-    alert_poll = Column(Boolean, nullable=False, default=True)
-    alert_update = Column(Boolean, nullable=False, default=True)
+    alert_mention: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    alert_status: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    alert_reblog: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    alert_follow: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    alert_follow_request: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True
+    )
+    alert_favourite: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    alert_poll: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    alert_update: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     # all|followed|follower|none, mirroring the Mastodon subscription policy.
-    policy = Column(String, nullable=False, default="all")
+    policy: Mapped[str] = mapped_column(String, nullable=False, default="all")
 
     # The watermark: the highest `Notification.id` already dealt with
     # (delivered, filtered out, or permanently rejected). Plain Integer, not
     # a FK — the referenced row may be pruned by `app/prune.py` while the
     # watermark itself must survive.
-    last_notification_id = Column(Integer, nullable=False, default=0)
+    last_notification_id: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0
+    )
 
-    tries = Column(Integer, nullable=False, default=0)
-    next_try = Column(DateTime(timezone=True), nullable=True, default=now, index=True)
-    last_try = Column(DateTime(timezone=True), nullable=True)
-    last_success_at = Column(DateTime(timezone=True), nullable=True)
-    last_status_code = Column(Integer, nullable=True)
-    error = Column(String, nullable=True)
+    tries: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    next_try: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=now, index=True
+    )
+    last_try: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_success_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_status_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 def notification_not_muted() -> Any:

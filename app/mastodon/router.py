@@ -500,15 +500,18 @@ async def post_markers(
 
 
 async def _pending_follow_requests_count(db_session: AsyncSession) -> int:
-    return await db_session.scalar(
-        select(func.count())
-        .select_from(models.Notification)
-        .where(
-            models.Notification.notification_type
-            == models.NotificationType.PENDING_INCOMING_FOLLOWER,
-            models.Notification.is_accepted.is_(None),
-            models.Notification.is_rejected.is_(None),
+    return (
+        await db_session.scalar(
+            select(func.count())
+            .select_from(models.Notification)
+            .where(
+                models.Notification.notification_type
+                == models.NotificationType.PENDING_INCOMING_FOLLOWER,
+                models.Notification.is_accepted.is_(None),
+                models.Notification.is_rejected.is_(None),
+            )
         )
+        or 0
     )
 
 
@@ -757,7 +760,7 @@ async def accounts_show(
 
 
 async def _respond_with_status_list(
-    request: Request, db_session: AsyncSession, objects: list
+    request: Request, db_session: AsyncSession, objects: Sequence[Any]
 ) -> JSONResponse:
     await serializers.prefetch_status_relations(db_session, objects)
     statuses = [await serializers.serialize_status(db_session, obj) for obj in objects]
@@ -3918,10 +3921,13 @@ async def statuses_pin(
             422, "validation_failed", "only your own statuses can be pinned"
         )
     if not obj.is_pinned:
-        pinned_count = await db_session.scalar(
-            select(func.count(activitypub.models.OutboxObject.id)).where(
-                activitypub.models.OutboxObject.is_pinned.is_(True)
+        pinned_count = (
+            await db_session.scalar(
+                select(func.count(activitypub.models.OutboxObject.id)).where(
+                    activitypub.models.OutboxObject.is_pinned.is_(True)
+                )
             )
+            or 0
         )
         if pinned_count >= activitypub.models.MAX_PINNED_OBJECTS:
             raise MastodonError(

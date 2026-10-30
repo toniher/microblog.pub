@@ -353,6 +353,7 @@ def test_send_create_activity__question__one_of(
     outbox_object = db.execute(select(activitypub.models.OutboxObject)).scalar_one()
     assert outbox_object.ap_type == "Question"
     assert outbox_object.is_one_of_poll is True
+    assert outbox_object.poll_items is not None
     assert len(outbox_object.poll_items) == 2
     assert {pi["name"] for pi in outbox_object.poll_items} == {"A", "B"}
     assert outbox_object.is_poll_ended is False
@@ -402,6 +403,7 @@ def test_send_create_activity__question__any_of(
     outbox_object = db.execute(select(activitypub.models.OutboxObject)).scalar_one()
     assert outbox_object.ap_type == "Question"
     assert outbox_object.is_one_of_poll is False
+    assert outbox_object.poll_items is not None
     assert len(outbox_object.poll_items) == 4
     assert {pi["name"] for pi in outbox_object.poll_items} == {"A", "B", "C", "D"}
     assert outbox_object.is_poll_ended is False

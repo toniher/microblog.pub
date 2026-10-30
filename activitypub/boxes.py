@@ -111,7 +111,7 @@ async def fetch_outbox(
     result = await db_session.scalars(stmt)
     outbox_objects = result.all()
 
-    return outbox_objects
+    return list(outbox_objects)
 
 
 async def save_outbox_object(
@@ -1366,7 +1366,7 @@ async def compute_all_known_recipients(db_session: AsyncSession) -> set[str]:
 async def _get_following(
     db_session: AsyncSession,
 ) -> list[activitypub.models.Following]:
-    return (
+    return list(
         (
             await db_session.scalars(
                 select(activitypub.models.Following).options(
@@ -1380,7 +1380,7 @@ async def _get_following(
 
 
 async def _get_followers(db_session: AsyncSession) -> list[activitypub.models.Follower]:
-    return (
+    return list(
         (
             await db_session.scalars(
                 select(activitypub.models.Follower).options(
@@ -1838,6 +1838,7 @@ async def _get_replies_count(
                 activitypub.models.InboxObject.is_deleted.is_(False),
             )
         )
+        or 0
     ) + (
         await db_session.scalar(
             select(func.count(activitypub.models.OutboxObject.id)).where(
@@ -1848,6 +1849,7 @@ async def _get_replies_count(
                 activitypub.models.OutboxObject.is_deleted.is_(False),
             )
         )
+        or 0
     )
 
 
@@ -1863,12 +1865,15 @@ async def _get_quotes_count(
     not a *remote* quote), which keeps this to a single lookup on
     `ix_inbox_quote_ap_id`.
     """
-    return await db_session.scalar(
-        select(func.count(activitypub.models.InboxObject.id)).where(
-            activitypub.models.InboxObject.quote_ap_id == quoted_object_ap_id,
-            activitypub.models.InboxObject.quote_is_verified.is_(True),
-            activitypub.models.InboxObject.is_deleted.is_(False),
+    return (
+        await db_session.scalar(
+            select(func.count(activitypub.models.InboxObject.id)).where(
+                activitypub.models.InboxObject.quote_ap_id == quoted_object_ap_id,
+                activitypub.models.InboxObject.quote_is_verified.is_(True),
+                activitypub.models.InboxObject.is_deleted.is_(False),
+            )
         )
+        or 0
     )
 
 
@@ -1884,6 +1889,7 @@ async def _get_outbox_replies_count(
                 models.Webmention.webmention_type == models.WebmentionType.REPLY,
             )
         )
+        or 0
     )
 
 
@@ -1900,6 +1906,7 @@ async def _get_outbox_likes_count(
                 activitypub.models.InboxObject.is_deleted.is_(False),
             )
         )
+        or 0
     ) + (
         await db_session.scalar(
             select(func.count(models.Webmention.id)).where(
@@ -1908,6 +1915,7 @@ async def _get_outbox_likes_count(
                 models.Webmention.webmention_type == models.WebmentionType.LIKE,
             )
         )
+        or 0
     )
 
 
@@ -1924,6 +1932,7 @@ async def _get_outbox_announces_count(
                 activitypub.models.InboxObject.is_deleted.is_(False),
             )
         )
+        or 0
     ) + (
         await db_session.scalar(
             select(func.count(models.Webmention.id)).where(
@@ -1932,6 +1941,7 @@ async def _get_outbox_announces_count(
                 models.Webmention.webmention_type == models.WebmentionType.REPOST,
             )
         )
+        or 0
     )
 
 
@@ -3499,7 +3509,7 @@ async def _handle_vote_answer(
         .where(activitypub.models.PollAnswer.outbox_object_id == question.id)
         .group_by(activitypub.models.PollAnswer.name)
     )
-    all_answers_count = {a["name"]: a["answer_count"] for a in all_answers}
+    all_answers_count = {a.name: a.answer_count for a in all_answers}
 
     logger.info(f"{voters_count=}")
     logger.info(f"{all_answers_count=}")
@@ -3588,6 +3598,7 @@ async def _handle_announce_activity(
                             ),
                         )
                     )
+                    or 0
                 )
             ) > 0:
                 logger.info(f"Deduping Announce {delta_from_original=}/{dup_count=}")
@@ -3866,8 +3877,8 @@ async def save_to_inbox(
                 activitypub.models.InboxObject.ap_id == raw_object_id
             )
         )
-        > 0
-    ):
+        or 0
+    ) > 0:
         logger.info(
             f'Received duplicate {raw_object["type"]} activity: {raw_object_id}'
         )
@@ -4240,11 +4251,14 @@ async def fetch_replies(
 
 
 async def public_outbox_objects_count(db_session: AsyncSession) -> int:
-    return await db_session.scalar(
-        select(func.count(activitypub.models.OutboxObject.id)).where(
-            activitypub.models.OutboxObject.visibility == ap.VisibilityEnum.PUBLIC,
-            activitypub.models.OutboxObject.is_deleted.is_(False),
+    return (
+        await db_session.scalar(
+            select(func.count(activitypub.models.OutboxObject.id)).where(
+                activitypub.models.OutboxObject.visibility == ap.VisibilityEnum.PUBLIC,
+                activitypub.models.OutboxObject.is_deleted.is_(False),
+            )
         )
+        or 0
     )
 
 

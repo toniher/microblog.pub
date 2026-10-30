@@ -582,6 +582,7 @@ def test_inbox__move_activity(
             models.Notification.notification_type == models.NotificationType.MOVE
         )
     ).scalar_one()
+    assert notif.actor
     assert notif.actor.ap_id == new_ra.ap_id
     assert notif.inbox_object_id == inbox_activity.id
 
@@ -634,6 +635,7 @@ def test_inbox__block_activity(
             models.Notification.notification_type == models.NotificationType.BLOCKED
         )
     ).scalar_one()
+    assert notif.actor
     assert notif.actor.ap_id == ra.ap_id
     assert notif.inbox_object_id == inbox_activity.id
 
@@ -695,6 +697,7 @@ def test_inbox__flag_activity(
             models.Notification.notification_type == models.NotificationType.REPORTED
         )
     ).scalar_one()
+    assert notif.actor
     assert notif.actor.ap_id == ra.ap_id
     assert notif.inbox_object_id == inbox_activity.id
     assert notif.outbox_object_id == outbox_object.id
@@ -1537,3 +1540,56 @@ def test_inbox_delete_of_local_stamp_from_a_remote_actor_is_ignored(
 
     db.refresh(quoting_note)
     assert quoting_note.quote_is_verified is True
+
+
+def test_inbox__vote_on_local_poll(
+    db: Session,
+    client: TestClient,
+    respx_mock: respx.MockRouter,
+) -> None:
+    # Given a remote actor
+    ra = setup_remote_actor(respx_mock)
+
+    # And a local poll
+    question = setup_outbox_note(to=[ap.AS_PUBLIC])
+    question.ap_type = "Question"
+    question.ap_object = {
+        **question.ap_object,
+        "type": "Question",
+        "oneOf": [
+            {
+                "type": "Note",
+                "name": name,
+                "replies": {"type": "Collection", "totalItems": 0},
+            }
+            for name in ("A", "B")
+        ],
+    }
+    db.commit()
+
+    # When receiving a vote for "A"
+    vote = factories.build_note_object(
+        from_remote_actor=ra,
+        outbox_public_id=str(uuid4()),
+        content="",
+        to=[LOCAL_ACTOR.ap_id],
+        in_reply_to=question.ap_id,
+    )
+    vote["name"] = "A"
+    ro = RemoteObject(factories.build_create_activity(vote), ra)
+    with mock_httpsig_checker(ra):
+        response = client.post(
+            "/inbox",
+            headers={"Content-Type": ap.AS_CTX},
+            json=ro.ap_object,
+        )
+    assert response.status_code == 202
+    run_process_next_incoming_activity()
+
+    # Then the poll tallies were updated
+    db.refresh(question)
+    assert question.ap_object["votersCount"] == 1
+    assert {
+        item["name"]: item["replies"]["totalItems"]
+        for item in question.ap_object["oneOf"]
+    } == {"A": 1, "B": 0}
