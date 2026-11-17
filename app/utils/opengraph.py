@@ -1,10 +1,11 @@
 import asyncio
 import mimetypes
+from collections.abc import Iterable
 from concurrent.futures import TimeoutError
+from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
 
-import httpx
 from bs4 import BeautifulSoup  # type: ignore
 from loguru import logger
 from sqlalchemy import select
@@ -21,6 +22,7 @@ from app.database import AsyncSession
 from app.utils.og_scrape import OpenGraphMeta
 from app.utils.og_scrape import scrap_og_meta_in_process
 from app.utils.url import is_url_valid_async
+from app.utils.webmentions import webmention_endpoint_from_response
 
 
 async def scrap_og_meta(url: str, html: str) -> OpenGraphMeta | None:
@@ -121,30 +123,73 @@ async def _og_meta_from_url(url: str) -> OpenGraphMeta | None:
         return None
 
 
+@dataclass
+class LinkInfo:
+    og_meta: dict[str, Any] | None = None
+    webmention_endpoint: str | None = None
+
+
+async def _link_info(url: str, discover_webmentions: bool, scrape_og: bool) -> LinkInfo:
+    resp = await http_client.get_client().get(
+        url,
+        headers={
+            "User-Agent": config.USER_AGENT,
+        },
+        follow_redirects=True,
+    )
+    resp.raise_for_status()
+
+    info = LinkInfo()
+    ct = resp.headers.get("content-type")
+    if scrape_og and ct and ct.startswith("text/html"):
+        try:
+            if og_meta := await scrap_og_meta(url, resp.text):
+                info.og_meta = og_meta.model_dump()
+        except Exception:
+            logger.info(f"Failed to scrap OG meta for {url}")
+
+    if discover_webmentions:
+        endpoint = await webmention_endpoint_from_response(resp, url)
+        if endpoint and await is_url_valid_async(endpoint):
+            info.webmention_endpoint = endpoint
+
+    return info
+
+
+async def fetch_link_info(
+    urls: Iterable[str],
+    discover_webmentions: bool,
+    scrape_og: bool = True,
+) -> dict[str, LinkInfo]:
+    """One fetch per link, all at once: both the link card and the webmention
+    endpoint come from the same response. A link that fails or takes over 5s
+    gets an empty `LinkInfo`."""
+
+    async def _one(url: str) -> LinkInfo:
+        try:
+            return await asyncio.wait_for(
+                _link_info(url, discover_webmentions, scrape_og), timeout=5
+            )
+        except asyncio.TimeoutError:
+            logger.info(f"Timing out fetching {url}")
+        except Exception:
+            logger.exception(f"Failed to fetch {url}")
+        return LinkInfo()
+
+    urls = list(urls)
+    return dict(zip(urls, await asyncio.gather(*(_one(url) for url in urls))))
+
+
+def og_meta_from_link_info(links: dict[str, LinkInfo]) -> list[dict[str, Any]]:
+    return [info.og_meta for info in links.values() if info.og_meta]
+
+
 async def og_meta_from_note(
     db_session: AsyncSession,
     ro: ap_object.RemoteObject,
 ) -> list[dict[str, Any]]:
-    og_meta = []
     urls = await external_urls(db_session, ro)
     logger.debug(f"Lookig OG metadata in {urls=}")
-    for url in urls:
-        logger.debug(f"Processing {url}")
-        try:
-            maybe_og_meta = None
-            try:
-                maybe_og_meta = await asyncio.wait_for(
-                    _og_meta_from_url(url),
-                    timeout=5,
-                )
-            except asyncio.TimeoutError:
-                logger.info(f"Timing out fetching {url}")
-            except Exception:
-                logger.exception(f"Failed scrap OG meta for {url}")
-
-            if maybe_og_meta:
-                og_meta.append(maybe_og_meta.model_dump())
-        except httpx.HTTPError:
-            pass
-
-    return og_meta
+    return og_meta_from_link_info(
+        await fetch_link_info(urls, discover_webmentions=False)
+    )

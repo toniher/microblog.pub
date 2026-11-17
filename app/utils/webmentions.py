@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Any
 from typing import Optional
 
+import httpx
 from bs4 import BeautifulSoup  # type: ignore
 from loguru import logger
 
@@ -28,6 +29,13 @@ async def _discover_webmention_endoint(url: str) -> str | None:
         logger.exception(f"Failed to discover webmention endpoint for {url}")
         return None
 
+    return await webmention_endpoint_from_response(resp, url)
+
+
+async def webmention_endpoint_from_response(
+    resp: httpx.Response, url: str
+) -> str | None:
+    """The (unvalidated) endpoint advertised by a fetched page, if any."""
     for k, v in resp.links.items():
         if k and "webmention" in k:
             return make_abs(resp.links[k].get("url"), url)

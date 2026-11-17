@@ -91,6 +91,11 @@ def _body_digest(body: bytes) -> str:
     return "SHA-256=" + base64.b64encode(h.digest()).decode("utf-8")
 
 
+def _host(url: str) -> str | None:
+    hostname = urlparse(url).hostname
+    return hostname.rstrip(".") if hostname else None
+
+
 async def _get_public_key(
     db_session: AsyncSession,
     key_id: str,
@@ -155,6 +160,12 @@ async def _get_public_key_and_actor(
         raise ValueError(
             f"failed to fetch requested key {key_id}: got {actor['publicKey']}"
         )
+
+    # The key document is served from the sender-chosen `keyId`: without this,
+    # a key hosted anywhere could name any actor as its owner and sign as them
+    # (and get that document cached as their profile).
+    if _host(k.owner) != _host(key_id):
+        raise ValueError(f"key {key_id} claims a foreign owner {k.owner}")
 
     if should_skip_cache and actor["type"] != "Key" and existing_actor:
         # We had to skip the cache, which means the actor key probably changed

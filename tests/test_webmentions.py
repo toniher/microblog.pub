@@ -128,15 +128,18 @@ async def test_send_create_queues_webmentions_after_commit(
     from activitypub.boxes import send_create
 
     url = "https://news.example/story"
-    respx_mock.route(url=url).mock(
+    page_route = respx_mock.route(url=url).mock(
         return_value=httpx.Response(
             200,
-            text='<html><head><link rel="webmention" href="/wm"></head></html>',
+            text=(
+                "<html><head><title>Story</title>"
+                '<link rel="webmention" href="/wm"></head></html>'
+            ),
             headers={"content-type": "text/html"},
         )
     )
 
-    await send_create(
+    _, outbox_object = await send_create(
         async_db_session,
         ObjectType.NOTE.value,
         f"Read [this]({url})",
@@ -153,3 +156,37 @@ async def test_send_create_queues_webmentions_after_commit(
         )
     ).all()
     assert [o.recipient for o in outgoing] == ["https://news.example/wm"]
+    # One fetch for both the link card and the webmention endpoint
+    assert page_route.call_count == 1
+    assert [m["title"] for m in outbox_object.og_meta or []] == ["Story"]
+
+
+@pytest.mark.asyncio
+async def test_fetch_link_info(respx_mock) -> None:
+    from app.utils import opengraph
+
+    page = (
+        "<html><head><title>{}</title>"
+        '<link rel="webmention" href="/wm"></head></html>'
+    )
+    routes = [
+        respx_mock.get(f"https://{host}.example/p").mock(
+            return_value=httpx.Response(
+                200, text=page.format(host), headers={"content-type": "text/html"}
+            )
+        )
+        for host in ("a", "b")
+    ]
+    urls = ["https://a.example/p", "https://b.example/p"]
+
+    links = await opengraph.fetch_link_info(urls, discover_webmentions=True)
+
+    assert {u: (i.og_meta or {}).get("title") for u, i in links.items()} == {
+        "https://a.example/p": "a",
+        "https://b.example/p": "b",
+    }
+    assert links["https://a.example/p"].webmention_endpoint == "https://a.example/wm"
+    assert [r.call_count for r in routes] == [1, 1]
+
+    links = await opengraph.fetch_link_info(urls, discover_webmentions=False)
+    assert links["https://a.example/p"].webmention_endpoint is None

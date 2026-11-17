@@ -58,7 +58,6 @@ from app.source import dedup_tags
 from app.source import markdownify
 from app.uploads import upload_to_attachment
 from app.utils import opengraph
-from app.utils import webmentions
 from app.utils.datetime import as_utc
 from app.utils.datetime import now
 from app.utils.datetime import parse_isoformat
@@ -132,8 +131,16 @@ async def save_outbox_object(
     conversation: str | None = None,
     slug: str | None = None,
     alias: str | None = None,
+    link_info: dict[str, opengraph.LinkInfo] | None = None,
 ) -> activitypub.models.OutboxObject:
+    """`link_info`: the note's links, already fetched by the caller (see
+    `opengraph.fetch_link_info`); fetched here when not given."""
     ro = await RemoteObject.from_raw_object(raw_object)
+    og_meta = (
+        opengraph.og_meta_from_link_info(link_info)
+        if link_info is not None
+        else await opengraph.og_meta_from_note(db_session, ro)
+    )
 
     outbox_object = activitypub.models.OutboxObject(
         public_id=public_id,
@@ -142,7 +149,7 @@ async def save_outbox_object(
         ap_context=ro.ap_context,
         ap_object=ro.ap_object,
         visibility=ro.visibility,
-        og_meta=await opengraph.og_meta_from_note(db_session, ro),
+        og_meta=og_meta,
         relates_to_inbox_object_id=relates_to_inbox_object_id,
         relates_to_outbox_object_id=relates_to_outbox_object_id,
         relates_to_actor_id=relates_to_actor_id,
@@ -981,6 +988,11 @@ async def send_create(
     }
     # Before the first write: resolving recipients may hit the network.
     recipients = await _compute_recipients(db_session, obj)
+    # Each link is fetched once, for both its card and its webmention endpoint.
+    link_info = await opengraph.fetch_link_info(
+        await opengraph.external_urls(db_session, RemoteObject(obj, LOCAL_ACTOR)),
+        discover_webmentions=visibility == ap.VisibilityEnum.PUBLIC,
+    )
     outbox_object = await save_outbox_object(
         db_session,
         note_id,
@@ -989,6 +1001,7 @@ async def send_create(
         conversation=conversation,
         slug=slug,
         alias=alias,
+        link_info=link_info,
     )
     if not outbox_object.id:
         raise ValueError("Should never happen")
@@ -1032,7 +1045,7 @@ async def send_create(
         await new_outgoing_activity(db_session, rcp, outbox_object.id)
 
     await db_session.commit()
-    await enqueue_webmentions(db_session, outbox_object)
+    await enqueue_webmentions(db_session, outbox_object, link_info)
 
     # Refresh the replies counter if needed
     if in_reply_to_object:
@@ -1287,6 +1300,7 @@ async def send_update(
 async def enqueue_webmentions(
     db_session: AsyncSession,
     outbox_object: activitypub.models.OutboxObject,
+    link_info: dict[str, opengraph.LinkInfo] | None = None,
 ) -> None:
     """Queue webmentions for a public note's external links, then commit.
 
@@ -1299,14 +1313,18 @@ async def enqueue_webmentions(
         return
 
     try:
-        possible_targets = await opengraph.external_urls(db_session, outbox_object)
-        logger.info(f"webmentions possible targert {possible_targets}")
-        endpoints = []
-        for target in possible_targets:
-            webmention_endpoint = await webmentions.discover_webmention_endpoint(target)
-            logger.info(f"{target=} {webmention_endpoint=}")
-            if webmention_endpoint:
-                endpoints.append((target, webmention_endpoint))
+        if link_info is None:
+            possible_targets = await opengraph.external_urls(db_session, outbox_object)
+            logger.info(f"webmentions possible targert {possible_targets}")
+            link_info = await opengraph.fetch_link_info(
+                possible_targets, discover_webmentions=True, scrape_og=False
+            )
+        endpoints = [
+            (target, info.webmention_endpoint)
+            for target, info in link_info.items()
+            if info.webmention_endpoint
+        ]
+        logger.info(f"webmention {endpoints=}")
 
         for target, webmention_endpoint in endpoints:
             await new_outgoing_activity(

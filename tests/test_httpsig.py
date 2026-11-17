@@ -263,3 +263,33 @@ async def test_cache_signer_actor__worker_skips_refetch(
     actor = await fetch_actor(async_db_session, ra.ap_id)
     assert actor.handle == "@toto@example.com"
     assert actor_route.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_httpsig_checker__rejects_key_naming_foreign_owner(
+    respx_mock: respx.MockRouter,
+    async_db_session: AsyncSession,
+) -> None:
+    # A key served by evil.example claiming to belong to an actor elsewhere
+    privkey, pubkey = factories.generate_key()
+    victim = factories.RemoteActorFactory(
+        base_url="https://victim.example", username="alice", public_key=pubkey
+    )
+    key_id = "https://evil.example/key"
+    forged = {**victim.ap_actor, "publicKey": {**victim.ap_actor["publicKey"]}}
+    forged["publicKey"]["id"] = key_id
+    respx_mock.get(key_id).mock(return_value=httpx.Response(200, json=forged))
+    k = Key(victim.ap_id, key_id)
+    k.load(privkey)
+    _KEY_CACHE.clear()
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=_test_app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/enforce_httpsig",
+            headers={"Content-Type": ap.AS_CTX},
+            json={"enforce_httpsig": True},
+            auth=httpsig.HTTPXSigAuth(k),  # type: ignore
+        )
+    assert response.status_code == 401
