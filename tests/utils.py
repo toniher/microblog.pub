@@ -1,5 +1,7 @@
 import asyncio
+import json
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any
 from typing import Callable
 from typing import Iterator
@@ -350,3 +352,39 @@ def no_network_while_writing() -> Iterator[list[str]]:
     assert not violations, "network while holding the SQLite writer lock: " + (
         "; ".join(violations)
     )
+
+
+_JSONLD_CONTEXTS = {
+    "https://www.w3.org/ns/activitystreams": "activitystreams.jsonld",
+    "https://w3id.org/security/v1": "security-v1.jsonld",
+}
+
+
+@contextmanager
+def offline_jsonld_contexts() -> Iterator[None]:
+    """Serve the JSON-LD contexts LD signatures need from vendored copies
+    (`tests/jsonld_contexts/`) instead of fetching them, so the suite doesn't
+    depend on w3.org / w3id.org. Autouse in both conftests.
+
+    Any other context URL fails loudly rather than going to the network.
+    """
+    import pyld  # type: ignore
+
+    from app import ldsig
+
+    contexts_dir = Path(__file__).parent / "jsonld_contexts"
+
+    def _offline_loader(url: str, options: dict | None = None) -> dict:
+        if (filename := _JSONLD_CONTEXTS.get(url)) is None:
+            raise ValueError(f"test tried to fetch JSON-LD context {url}")
+        return {
+            "contextUrl": None,
+            "documentUrl": url,
+            "document": json.loads((contexts_dir / filename).read_text()),
+        }
+
+    pyld.jsonld.set_document_loader(_offline_loader)
+    try:
+        yield
+    finally:
+        pyld.jsonld.set_document_loader(ldsig._loader)

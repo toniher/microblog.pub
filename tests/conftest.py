@@ -32,6 +32,14 @@ def _no_network_while_writing() -> Generator:
 
 
 @pytest.fixture(autouse=True)
+def _offline_jsonld_contexts() -> Generator:
+    from tests.utils import offline_jsonld_contexts
+
+    with offline_jsonld_contexts():
+        yield
+
+
+@pytest.fixture(autouse=True)
 def _reset_scoped_session() -> Generator:
     # `_Session` is a module-level scoped_session shared by every factory
     # across the whole test run. Several tests write through it without using

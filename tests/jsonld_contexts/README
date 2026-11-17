@@ -1,0 +1,7 @@
+JSON-LD context documents served to pyld during tests (see
+`tests/utils.py:offline_jsonld_contexts`), so LD signature tests never depend
+on w3.org / w3id.org being reachable. Fetched 2026-11-17 with
+`Accept: application/ld+json`, unmodified:
+
+- activitystreams.jsonld  <- https://www.w3.org/ns/activitystreams
+- security-v1.jsonld      <- https://w3id.org/security/v1
