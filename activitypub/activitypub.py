@@ -451,7 +451,8 @@ def remove_context(raw_object: RawObject) -> RawObject:
 
 
 async def post(url: str, payload: dict[str, Any]) -> httpx.Response:
-    logger.info(f"Posting {url} ({payload=})")
+    # Not the payload itself: a fan-out posts it to thousands of inboxes.
+    logger.info(f"Posting {url} ({payload.get('type')} {payload.get('id')})")
     await check_url_async(url)
 
     resp = await http_client.get_client().post(

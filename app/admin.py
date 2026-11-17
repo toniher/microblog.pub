@@ -425,30 +425,24 @@ async def admin_blocks(
         )
 
     page_size = 20
-    blocks_count = (
-        await db_session.scalar(
-            select(func.count(activitypub.models.Actor.id)).where(*where)
-        )
-        or 0
-    )
-
-    blocked_actors = (
+    # One extra row tells whether there's a next page (no COUNT scan).
+    blocked_actors = list(
         (
             await db_session.scalars(
                 select(activitypub.models.Actor)
                 .where(*where)
                 .order_by(activitypub.models.Actor.created_at.desc())
-                .limit(page_size)
+                .limit(page_size + 1)
             )
         )
         .unique()
         .all()
     )
+    has_next = len(blocked_actors) > page_size
+    blocked_actors = blocked_actors[:page_size]
 
     next_cursor = (
-        pagination.encode_cursor(blocked_actors[-1].created_at)
-        if blocked_actors and blocks_count > page_size
-        else None
+        pagination.encode_cursor(blocked_actors[-1].created_at) if has_next else None
     )
 
     # display_actor() renders the unblock button off this metadata.
@@ -482,30 +476,24 @@ async def admin_mutes(
         )
 
     page_size = 20
-    mutes_count = (
-        await db_session.scalar(
-            select(func.count(activitypub.models.Actor.id)).where(*where)
-        )
-        or 0
-    )
-
-    muted_actors = (
+    # One extra row tells whether there's a next page (no COUNT scan).
+    muted_actors = list(
         (
             await db_session.scalars(
                 select(activitypub.models.Actor)
                 .where(*where)
                 .order_by(activitypub.models.Actor.created_at.desc())
-                .limit(page_size)
+                .limit(page_size + 1)
             )
         )
         .unique()
         .all()
     )
+    has_next = len(muted_actors) > page_size
+    muted_actors = muted_actors[:page_size]
 
     next_cursor = (
-        pagination.encode_cursor(muted_actors[-1].created_at)
-        if muted_actors and mutes_count > page_size
-        else None
+        pagination.encode_cursor(muted_actors[-1].created_at) if has_next else None
     )
 
     # display_actor() renders the unmute button off this metadata.

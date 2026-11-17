@@ -224,6 +224,7 @@ async def prefetch_status_relations(
     Call this before serializing a list of statuses; `serialize_status` stays
     correct without it, just one query per relation per status again.
     """
+    objects = list(objects)
     cache = _anybox_cache(db_session)
     pending = _related_ap_ids(objects) - cache.keys()
 
@@ -233,13 +234,27 @@ async def prefetch_status_relations(
     # `_resolve_reblog=False`.
     for _ in range(2):
         if not pending:
-            return
+            break
         fetched = await get_anybox_objects_by_ap_ids(db_session, pending)
         for obj in fetched:
             cache[obj.ap_id] = obj
         for ap_id in pending:
             cache.setdefault(ap_id, None)
         pending = _related_ap_ids(fetched) - cache.keys()
+
+    # Mentioned accounts of the statuses and of their boost targets, in one
+    # query instead of one per status.
+    boosted = [
+        target
+        for obj in objects
+        if obj.ap_type == "Announce"
+        and obj.activity_object_ap_id
+        and (target := cache.get(obj.activity_object_ap_id))
+    ]
+    await _mention_actors(
+        db_session,
+        {href for obj in objects + boosted for href in _mention_hrefs(obj)},
+    )
 
 
 # The actor keypair is generated once, during initial setup, and never
@@ -711,30 +726,50 @@ def serialize_poll(obj: AnyboxObject, status_id: str) -> dict | None:
     }
 
 
-async def _serialize_mentions(
-    db_session: AsyncSession, obj: AnyboxObject
-) -> list[dict]:
-    mention_tags = [
+def _mention_tags(obj: AnyboxObject) -> list[dict]:
+    return [
         tag
         for tag in obj.tags
         if isinstance(tag, dict)
         and tag.get("type") == "Mention"
         and _as_str(tag.get("href"))
     ]
+
+
+def _mention_hrefs(obj: AnyboxObject) -> list[str]:
+    return [tag["href"] for tag in _mention_tags(obj)]
+
+
+async def _mention_actors(
+    db_session: AsyncSession, hrefs: Iterable[str]
+) -> dict[str, "activitypub.models.Actor | None"]:
+    """Request-cached actors by ap_id (`None` for unknown ones), so a page
+    prefetched by `prefetch_status_relations` costs one query."""
+    cache: dict[str, activitypub.models.Actor | None] = _request_cache(
+        db_session
+    ).setdefault("mention_actors", {})
+    if missing := set(hrefs) - cache.keys():
+        for actor in await db_session.scalars(
+            select(activitypub.models.Actor).where(
+                activitypub.models.Actor.ap_id.in_(missing)
+            )
+        ):
+            cache[actor.ap_id] = actor
+        for href in missing:
+            cache.setdefault(href, None)
+    return cache
+
+
+async def _serialize_mentions(
+    db_session: AsyncSession, obj: AnyboxObject
+) -> list[dict]:
+    mention_tags = _mention_tags(obj)
     if not mention_tags:
         return []
 
-    hrefs = [tag["href"] for tag in mention_tags]
-    known_actors = {
-        actor.ap_id: actor
-        for actor in (
-            await db_session.scalars(
-                select(activitypub.models.Actor).where(
-                    activitypub.models.Actor.ap_id.in_(hrefs)
-                )
-            )
-        ).all()
-    }
+    known_actors = await _mention_actors(
+        db_session, [tag["href"] for tag in mention_tags]
+    )
 
     mentions = []
     for tag in mention_tags:

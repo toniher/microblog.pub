@@ -107,3 +107,68 @@ async def test_prefetch_is_optional(async_db_session: AsyncSession) -> None:
     ]
     assert len(statuses) == 3
     assert all(s["in_reply_to_id"] for s in statuses)
+
+
+@pytest.mark.parametrize("page_size", [2, 10])
+@pytest.mark.asyncio
+async def test_prefetch_loads_mentioned_accounts_once(
+    async_db_session: AsyncSession,
+    page_size: int,
+) -> None:
+    bob = activitypub.models.Actor(
+        ap_id="https://remote.example/users/bob",
+        ap_type="Person",
+        ap_actor={
+            "id": "https://remote.example/users/bob",
+            "type": "Person",
+            "preferredUsername": "bob",
+            "inbox": "https://remote.example/users/bob/inbox",
+        },
+    )
+    async_db_session.add(bob)
+    posts = []
+    for i in range(page_size):
+        _, post = await boxes.send_create(
+            async_db_session,
+            ObjectType.NOTE.value,
+            f"post {i}",
+            uploads=[],
+            in_reply_to=None,
+            visibility=ap.VisibilityEnum.PUBLIC,
+        )
+        post.ap_object = {
+            **post.ap_object,
+            "tag": [
+                {"type": "Mention", "href": bob.ap_id, "name": "@bob@remote.example"},
+                {
+                    "type": "Mention",
+                    "href": f"https://gone.example/u{i}",
+                    "name": f"@u{i}@gone.example",
+                },
+            ],
+        }
+        posts.append(post)
+    await async_db_session.commit()
+    objects = await boxes.get_outbox_objects_by_ap_ids(
+        async_db_session, [p.ap_id for p in posts]
+    )
+
+    actor_queries = []
+
+    def _record(conn, cursor, statement, params, context, executemany) -> None:
+        if "FROM actor" in statement and "ap_id IN" in statement:
+            actor_queries.append(statement)
+
+    event.listen(async_engine.sync_engine, "before_cursor_execute", _record)
+    try:
+        await serializers.prefetch_status_relations(async_db_session, objects)
+        statuses = [
+            await serializers.serialize_status(async_db_session, obj) for obj in objects
+        ]
+    finally:
+        event.remove(async_engine.sync_engine, "before_cursor_execute", _record)
+
+    assert len(actor_queries) == 1
+    for status in statuses:
+        assert [m["acct"] for m in status["mentions"]][0] == "bob@remote.example"
+        assert status["mentions"][1]["id"] == ""  # unknown: stub, not a query

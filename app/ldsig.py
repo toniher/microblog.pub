@@ -118,9 +118,11 @@ async def verify_signature(
         )
         return False
 
-    # Both normalize + dereference `@context`, so keep them off the loop.
-    options_hash = await asyncio.to_thread(_options_hash, doc)
-    doc_hash = await asyncio.to_thread(_doc_hash, doc)
+    # Both normalize + dereference `@context`, so keep them off the loop (in
+    # one thread hop).
+    options_hash, doc_hash = await asyncio.to_thread(
+        lambda: (_options_hash(doc), _doc_hash(doc))
+    )
 
     to_be_signed = options_hash + doc_hash
     signature = doc["signature"]["signatureValue"]

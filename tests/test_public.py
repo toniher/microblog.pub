@@ -785,3 +785,37 @@ def test_resized_cache_is_sized_in_bytes() -> None:
 
     assert _RESIZED_CACHE.maxsize == 32 * 1024 * 1024  # type: ignore[attr-defined]
     assert _RESIZED_CACHE.getsizeof((b"x" * 1000, "image/webp", {})) == 1000  # type: ignore[attr-defined]  # noqa: E501
+
+
+def test_c2s_inbox__pages_without_overlap(
+    db: Session, client: TestClient, respx_mock: respx.MockRouter
+) -> None:
+    from sqlalchemy import update
+
+    import activitypub.models
+    from activitypub.tests import factories
+    from app import indieauth
+    from app.main import app
+    from tests.utils import setup_inbox_note
+    from tests.utils import setup_remote_actor
+
+    actor = factories.ActorFactory.from_remote_actor(setup_remote_actor(respx_mock))
+    for i in range(21):
+        setup_inbox_note(actor, content=f"n{i}")
+    db.execute(update(activitypub.models.InboxObject).values(ap_type="Create"))
+    db.commit()
+
+    app.dependency_overrides[indieauth.enforce_access_token] = lambda: None
+    try:
+        first = client.get("/inbox?page=true").json()
+        assert len(first["orderedItems"]) == 20
+        assert "next" in first
+        second = client.get(first["next"].removeprefix("http://localhost:8000")).json()
+        assert "next" not in second
+        assert client.get("/inbox?next_cursor=bogus").status_code == 400
+        assert client.get("/inbox").json()["totalItems"] == 21
+    finally:
+        del app.dependency_overrides[indieauth.enforce_access_token]
+
+    ids = [o["id"] for o in first["orderedItems"] + second["orderedItems"]]
+    assert len(set(ids)) == 21

@@ -1410,11 +1410,10 @@ async def get_inbox(
             ["Create", "Follow", "Like", "Announce", "Undo", "Update"]
         )
     ]
-    total_items = await db_session.scalar(
-        select(func.count(activitypub.models.InboxObject.id)).where(*where)
-    )
-
     if not page and not next_cursor:
+        total_items = await db_session.scalar(
+            select(func.count(activitypub.models.InboxObject.id)).where(*where)
+        )
         return ActivityPubResponse(
             {
                 "@context": ap.AS_CTX,
@@ -1425,34 +1424,24 @@ async def get_inbox(
             }
         )
 
+    # Paged on the primary key (insertion order, like `created_at`, which has
+    # no index); one extra row tells whether there's a next page.
     q = (
         select(activitypub.models.InboxObject)
         .where(*where)
-        .order_by(activitypub.models.InboxObject.created_at.desc())
-    )  # type: ignore
+        .order_by(activitypub.models.InboxObject.id.desc())
+    )
     if next_cursor:
-        q = q.where(
-            activitypub.models.InboxObject.created_at
-            < pagination.decode_cursor(next_cursor)  # type: ignore
-        )
-    q = q.limit(20)
+        try:
+            last_id = int(next_cursor)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid cursor")
+        q = q.where(activitypub.models.InboxObject.id < last_id)
 
-    items = [item for item in (await db_session.scalars(q)).all()]
-    next_cursor = None
-    if (
-        items
-        and (
-            await db_session.scalar(
-                select(func.count(activitypub.models.InboxObject.id)).where(
-                    *where,
-                    activitypub.models.InboxObject.created_at < items[-1].created_at,
-                )
-            )
-            or 0
-        )
-        > 0
-    ):
-        next_cursor = pagination.encode_cursor(items[-1].created_at)
+    page_size = 20
+    items = list((await db_session.scalars(q.limit(page_size + 1))).all())
+    next_cursor = str(items[page_size - 1].id) if len(items) > page_size else None
+    items = items[:page_size]
 
     collection_page = {
         "@context": ap.AS_CTX,

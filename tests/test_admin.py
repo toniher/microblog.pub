@@ -367,6 +367,38 @@ def test_admin_blocks_lists_blocked_actors(
     assert "/admin/actions/unblock" in response.text
 
 
+def test_admin_blocks__paginates_without_count(db: Session, client: TestClient) -> None:
+    import re
+    from datetime import timedelta
+
+    from app.utils.datetime import now
+
+    base = now()
+    for i in range(21):
+        ra = factories.RemoteActorFactory(
+            base_url=f"https://b{i}.example", username="u", public_key="pk"
+        )
+        actor = factories.ActorFactory.from_remote_actor(ra)
+        actor.is_blocked = True
+        actor.created_at = base - timedelta(minutes=i)
+    db.commit()
+
+    first = client.get("/admin/blocks", cookies=generate_admin_session_cookies())
+    assert first.status_code == 200
+    assert first.text.count("/admin/actions/unblock") == 20
+    next_link = r'<a href="[^"]*/admin/blocks\?cursor=([^"&]+)"'
+    cursor = re.search(next_link, first.text)
+    assert cursor
+
+    last = client.get(
+        f"/admin/blocks?cursor={cursor.group(1)}",
+        cookies=generate_admin_session_cookies(),
+    )
+    assert last.text.count("/admin/actions/unblock") == 1
+    assert "https://b20.example" in last.text
+    assert not re.search(next_link, last.text)
+
+
 def test_admin_blocks_with_no_blocked_actor(client: TestClient) -> None:
     response = client.get("/admin/blocks", cookies=generate_admin_session_cookies())
 

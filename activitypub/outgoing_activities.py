@@ -227,8 +227,6 @@ def _build_delivery_request(
                 ldsig.generate_signature(payload, k)
                 _LD_SIG_CACHE[payload["id"]] = payload
 
-    logger.info(f"{payload=}")
-
     return _DeliveryRequest(
         activity_id=activity_id,
         recipient=recipient,
