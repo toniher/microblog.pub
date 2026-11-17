@@ -194,17 +194,16 @@ class CustomMiddleware:
             request_path = scope["path"]
             headers = Headers(raw=scope["headers"])  # type: ignore
             user_agent = headers.get("user-agent")
-            logger.info(
-                f"{client_host}:{client_port} - "
-                f"{request_method} "
-                f"{scheme}://{server_host}:{server_port}{request_path} - "
-                f'"{user_agent}"'
-            )
             try:
                 await self.app(scope, receive, send_wrapper)  # type: ignore
             finally:
+                # One line per request (uvicorn's access log is disabled).
                 elapsed_time = time.perf_counter() - start_time
                 logger.info(
+                    f"{client_host}:{client_port} - "
+                    f"{request_method} "
+                    f"{scheme}://{server_host}:{server_port}{request_path} - "
+                    f'"{user_agent}" '
                     f"status_code={response_details['status_code']} "
                     f"{elapsed_time=:.2f}s"
                 )

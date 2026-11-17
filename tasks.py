@@ -134,7 +134,7 @@ def compile_translations(ctx):
 @task
 def uvicorn(ctx):
     # type: (Context) -> None
-    run("uvicorn app.main:app --no-server-header", pty=True, echo=True)
+    run("uvicorn app.main:app --no-server-header --no-access-log", pty=True, echo=True)
 
 
 @task

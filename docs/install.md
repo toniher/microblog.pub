@@ -441,7 +441,10 @@ Tweak `/etc/nginx/nginx.conf` and add gzip compression for ActivityPub responses
 ```nginx
 http {
     # [...]
-    gzip_types text/plain text/css application/json application/javascript application/activity+json application/octet-stream;
+    gzip_types text/plain text/css application/javascript application/json
+               application/activity+json application/ld+json
+               application/rss+xml application/atom+xml image/svg+xml
+               application/jrd+json application/xml application/manifest+json;
 }
 ```
 

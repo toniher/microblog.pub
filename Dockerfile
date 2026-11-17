@@ -17,7 +17,7 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 RUN curl -sSL https://install.python-poetry.org | python3 -
 WORKDIR $PYSETUP_PATH
 COPY poetry.lock pyproject.toml ./
-RUN poetry install --only main
+RUN poetry install --only main --compile
 # Fail the build if SQLAlchemy fell back to pure Python (no matching wheel)
 RUN python -c "from sqlalchemy.util import has_compiled_ext; assert has_compiled_ext()"
 
@@ -31,6 +31,9 @@ RUN groupadd --gid 1000 microblogpub \
   && useradd --uid 1000 --gid microblogpub --shell /bin/bash microblogpub
 COPY --from=builder-base $PYSETUP_PATH $PYSETUP_PATH
 COPY --chown=1000:1000 . /app/
+# Ship bytecode: PYTHONDONTWRITEBYTECODE means nothing is ever cached at
+# runtime, so without this every process recompiles each module on start.
+RUN python -m compileall -q /app/app /app/activitypub /app/tasks.py
 # Keep a pristine copy of the bundled static assets. app/static is mounted as a
 # Docker volume at runtime (so generated CSS/favicon/emoji persist), and the
 # entrypoint repopulates that volume from this snapshot whenever it is empty —
