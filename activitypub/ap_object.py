@@ -14,6 +14,7 @@ from activitypub import activitypub as ap
 from activitypub.actor import LOCAL_ACTOR
 from activitypub.actor import Actor
 from activitypub.actor import RemoteActor
+from activitypub.actor import resolve_handle
 
 # TODO: What can we refactor in the library from these imports and config?
 from app.config import ID
@@ -484,8 +485,10 @@ class RemoteObject(Object):
                 )
             _actor = actor  # type: ignore
         else:
+            raw_actor = await ap.fetch(ap.get_actor_id(raw_object))
             _actor = RemoteActor(
-                ap_actor=await ap.fetch(ap.get_actor_id(raw_object)),
+                ap_actor=raw_actor,
+                handle=await resolve_handle(raw_actor),
             )
 
         return cls(raw_object, _actor)

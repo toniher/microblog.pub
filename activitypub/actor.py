@@ -14,6 +14,7 @@ from sqlalchemy.orm import joinedload
 
 import activitypub.models
 from activitypub import activitypub as ap
+from app import http_client
 from app import media
 from app.config import BASE_URL
 from app.config import USER_AGENT
@@ -27,25 +28,36 @@ if typing.TYPE_CHECKING:
     from activitypub.models import Actor as ActorModel
 
 
-def _handle(raw_actor: ap.RawObject) -> str:
+def _default_handle(raw_actor: ap.RawObject) -> str:
+    """`@preferredUsername@ap_id-host`, without asking webfinger.
+
+    Good enough wherever the handle is neither stored nor shown (e.g. an actor
+    built only to read its inbox); use `resolve_handle` everywhere else."""
     ap_id = ap.get_id(raw_actor["id"])
     domain = urlparse(ap_id)
     if not domain.hostname:
         raise ValueError(f"Invalid actor ID {ap_id}")
 
-    handle = f'@{raw_actor["preferredUsername"]}@{domain.hostname}'  # type: ignore
+    return f'@{raw_actor["preferredUsername"]}@{domain.hostname}'  # type: ignore
 
-    # TODO: cleanup this
+
+async def resolve_handle(raw_actor: ap.RawObject) -> str:
+    """The actor's handle, honouring a custom webfinger domain (the webfinger
+    `subject` may name a different host than the actor ID). Falls back to
+    `_default_handle` when webfinger fails."""
+    handle = _default_handle(raw_actor)
+    hostname = urlparse(ap.get_id(raw_actor["id"])).hostname
+
     # TODO: is this fully compatible with the specification?
-    # Next, check for custom webfinger domains
     resp: httpx.Response | None = None
-    for url in {
-        f"https://{domain.hostname}/.well-known/webfinger",
-        f"http://{domain.hostname}/.well-known/webfinger",
-    }:
+    client = http_client.get_client()
+    for url in (
+        f"https://{hostname}/.well-known/webfinger",
+        f"http://{hostname}/.well-known/webfinger",
+    ):
         try:
             logger.info(f"Webfinger {handle} at {url}")
-            resp = httpx.get(
+            resp = await client.get(
                 url,
                 params={"resource": f"acct:{handle[1:]}"},
                 headers={
@@ -58,14 +70,37 @@ def _handle(raw_actor: ap.RawObject) -> str:
         except Exception:
             logger.exception(f"Failed to webfinger {handle}")
 
+    subject = None
     if resp:
         try:
             json_resp = resp.json()
             if json_resp.get("subject", "").startswith("acct:"):
-                return "@" + json_resp["subject"].removeprefix("acct:")
+                subject = json_resp["subject"].removeprefix("acct:")
         except Exception:
             logger.exception(f"Failed to parse webfinger response for {handle}")
-    return handle
+    if not subject:
+        return handle
+
+    # Any server can claim any `subject`. One naming another domain is only
+    # trusted if that domain's webfinger points back at this actor (what
+    # Mastodon does too), so an actor can't take over someone else's handle.
+    if subject.rpartition("@")[2] != hostname and not await _webfinger_points_to(
+        subject, ap.get_id(raw_actor["id"])
+    ):
+        logger.warning(f"Ignoring unverified webfinger subject {subject} for {handle}")
+        return handle
+
+    return "@" + subject
+
+
+async def _webfinger_points_to(acct: str, ap_id: str) -> bool:
+    from app import webfinger  # avoid an import cycle at module load
+
+    try:
+        return await webfinger.get_actor_url(acct) == ap_id
+    except Exception:
+        logger.exception(f"Failed to verify webfinger for {acct}")
+        return False
 
 
 def _media_link_url(media: object) -> str | None:
@@ -123,7 +158,7 @@ class Actor:
 
     @cached_property
     def handle(self) -> str:
-        return _handle(self.ap_actor)
+        return _default_handle(self.ap_actor)
 
     @property
     def ap_type(self) -> str:
@@ -222,7 +257,9 @@ class RemoteActor(Actor):
         self._ap_type = ap_type
 
         if handle is None:
-            handle = _handle(ap_actor)
+            # No network from a constructor: callers that store or show the
+            # handle pass `handle=await resolve_handle(...)`.
+            handle = _default_handle(ap_actor)
 
         self._handle = handle
 
@@ -256,7 +293,7 @@ async def save_actor(db_session: AsyncSession, ap_actor: ap.RawObject) -> "Actor
         ap_id=ap_id,
         ap_actor=ap_actor,
         ap_type=ap.as_list(ap_actor["type"])[0],
-        handle=_handle(ap_actor),
+        handle=await resolve_handle(ap_actor),
     )
     try:
         # Isolated in a SAVEPOINT: a concurrent request may be inserting the
@@ -308,7 +345,7 @@ async def fetch_actor(
                 await update_actor_if_needed(
                     db_session,
                     existing_actor,
-                    RemoteActor(ap_actor),
+                    RemoteActor(ap_actor, handle=await resolve_handle(ap_actor)),
                 )
                 return existing_actor
             except Exception:
@@ -334,7 +371,7 @@ async def fetch_actor(
             await update_actor_if_needed(
                 db_session,
                 existing_actor_by_url,
-                RemoteActor(ap_actor),
+                RemoteActor(ap_actor, handle=await resolve_handle(ap_actor)),
             )
             return existing_actor_by_url
 

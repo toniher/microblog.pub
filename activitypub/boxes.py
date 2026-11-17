@@ -28,6 +28,7 @@ from activitypub.actor import LOCAL_ACTOR
 from activitypub.actor import Actor
 from activitypub.actor import RemoteActor
 from activitypub.actor import fetch_actor
+from activitypub.actor import resolve_handle
 from activitypub.actor import save_actor
 from activitypub.actor import update_actor_if_needed
 from activitypub.ap_object import RemoteObject
@@ -3093,7 +3094,9 @@ async def _handle_update_activity(
     if wrapped_object["type"] in ap.ACTOR_TYPES:
         logger.info("Updating actor")
 
-        updated_actor = RemoteActor(wrapped_object)
+        updated_actor = RemoteActor(
+            wrapped_object, handle=await resolve_handle(wrapped_object)
+        )
         if (
             from_actor.ap_id != updated_actor.ap_id
             or ap.as_list(from_actor.ap_type)[0] not in ap.ACTOR_TYPES
@@ -3790,7 +3793,9 @@ async def save_to_inbox(
     # Special case for server sending the actor as a payload (like python-federation)
     if ap.as_list(raw_object["type"])[0] in ap.ACTOR_TYPES:
         if ap.get_id(raw_object) == sent_by_ap_actor_id:
-            updated_actor = RemoteActor(raw_object)
+            updated_actor = RemoteActor(
+                raw_object, handle=await resolve_handle(raw_object)
+            )
 
             try:
                 actor = await fetch_actor(db_session, sent_by_ap_actor_id)

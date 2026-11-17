@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass
 from typing import Any
 from typing import Optional
@@ -31,7 +32,13 @@ async def _discover_webmention_endoint(url: str) -> str | None:
         if k and "webmention" in k:
             return make_abs(resp.links[k].get("url"), url)
 
-    soup = BeautifulSoup(resp.text, "html5lib")
+    # html5lib parsing of a whole remote page is pure CPU: keep it off the
+    # event loop.
+    return await asyncio.to_thread(_find_webmention_link, resp.text, url)
+
+
+def _find_webmention_link(html: str, url: str) -> str | None:
+    soup = BeautifulSoup(html, "html5lib")
     wlinks = soup.find_all(["link", "a"], attrs={"rel": "webmention"})
     for wlink in wlinks:
         if "href" in wlink.attrs:

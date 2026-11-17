@@ -1,3 +1,5 @@
+from unittest import mock
+
 import httpx
 import pytest
 import respx
@@ -7,8 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 import activitypub.models
+from activitypub.actor import RemoteActor
 from activitypub.actor import fetch_actor
 from activitypub.actor import refresh_actor_counts
+from activitypub.actor import resolve_handle
 from activitypub.actor import save_actor
 from activitypub.tests import factories
 
@@ -46,6 +50,84 @@ async def test_fetch_actor(async_db_session: AsyncSession, respx_mock) -> None:
     ).scalar_one() == 1
     assert respx.calls.call_count == 2
     await async_db_session.close()
+
+
+def _mock_webfinger(respx_mock, host: str, subject: str, self_href: str) -> None:
+    respx_mock.get(f"https://{host}/.well-known/webfinger").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "subject": f"acct:{subject}",
+                "links": [
+                    {
+                        "rel": "self",
+                        "type": "application/activity+json",
+                        "href": self_href,
+                    }
+                ],
+            },
+        )
+    )
+
+
+@pytest.mark.asyncio
+async def test_resolve_handle_uses_verified_webfinger_subject(
+    respx_mock, monkeypatch
+) -> None:
+    monkeypatch.setattr("app.webfinger.check_url_async", mock.AsyncMock())
+    ra = factories.RemoteActorFactory(
+        base_url="https://example.com", username="toto", public_key="pk"
+    )
+    _mock_webfinger(respx_mock, "example.com", "toto@social.example", ra.ap_id)
+    _mock_webfinger(respx_mock, "social.example", "toto@social.example", ra.ap_id)
+
+    assert await resolve_handle(ra.ap_actor) == "@toto@social.example"
+
+
+@pytest.mark.asyncio
+async def test_resolve_handle_ignores_unverified_webfinger_subject(
+    respx_mock, monkeypatch
+) -> None:
+    # example.com claims a handle on victim.example, whose webfinger names
+    # a different actor: the claim is ignored.
+    monkeypatch.setattr("app.webfinger.check_url_async", mock.AsyncMock())
+    ra = factories.RemoteActorFactory(
+        base_url="https://example.com", username="toto", public_key="pk"
+    )
+    _mock_webfinger(respx_mock, "example.com", "toto@victim.example", ra.ap_id)
+    _mock_webfinger(
+        respx_mock,
+        "victim.example",
+        "toto@victim.example",
+        "https://victim.example/users/toto",
+    )
+
+    assert await resolve_handle(ra.ap_actor) == "@toto@example.com"
+
+
+@pytest.mark.asyncio
+async def test_resolve_handle_falls_back_when_webfinger_fails(respx_mock) -> None:
+    ra = factories.RemoteActorFactory(
+        base_url="https://example.com", username="toto", public_key="pk"
+    )
+    respx_mock.get("https://example.com/.well-known/webfinger").mock(
+        return_value=httpx.Response(500)
+    )
+    respx_mock.get("http://example.com/.well-known/webfinger").mock(
+        side_effect=httpx.ConnectError("down")
+    )
+
+    assert await resolve_handle(ra.ap_actor) == "@toto@example.com"
+
+
+def test_remote_actor_does_not_hit_the_network(respx_mock) -> None:
+    ra = factories.RemoteActorFactory(
+        base_url="https://example.com", username="toto", public_key="pk"
+    )
+
+    # No route is mocked: any request would raise in respx.
+    assert RemoteActor(ra.ap_actor).handle == "@toto@example.com"
+    assert respx.calls.call_count == 0
 
 
 @pytest.mark.asyncio

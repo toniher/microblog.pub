@@ -1,8 +1,11 @@
+import asyncio
+
 import mf2py  # type: ignore
 
 from activitypub import activitypub as ap
 from activitypub.actor import Actor
 from activitypub.actor import RemoteActor
+from activitypub.actor import resolve_handle
 from activitypub.ap_object import RemoteObject
 from app import webfinger
 from app.database import AsyncSession
@@ -26,7 +29,9 @@ async def lookup(db_session: AsyncSession, query: str) -> Actor | RemoteObject:
 
         alternate_obj = None
         if resp.headers.get("content-type", "").startswith("text/html"):
-            for alternate in mf2py.parse(doc=resp.text).get("alternates", []):
+            # mf2py parsing is pure CPU: keep it off the event loop.
+            mf_data = await asyncio.to_thread(mf2py.parse, doc=resp.text)
+            for alternate in mf_data.get("alternates", []):
                 if alternate.get("type") == "application/activity+json":
                     alternate_obj = await ap.fetch(alternate["url"])
 
@@ -36,7 +41,7 @@ async def lookup(db_session: AsyncSession, query: str) -> Actor | RemoteObject:
             raise
 
     if ap.as_list(ap_obj["type"])[0] in ap.ACTOR_TYPES:
-        return RemoteActor(ap_obj)
+        return RemoteActor(ap_obj, handle=await resolve_handle(ap_obj))
     else:
         # Some software return objects wrapped in a Create activity (like
         # python-federation)

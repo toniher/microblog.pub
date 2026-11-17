@@ -119,6 +119,7 @@ async def _get_public_key(
     # Fetch it
     from activitypub import activitypub as ap
     from activitypub.actor import RemoteActor
+    from activitypub.actor import resolve_handle
     from activitypub.actor import update_actor_if_needed
 
     # Without signing the request as if it's the first contact, the 2 servers
@@ -146,7 +147,11 @@ async def _get_public_key(
     if should_skip_cache and actor["type"] != "Key" and existing_actor:
         # We had to skip the cache, which means the actor key probably changed
         # and we want to update our cached version
-        await update_actor_if_needed(db_session, existing_actor, RemoteActor(actor))
+        await update_actor_if_needed(
+            db_session,
+            existing_actor,
+            RemoteActor(actor, handle=await resolve_handle(actor)),
+        )
         await db_session.commit()
 
     _KEY_CACHE[key_id] = k

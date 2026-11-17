@@ -21,8 +21,10 @@ from fastapi import Depends
 from fastapi import Request
 from fastapi import UploadFile as FastAPIUploadFile
 from loguru import logger
+from sqlalchemy import and_
 from sqlalchemy import delete
 from sqlalchemy import func
+from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy import update
 from sqlalchemy.orm import joinedload
@@ -666,16 +668,45 @@ async def accounts_lookup(
     # DB-only: we don't live-fetch/webfinger unknown actors here. PR-3's
     # search (resolve=true) covers that case; this only finds actors already
     # cached from prior federation activity.
-    known_actors = (await db_session.scalars(select(activitypub.models.Actor))).all()
-    match = next(
-        (
-            actor
-            for actor in known_actors
-            if actor.preferred_username == username
-            and urlparse(actor.ap_id).netloc == host
-        ),
-        None,
-    )
+    Actor = activitypub.models.Actor
+    # `handle` holds the webfinger acct (what clients send) and is indexed.
+    handle_matches = (
+        await db_session.scalars(
+            select(Actor)
+            .where(Actor.handle == f"@{username}@{host}")
+            .order_by(Actor.id)
+        )
+    ).all()
+    match = next((a for a in handle_matches if urlparse(a.ap_id).netloc == host), None)
+    if match is None:
+        # Match `username@<ap_id host>`; this also takes precedence over a
+        # handle naming another domain (a custom webfinger domain), which is a
+        # remote server's claim (verified by `resolve_handle`, but rows stored
+        # before that check may hold an unverified one).
+        # The bare-origin match plus the prefix range (`0` sorts right after
+        # `/`) keep this on the `ap_id` index instead of scanning every actor.
+        on_host = [
+            cond
+            for origin in (f"https://{host}", f"http://{host}")
+            for cond in (
+                Actor.ap_id == origin,
+                and_(Actor.ap_id >= f"{origin}/", Actor.ap_id < f"{origin}0"),
+            )
+        ]
+        match = (
+            await db_session.scalars(
+                select(Actor)
+                .where(
+                    or_(*on_host),
+                    func.json_extract(Actor.ap_actor, "$.preferredUsername")
+                    == username,
+                )
+                .order_by(Actor.id)
+                .limit(1)
+            )
+        ).first()
+    if match is None and handle_matches:
+        match = handle_matches[0]
     if match is None:
         raise MastodonError(404, "not_found", "account not found")
 

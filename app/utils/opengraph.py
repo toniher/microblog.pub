@@ -78,8 +78,12 @@ def _scrap_og_meta(url: str, html: str) -> OpenGraphMeta | None:
     return OpenGraphMeta.model_validate(raw)
 
 
-def scrap_og_meta(url: str, html: str) -> OpenGraphMeta | None:
-    return _scrap_og_meta(url, html).result()
+async def scrap_og_meta(url: str, html: str) -> OpenGraphMeta | None:
+    # Await the pebble future instead of blocking on `.result()`: the parse
+    # runs in a child process for up to 5s, and a blocking wait would stall
+    # the event loop for that long. Cancelling the wrapper (e.g. from
+    # `asyncio.wait_for`) also cancels the pebble process.
+    return await asyncio.wrap_future(_scrap_og_meta(url, html))
 
 
 async def external_urls(
@@ -156,7 +160,7 @@ async def _og_meta_from_url(url: str) -> OpenGraphMeta | None:
         return None
 
     try:
-        return scrap_og_meta(url, resp.text)
+        return await scrap_og_meta(url, resp.text)
     except TimeoutError:
         logger.info(f"Timed out when scraping OG meta for {url}")
         return None

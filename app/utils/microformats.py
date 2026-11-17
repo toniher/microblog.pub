@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any
 
 import httpx
@@ -12,26 +13,44 @@ class URLNotFoundOrGone(Exception):
     pass
 
 
+# Upper bound on the HTML read from a remote page. `POST /webmentions` is
+# unauthenticated and lets the caller pick the URL, so the body size (and the
+# mf2py parse time that follows) must not be theirs to choose either.
+_MAX_HTML_BYTES = 2 * 1024 * 1024
+
+
 async def fetch_and_parse(url: str) -> tuple[dict[str, Any], str]:
-    resp = await http_client.get_client().get(
+    async with http_client.get_client().stream(
+        "GET",
         url,
         headers={
             "User-Agent": config.USER_AGENT,
         },
         follow_redirects=True,
-    )
-    if resp.status_code in [404, 410]:
-        raise URLNotFoundOrGone
+    ) as resp:
+        if resp.status_code in [404, 410]:
+            raise URLNotFoundOrGone
 
-    try:
-        resp.raise_for_status()
-    except httpx.HTTPStatusError:
-        logger.error(
-            f"Failed to parse microformats for {url}: " f"got {resp.status_code}"
-        )
-        raise
+        try:
+            resp.raise_for_status()
+        except httpx.HTTPStatusError:
+            logger.error(
+                f"Failed to parse microformats for {url}: " f"got {resp.status_code}"
+            )
+            raise
 
-    return _drop_img_alt(mf2py.parse(doc=resp.text)), resp.text
+        body = bytearray()
+        async for chunk in resp.aiter_bytes():
+            body += chunk
+            if len(body) >= _MAX_HTML_BYTES:
+                logger.info(f"Truncating {url} at {_MAX_HTML_BYTES} bytes")
+                del body[_MAX_HTML_BYTES:]
+                break
+        html = body.decode(resp.encoding or "utf-8", errors="replace")
+
+    # mf2py parsing is pure CPU: keep it off the event loop.
+    data = await asyncio.to_thread(lambda: _drop_img_alt(mf2py.parse(doc=html)))
+    return data, html
 
 
 def _drop_img_alt(data: Any) -> Any:

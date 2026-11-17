@@ -309,6 +309,49 @@ def test_accounts_lookup_remote_actor(
     assert response.json()["id"] == ids.encode_account_id(follower.actor)
 
 
+def test_accounts_lookup_by_webfinger_handle(
+    client: TestClient, respx_mock: respx.MockRouter
+) -> None:
+    # The webfinger domain differs from the actor ID's host: both forms resolve.
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    actor = factories.ActorFactory(
+        ap_type=ra.ap_type,
+        ap_actor=ra.ap_actor,
+        ap_id=ra.ap_id,
+        handle="@toto@social.example",
+    )
+
+    for acct in ("toto@social.example", "toto@example.com"):
+        response = client.get(f"/api/v1/accounts/lookup?acct={acct}")
+        assert response.status_code == 200, acct
+        assert response.json()["id"] == ids.encode_account_id(actor)
+
+    response = client.get("/api/v1/accounts/lookup?acct=titi@social.example")
+    assert response.status_code == 404
+
+
+def test_accounts_lookup_prefers_actor_on_acct_host(
+    client: TestClient, respx_mock: respx.MockRouter
+) -> None:
+    # An actor elsewhere claiming the handle doesn't shadow the real one.
+    real = setup_remote_actor(respx_mock, base_url="https://example.com")
+    real_actor = factories.ActorFactory.from_remote_actor(real)
+    spoof = factories.RemoteActorFactory(
+        base_url="https://evil.example", username="toto", public_key="pk"
+    )
+    factories.ActorFactory(
+        ap_type=spoof.ap_type,
+        ap_actor=spoof.ap_actor,
+        ap_id=spoof.ap_id,
+        handle="@toto@example.com",
+    )
+
+    response = client.get("/api/v1/accounts/lookup?acct=toto@example.com")
+
+    assert response.status_code == 200
+    assert response.json()["id"] == ids.encode_account_id(real_actor)
+
+
 def test_accounts_lookup_not_found(client: TestClient) -> None:
     response = client.get("/api/v1/accounts/lookup?acct=nobody@nowhere.example")
     assert response.status_code == 404
