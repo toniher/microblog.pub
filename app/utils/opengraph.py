@@ -1,7 +1,5 @@
 import asyncio
 import mimetypes
-import re
-import signal
 from concurrent.futures import TimeoutError
 from typing import Any
 from urllib.parse import urlparse
@@ -9,8 +7,6 @@ from urllib.parse import urlparse
 import httpx
 from bs4 import BeautifulSoup  # type: ignore
 from loguru import logger
-from pebble import concurrent  # type: ignore
-from pydantic import BaseModel
 
 from activitypub import activitypub as ap
 from activitypub import ap_object
@@ -21,61 +17,9 @@ from activitypub.models import OutboxObject
 from app import config
 from app import http_client
 from app.database import AsyncSession
-from app.utils.url import is_url_valid
+from app.utils.og_scrape import OpenGraphMeta
+from app.utils.og_scrape import scrap_og_meta_in_process
 from app.utils.url import is_url_valid_async
-from app.utils.url import make_abs
-
-
-class OpenGraphMeta(BaseModel):
-    url: str
-    title: str
-    image: str | None
-    description: str | None
-    site_name: str
-
-
-@concurrent.process(timeout=5)
-def _scrap_og_meta(url: str, html: str) -> OpenGraphMeta | None:
-    # Prevent SIGTERM to bubble up to the worker
-    signal.signal(signal.SIGTERM, signal.SIG_IGN)
-
-    soup = BeautifulSoup(html, "html5lib")
-    assert soup.head is not None  # html5lib always builds a <head>
-    # content is a single-valued attribute, so it is a str (or missing)
-    ogs: dict[str, Any] = {
-        str(og.attrs["property"]): og.get("content")
-        for og in soup.head.find_all(property=re.compile(r"^og"))
-    }
-    title = soup.find("title")
-    if title is None:
-        return None
-    raw = {
-        "url": url,
-        "title": title.text.strip(),
-        "image": None,
-        "description": None,
-        "site_name": urlparse(url).hostname,
-    }
-    for field in OpenGraphMeta.model_fields.keys():
-        og_field = f"og:{field}"
-        if ogs.get(og_field):
-            raw[field] = ogs.get(og_field, None)
-
-    if "title" not in raw:
-        return None
-
-    for maybe_rel in {"url", "image"}:
-        if u := raw.get(maybe_rel):
-            raw[maybe_rel] = make_abs(u, url)
-
-            if not is_url_valid(raw[maybe_rel] or ""):
-                logger.info(f"Invalid url {raw[maybe_rel]}")
-                if maybe_rel == "url":
-                    raw["url"] = url
-                elif maybe_rel == "image":
-                    raw["image"] = None
-
-    return OpenGraphMeta.model_validate(raw)
 
 
 async def scrap_og_meta(url: str, html: str) -> OpenGraphMeta | None:
@@ -83,7 +27,7 @@ async def scrap_og_meta(url: str, html: str) -> OpenGraphMeta | None:
     # runs in a child process for up to 5s, and a blocking wait would stall
     # the event loop for that long. Cancelling the wrapper (e.g. from
     # `asyncio.wait_for`) also cancels the pebble process.
-    return await asyncio.wrap_future(_scrap_og_meta(url, html))
+    return await asyncio.wrap_future(scrap_og_meta_in_process(url, html))
 
 
 async def external_urls(
