@@ -243,3 +243,26 @@ def test_sqlalchemy_factory(db: Session) -> None:
         actor_in_db.id == db.execute(select(activitypub.models.Actor)).scalar_one().id
     )
     db.close()
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        {"type": "Link", "href": "https://example.com/@toto"},
+        [
+            {
+                "type": "Link",
+                "mediaType": "text/html",
+                "href": "https://example.com/@toto",
+            }
+        ],
+        ["https://example.com/@toto"],
+    ],
+)
+def test_remote_actor_url_from_link(url) -> None:
+    ra = factories.RemoteActorFactory(
+        base_url="https://example.com", username="toto", public_key="pk"
+    )
+    ra.ap_actor["url"] = url
+
+    assert ra.url == "https://example.com/@toto"

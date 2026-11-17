@@ -1,6 +1,7 @@
 import asyncio
 import traceback
 
+import fastapi
 from loguru import logger
 from sqlalchemy import select
 
@@ -14,6 +15,23 @@ from app.utils.datetime import now
 from app.utils.workers import Worker
 
 _MAX_RETRIES = 8
+
+# Retrying these cannot help: the remote object is gone, the payload was
+# rejected (e.g. an invalid LD sig), or the payload trips a code path bug.
+_PERMANENT_ERRORS = (
+    ap.ObjectNotFoundError,
+    ap.ObjectIsGoneError,
+    TypeError,
+    KeyError,
+    ValueError,
+    AttributeError,
+)
+
+
+def _is_permanent(exc: Exception) -> bool:
+    if isinstance(exc, fastapi.HTTPException):
+        return 400 <= exc.status_code < 500
+    return isinstance(exc, _PERMANENT_ERRORS)
 
 
 async def new_ap_incoming_activity(
@@ -102,12 +120,17 @@ async def process_next_incoming_activity(
             await db_session.refresh(next_activity)
             next_activity.error = traceback.format_exc()
             activitypub.models.set_next_try(next_activity, _MAX_RETRIES)
-        except Exception:
+        except Exception as exc:
             logger.exception("Failed")
             await db_session.rollback()
             await db_session.refresh(next_activity)
             next_activity.error = traceback.format_exc()
-            activitypub.models.set_next_try(next_activity, _MAX_RETRIES)
+            if _is_permanent(exc):
+                logger.warning("Permanent error, not retrying")
+                next_activity.is_errored = True
+                next_activity.next_try = None
+            else:
+                activitypub.models.set_next_try(next_activity, _MAX_RETRIES)
         else:
             logger.info("Success")
             next_activity.is_processed = True

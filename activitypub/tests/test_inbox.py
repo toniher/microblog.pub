@@ -1,7 +1,9 @@
 from unittest import mock
 from uuid import uuid4
 
+import fastapi
 import httpx
+import pytest
 import respx
 from fastapi.testclient import TestClient
 from sqlalchemy import func
@@ -1593,3 +1595,39 @@ def test_inbox__vote_on_local_poll(
         item["name"]: item["replies"]["totalItems"]
         for item in question.ap_object["oneOf"]
     } == {"A": 1, "B": 0}
+
+
+@pytest.mark.parametrize(
+    "exc,is_permanent",
+    [
+        (fastapi.HTTPException(status_code=401, detail="Invalid LD sig"), True),
+        (ap.ObjectNotFoundError("https://example.com/gone"), True),
+        (TypeError("unhashable type: 'dict'"), True),
+        (ap.FetchError("https://example.com/down"), False),
+        (fastapi.HTTPException(status_code=503), False),
+    ],
+)
+def test_inbox__permanent_errors_are_not_retried(
+    db: Session,
+    exc: Exception,
+    is_permanent: bool,
+) -> None:
+    db.add(
+        activitypub.models.IncomingActivity(
+            sent_by_ap_actor_id="https://example.com",
+            ap_id="https://example.com/activity",
+            ap_object={"id": "https://example.com/activity", "type": "Create"},
+        )
+    )
+    db.commit()
+
+    with mock.patch("activitypub.incoming_activities.save_to_inbox", side_effect=exc):
+        run_process_next_incoming_activity()
+
+    activity = db.execute(select(activitypub.models.IncomingActivity)).scalar_one()
+    db.refresh(activity)
+    assert activity.tries == 1
+    assert not activity.is_processed
+    assert activity.error
+    assert activity.is_errored is is_permanent
+    assert (activity.next_try is None) is is_permanent

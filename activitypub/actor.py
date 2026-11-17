@@ -144,7 +144,8 @@ class Actor:
 
     @property
     def url(self) -> str | None:
-        return self.ap_actor.get("url") or self.ap_actor["id"]
+        # `url` may be a Link dict or a list on some servers
+        return _media_link_url(self.ap_actor.get("url")) or self.ap_actor["id"]
 
     @property
     def preferred_username(self) -> str:
