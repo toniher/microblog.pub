@@ -172,6 +172,59 @@ def test_inline_imgs_cache_follows_the_expiry_bucket(
     assert str(media.current_expiry()) in after
 
 
+def test_clean_html_is_memoized_per_expiry_bucket_and_inputs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from activitypub.actor import LOCAL_ACTOR
+    from activitypub.ap_object import RemoteObject
+    from app import templates
+
+    calls = []
+    real_clean = templates.bleach.clean
+
+    def _counting_clean(*args, **kwargs):
+        calls.append(1)
+        return real_clean(*args, **kwargs)
+
+    monkeypatch.setattr(templates.bleach, "clean", _counting_clean)
+    templates._CLEAN_HTML_CACHE.clear()
+
+    def _note(ap_id: str, emoji_url: str) -> RemoteObject:
+        return RemoteObject(
+            {
+                "type": "Note",
+                "id": ap_id,
+                "attributedTo": LOCAL_ACTOR.ap_id,
+                "content": "x",
+                "tag": [{"type": "Emoji", "name": ":e:", "icon": {"url": emoji_url}}],
+            },
+            LOCAL_ACTOR,
+        )
+
+    html = '<p class="x" title="t">:e: <img src="https://example.com/i.png"></p>'
+    remote = _note("https://remote.example/n/1", "https://remote.example/e.png")
+    first_day = 7 * 3000
+
+    _at_day(monkeypatch, first_day)
+    before = templates._clean_html(html, remote)
+    assert templates._clean_html(html, remote) == before
+    assert len(calls) == 1  # second call: cache hit
+
+    # Another note with the same html but a different emoji: own entry
+    other_emoji = _note("https://remote.example/n/2", "https://remote.example/f.png")
+    assert templates._clean_html(html, other_emoji) != before
+
+    # Local notes keep every attribute: own entry
+    local = _note(templates.config.ID + "/o/1", "https://remote.example/e.png")
+    assert templates._clean_html(html, local) != before
+
+    # New expiry bucket: recomputed, with the new signatures
+    _at_day(monkeypatch, first_day + media.EXPIRY_LENGTH)
+    after = templates._clean_html(html, remote)
+    assert after != before
+    assert str(media.current_expiry()) in after
+
+
 @pytest.mark.parametrize("accept", ["image/webp,*/*", "*/*"])
 def test_proxy_media_resized_varies_on_accept(
     client: TestClient, respx_mock, accept: str

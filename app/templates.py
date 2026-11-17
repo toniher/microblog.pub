@@ -14,6 +14,7 @@ from babel.dates import format_date
 from babel.dates import format_datetime
 from babel.dates import format_timedelta
 from bs4 import BeautifulSoup  # type: ignore
+from cachetools import LRUCache
 from cachetools import TTLCache
 from dateutil.parser import parse
 from fastapi import Request
@@ -379,31 +380,69 @@ def _update_inline_imgs_cached(content: str, expiry: int) -> str:
     return body.decode_contents()
 
 
+def _clean_html_entry_size(value: str) -> int:
+    # In characters, counting the key's html as about the value's size.
+    return 2 * len(value)
+
+
+# Sized by characters, not entries: a few long articles mustn't blow memory.
+_CLEAN_HTML_CACHE: MutableMapping[tuple, str] = LRUCache(
+    maxsize=8 * 1024 * 1024, getsizeof=_clean_html_entry_size
+)
+
+
 def _clean_html(html: str, note: Object) -> str:
+    """Memoized: the same notes and actors render on every page view, and
+    each pass is several html5lib parses (bleach, highlight, ...)."""
     if html is None:
         logger.error(f"{html=} for {note.ap_id}/{note.ap_object}")
         return ""
+
+    emoji_key = []
+    for tag in note.tags:
+        if tag.get("type") == "Emoji":
+            try:
+                emoji_key.append((tag["name"], tag["icon"]["url"]))
+            except (KeyError, TypeError):
+                continue
+    # Everything the output depends on. The expiry bucket because inline
+    # images and custom emojis embed signed proxy URLs: a cached entry must
+    # never outlive its signatures.
+    key = (
+        html,
+        note.ap_id.startswith(config.ID),
+        note.ap_id.startswith(BASE_URL),
+        tuple(emoji_key),
+        current_expiry(),
+    )
+    if (cached := _CLEAN_HTML_CACHE.get(key)) is not None:
+        return cached
+
+    cleaned = _clean_html_uncached(html, note)
     try:
-        return _emojify(
-            _replace_custom_emojis(
-                bleach.clean(
-                    privacy_replace.replace_content(
-                        _update_inline_imgs(highlight(html))
-                    ),
-                    tags=ALLOWED_TAGS,
-                    attributes=(
-                        _allow_all_attributes
-                        if note.ap_id.startswith(config.ID)
-                        else ALLOWED_ATTRIBUTES
-                    ),
-                    strip=True,
+        _CLEAN_HTML_CACHE[key] = cleaned
+    except ValueError:  # larger than the whole cache
+        pass
+    return cleaned
+
+
+def _clean_html_uncached(html: str, note: Object) -> str:
+    return _emojify(
+        _replace_custom_emojis(
+            bleach.clean(
+                privacy_replace.replace_content(_update_inline_imgs(highlight(html))),
+                tags=ALLOWED_TAGS,
+                attributes=(
+                    _allow_all_attributes
+                    if note.ap_id.startswith(config.ID)
+                    else ALLOWED_ATTRIBUTES
                 ),
-                note,
+                strip=True,
             ),
-            is_local=note.ap_id.startswith(BASE_URL),
-        )
-    except Exception:
-        raise
+            note,
+        ),
+        is_local=note.ap_id.startswith(BASE_URL),
+    )
 
 
 def _clean_html_wm(html: str) -> str:
