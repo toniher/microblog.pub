@@ -330,11 +330,13 @@ class ResolvedActor:
 
     `existing` is the cached row (if any); `fetched` is a freshly fetched
     document (with its handle resolved) to save or refresh it from.
+    `refresh_failed`: refreshing the stale `existing` row failed.
     """
 
     actor_id: str
     existing: "ActorModel | None"
     fetched: RemoteActor | None
+    refresh_failed: bool = False
 
 
 async def resolve_actor(
@@ -372,6 +374,9 @@ async def resolve_actor(
             except Exception:
                 logger.exception(f"Failed to refresh {actor_id}")
                 # If we fail to refresh the actor, return the cached one
+                return ResolvedActor(
+                    actor_id, existing_actor, None, refresh_failed=True
+                )
 
         return ResolvedActor(actor_id, existing_actor, None)
 
@@ -403,6 +408,12 @@ async def persist_actor(
             await update_actor_if_needed(
                 db_session, resolved.existing, resolved.fetched
             )
+        elif resolved.refresh_failed:
+            # Back off: `updated_at` is "last refresh attempt", so a dead
+            # host is retried after the usual 24h instead of on every lookup
+            # (each one waiting out the HTTP timeout).
+            resolved.existing.updated_at = now()
+            await db_session.flush()
     elif resolved.fetched is not None:
         resolved.existing = await save_actor(
             db_session, resolved.fetched.ap_actor, handle=resolved.fetched.handle
@@ -411,6 +422,7 @@ async def persist_actor(
         raise ValueError("Should never happen")
 
     resolved.fetched = None
+    resolved.refresh_failed = False
     return resolved.existing
 
 

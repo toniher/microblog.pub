@@ -268,3 +268,36 @@ def test_remote_actor_url_from_link(url) -> None:
     ra.ap_actor["url"] = url
 
     assert ra.url == "https://example.com/@toto"
+
+
+@pytest.mark.asyncio
+async def test_fetch_actor_backs_off_after_failed_refresh(
+    async_db_session: AsyncSession, respx_mock
+) -> None:
+    from datetime import timedelta
+
+    from app.utils.datetime import as_utc
+    from app.utils.datetime import now
+
+    ra = factories.RemoteActorFactory(
+        base_url="https://dead.example", username="toto", public_key="pk"
+    )
+    actor_in_db = activitypub.models.Actor(
+        ap_id=ra.ap_id,
+        ap_actor=ra.ap_actor,
+        ap_type=ra.ap_type,
+        handle="@toto@dead.example",
+        updated_at=now() - timedelta(days=2),
+    )
+    async_db_session.add(actor_in_db)
+    await async_db_session.commit()
+    route = respx_mock.get(ra.ap_id).mock(return_value=httpx.Response(500))
+
+    for _ in range(2):
+        actor = await fetch_actor(async_db_session, ra.ap_id)
+        await async_db_session.commit()
+        assert actor.id == actor_in_db.id
+
+    # The stale actor was retried once, then left alone for the usual 24h.
+    assert route.call_count == 1
+    assert now() - as_utc(actor_in_db.updated_at) < timedelta(minutes=1)
