@@ -1369,16 +1369,18 @@ async def _compute_recipients(
 
 
 async def compute_all_known_recipients(db_session: AsyncSession) -> set[str]:
-    return {
-        actor.shared_inbox_url or actor.inbox_url
-        for actor in (
-            await db_session.scalars(
-                select(activitypub.models.Actor).where(
-                    activitypub.models.Actor.is_deleted.is_(False)
-                )
-            )
-        ).all()
-    }
+    # Extracted in SQL: loading every `Actor` (tens of thousands of rows, each
+    # with its full `ap_actor` JSON) to read two fields is seconds of work.
+    # Same fallback as `BaseActor.shared_inbox_url`, empty sharedInbox included.
+    ap_actor = activitypub.models.Actor.ap_actor
+    inbox = func.coalesce(
+        func.nullif(func.json_extract(ap_actor, "$.endpoints.sharedInbox"), ""),
+        func.json_extract(ap_actor, "$.inbox"),
+    )
+    rows = await db_session.scalars(
+        select(inbox).where(activitypub.models.Actor.is_deleted.is_(False)).distinct()
+    )
+    return {url for url in rows if url}
 
 
 async def _is_following(db_session: AsyncSession, actor_id: int) -> bool:

@@ -175,7 +175,9 @@ class Actor:
 
     @property
     def shared_inbox_url(self) -> str:
-        return self.ap_actor.get("endpoints", {}).get("sharedInbox") or self.inbox_url
+        # Some servers send `"endpoints": null`.
+        endpoints = self.ap_actor.get("endpoints") or {}
+        return endpoints.get("sharedInbox") or self.inbox_url
 
     @property
     def icon_url(self) -> str | None:

@@ -121,9 +121,9 @@ async def new_outgoing_activity(
         webmention_target=webmention_target,
     )
 
+    # No flush: fan-outs add one row per recipient, and the caller's next
+    # flush/commit inserts them all in one batched statement.
     db_session.add(outgoing_activity)
-    await db_session.flush()
-    await db_session.refresh(outgoing_activity)
     return outgoing_activity
 
 

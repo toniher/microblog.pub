@@ -326,3 +326,32 @@ async def test_send_quote_revoke_requires_a_local_verified_stamp(
 
     with pytest.raises(ValueError):
         await boxes.send_quote_revoke(async_db_session, quoting_note.ap_id)
+
+
+@pytest.mark.asyncio
+async def test_compute_all_known_recipients(async_db_session: AsyncSession) -> None:
+    def _actor(name: str, endpoints: object, is_deleted: bool = False):
+        ap_id = f"https://{name}.example/u"
+        return activitypub.models.Actor(
+            ap_id=ap_id,
+            ap_type="Person",
+            is_deleted=is_deleted,
+            ap_actor={"id": ap_id, "inbox": ap_id + "/inbox", "endpoints": endpoints},
+        )
+
+    async_db_session.add_all(
+        [
+            _actor("shared", {"sharedInbox": "https://shared.example/inbox"}),
+            _actor("shared2", {"sharedInbox": "https://shared.example/inbox"}),
+            _actor("null", None),
+            _actor("empty", {"sharedInbox": ""}),
+            _actor("deleted", {}, is_deleted=True),
+        ]
+    )
+    await async_db_session.commit()
+
+    assert await boxes.compute_all_known_recipients(async_db_session) == {
+        "https://shared.example/inbox",
+        "https://null.example/u/inbox",
+        "https://empty.example/u/inbox",
+    }
