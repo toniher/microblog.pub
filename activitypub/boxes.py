@@ -54,6 +54,7 @@ from app.config import set_moved_to
 from app.config import stream_visibility_callback
 from app.customization import ObjectInfo
 from app.database import AsyncSession
+from app.database import Base
 from app.source import dedup_tags
 from app.source import markdownify
 from app.uploads import upload_to_attachment
@@ -850,7 +851,10 @@ async def send_create(
     language: str | None = None,
     quote_of: str | None = None,
     alias: str | None = None,
+    delete_on_send: Base | None = None,
 ) -> tuple[str, activitypub.models.OutboxObject]:
+    """`delete_on_send`: a row to delete in the same transaction as the new
+    note (a published scheduled status), staged after the network calls."""
     note_id = allocate_outbox_id()
     published = now().replace(microsecond=0).isoformat().replace("+00:00", "Z")
     context = f"{ID}/contexts/" + uuid.uuid4().hex
@@ -993,6 +997,8 @@ async def send_create(
         await opengraph.external_urls(db_session, RemoteObject(obj, LOCAL_ACTOR)),
         discover_webmentions=visibility == ap.VisibilityEnum.PUBLIC,
     )
+    if delete_on_send is not None:
+        await db_session.delete(delete_on_send)
     outbox_object = await save_outbox_object(
         db_session,
         note_id,

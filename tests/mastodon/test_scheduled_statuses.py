@@ -2,7 +2,9 @@ import io
 import secrets
 from datetime import timedelta
 
+import httpx
 import pytest
+import respx
 from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy import select
@@ -511,3 +513,38 @@ async def test_scheduled_statuses_list_serializes_attachments(
         assert len(entity["media_attachments"]) == 1
         assert entity["media_attachments"][0]["description"] == "alt text"
         assert entity["params"]["media_ids"] == [entity["media_attachments"][0]["id"]]
+
+
+@pytest.mark.asyncio
+async def test_worker_publish_fetches_links_before_writing(
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    # The queue row's delete must not be flushed (taking SQLite's writer
+    # lock) before `send_create`'s network calls: autouse
+    # `no_network_while_writing` guard.
+    url = "https://news.example/story"
+    page_route = respx_mock.get(url).mock(
+        return_value=httpx.Response(
+            200,
+            text="<html><head><title>Story</title></head></html>",
+            headers={"content-type": "text/html"},
+        )
+    )
+    await scheduled_statuses.schedule(
+        async_db_session,
+        scheduled_statuses.ComposeParams(
+            content=f"Read [this]({url})", visibility=ap.VisibilityEnum.PUBLIC
+        ),
+        now() - timedelta(minutes=1),
+    )
+
+    published = await scheduled_statuses.publish_due_scheduled_statuses(
+        async_db_session
+    )
+
+    assert published == 1
+    assert page_route.call_count == 1
+    assert await _scheduled_rows(async_db_session) == []
+    notes = await _outbox_notes(async_db_session)
+    assert [m["title"] for m in notes[0].og_meta or []] == ["Story"]

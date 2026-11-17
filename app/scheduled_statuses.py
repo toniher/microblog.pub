@@ -105,11 +105,9 @@ async def publish(
     removed inside the transaction `send_create` commits, which is what makes
     publishing a queued post exactly-once — there's no window where the status
     exists and the queue row still does, so a crash can't republish it on the
-    next pass. It's staged only after the uploads and the reply parent have been
-    resolved, keeping those reads out of the write transaction: SQLite
-    serializes writers, so the transaction wants to be as short as it can be.
-    (It still spans `send_create`'s own network calls — recipient resolution and
-    webmention discovery — exactly as it does for an interactive post.)
+    next pass. `send_create` stages it after its network calls (mentions,
+    recipients, link fetches), right before its own writes: SQLite serializes
+    writers, so the transaction must not span the network.
 
     Raises `ScheduledStatusError` if a referenced upload or reply parent no
     longer exists.
@@ -157,9 +155,6 @@ async def publish(
         # to 0 (which would mean "no expiration" / immediately expired).
         poll_duration_in_minutes = max(1, (params.poll_expires_in or 3600) // 60)
 
-    if delete_on_send is not None:
-        await db_session.delete(delete_on_send)
-
     _, outbox_object = await send_create(
         db_session,
         ap_type=ap_type,
@@ -175,6 +170,7 @@ async def publish(
         name=None,
         language=params.language,
         quote_of=quote_of,
+        delete_on_send=delete_on_send,
     )
     return outbox_object
 
