@@ -4241,6 +4241,12 @@ async def accounts_follow(
         and await _find_own_follow_activity(db_session, actor.ap_id) is None
     )
 
+    if is_new_follow:
+        # Before setting the flags: `send_follow` may refresh the actor over
+        # the network, and pending flag changes would be autoflushed first,
+        # holding SQLite's writer lock across the fetch. It commits.
+        await send_follow(db_session, actor.ap_id)
+
     # On a new follow an absent param takes Mastodon's default; on an
     # existing one an absent param leaves the flag unchanged.
     if params.has("reblogs") or is_new_follow:
@@ -4252,10 +4258,7 @@ async def accounts_follow(
             params.get_bool("notify") if params.has("notify") else False
         )
 
-    if is_new_follow:
-        await send_follow(db_session, actor.ap_id)
-    else:
-        await db_session.commit()
+    await db_session.commit()
 
     return JSONResponse(
         content=await _relationship_for_actor(db_session, account_id, actor),
@@ -4698,6 +4701,9 @@ async def search(
         if isinstance(resolved, RemoteActor) and need_accounts:
             try:
                 actor_row = await fetch_actor(db_session, resolved.ap_id)
+                # Keep the cached actor (and release the writer lock) now,
+                # not at the end of the request (where it was rolled back).
+                await db_session.commit()
             except Exception:
                 actor_row = None
             if actor_row is not None:

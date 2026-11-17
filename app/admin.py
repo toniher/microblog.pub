@@ -197,6 +197,9 @@ async def get_lookup(
                     await fetch_actor(
                         db_session, ap_object.ap_id, save_if_not_found=False
                     )
+                    # A refresh of the cached actor: keep it, and release the
+                    # writer lock now rather than at the end of the request.
+                    await db_session.commit()
                 except ap.ObjectNotFoundError:
                     pass
                 else:

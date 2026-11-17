@@ -268,6 +268,11 @@ async def send_delete(db_session: AsyncSession, ap_object_id: str) -> None:
             "id": ap_object_id,
         },
     }
+    # The original recipients. Before the first write: resolving them may hit
+    # the network.
+    recipients = await _compute_recipients(
+        db_session, outbox_object_to_delete.ap_object
+    )
     outbox_object = await save_outbox_object(
         db_session,
         delete_id,
@@ -280,10 +285,6 @@ async def send_delete(db_session: AsyncSession, ap_object_id: str) -> None:
     outbox_object_to_delete.is_deleted = True
     await db_session.flush()
 
-    # Compute the original recipients
-    recipients = await _compute_recipients(
-        db_session, outbox_object_to_delete.ap_object
-    )
     for rcp in recipients:
         await new_outgoing_activity(db_session, rcp, outbox_object.id)
 
@@ -571,6 +572,8 @@ async def send_announce(db_session: AsyncSession, ap_object_id: str) -> None:
             inbox_object.ap_actor_id,
         ],
     }
+    # Before the first write: resolving recipients may hit the network.
+    recipients = await _compute_recipients(db_session, announce)
     outbox_object = await save_outbox_object(
         db_session, announce_id, announce, relates_to_inbox_object_id=inbox_object.id
     )
@@ -579,7 +582,6 @@ async def send_announce(db_session: AsyncSession, ap_object_id: str) -> None:
 
     inbox_object.announced_via_outbox_object_ap_id = outbox_object.ap_id
 
-    recipients = await _compute_recipients(db_session, announce)
     for rcp in recipients:
         await new_outgoing_activity(db_session, rcp, outbox_object.id)
 
@@ -638,6 +640,23 @@ async def _send_undo(db_session: AsyncSession, ap_object_id: str) -> None:
         "object": ap.remove_context(outbox_object_to_undo.ap_object),
     }
 
+    # Network first (the undone activity's target actor or recipients), then
+    # the writes: SQLite's writer lock must not be held across a fetch.
+    undo_target: ResolvedActor | None = None
+    undo_recipients: set[str] = set()
+    if outbox_object_to_undo.ap_type in ["Follow", "Block"]:
+        if not outbox_object_to_undo.activity_object_ap_id:
+            raise ValueError(
+                f"Invalid {outbox_object_to_undo.ap_type} {outbox_object_to_undo.ap_id}"
+            )
+        undo_target = await resolve_actor(
+            db_session, outbox_object_to_undo.activity_object_ap_id
+        )
+    elif outbox_object_to_undo.ap_type == "Announce":
+        undo_recipients = await _compute_recipients(
+            db_session, outbox_object_to_undo.ap_object
+        )
+
     outbox_object = await save_outbox_object(
         db_session,
         undo_id,
@@ -651,11 +670,8 @@ async def _send_undo(db_session: AsyncSession, ap_object_id: str) -> None:
     outbox_object_to_undo.is_deleted = True
 
     if outbox_object_to_undo.ap_type == "Follow":
-        if not outbox_object_to_undo.activity_object_ap_id:
-            raise ValueError("Should never happen")
-        followed_actor = await fetch_actor(
-            db_session, outbox_object_to_undo.activity_object_ap_id
-        )
+        assert undo_target is not None
+        followed_actor = await persist_actor(db_session, undo_target)
         await new_outgoing_activity(
             db_session,
             followed_actor.inbox_url,
@@ -694,19 +710,12 @@ async def _send_undo(db_session: AsyncSession, ap_object_id: str) -> None:
         announced_object.announced_via_outbox_object_ap_id = None
 
         # Send the Undo to the original recipients
-        recipients = await _compute_recipients(
-            db_session, outbox_object_to_undo.ap_object
-        )
-        for rcp in recipients:
+        for rcp in undo_recipients:
             await new_outgoing_activity(db_session, rcp, outbox_object.id)
     elif outbox_object_to_undo.ap_type == "Block":
-        if not outbox_object_to_undo.activity_object_ap_id:
-            raise ValueError(f"Invalid block activity {outbox_object_to_undo.ap_id}")
-
+        assert undo_target is not None
         # Send the Undo to the blocked actor
-        blocked_actor = await fetch_actor(
-            db_session, outbox_object_to_undo.activity_object_ap_id
-        )
+        blocked_actor = await persist_actor(db_session, undo_target)
 
         blocked_actor.is_blocked = False
 
@@ -1166,7 +1175,9 @@ async def send_update(
     *,
     _commit: bool = True,
 ) -> str:
-    outbox_object = await get_outbox_object_by_ap_id(db_session, ap_id)
+    # `no_autoflush` here and around the network phase below: see there.
+    with db_session.no_autoflush:
+        outbox_object = await get_outbox_object_by_ap_id(db_session, ap_id)
     if not outbox_object:
         raise ValueError(f"{ap_id} not found")
 
@@ -1188,13 +1199,20 @@ async def send_update(
     )
 
     updated = now().replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    content, tags, mentioned_actors = await markdownify(db_session, source)
-    # Before the first write: resolving recipients may hit the network. An
-    # edit keeps the original audience.
-    recipients = await _compute_recipients(
-        db_session,
-        {"to": outbox_object.ap_object["to"], "cc": outbox_object.ap_object["cc"]},
-    )
+    # Before the first write: mentions and recipients may hit the network.
+    # `no_autoflush`: a caller's pending changes (the admin edit's new alias,
+    # the Mastodon edit's media focus) must not be flushed by these reads,
+    # which would take SQLite's writer lock across the fetches. An edit keeps
+    # the original audience.
+    with db_session.no_autoflush:
+        content, tags, mentioned_actors = await markdownify(db_session, source)
+        recipients = await _compute_recipients(
+            db_session,
+            {
+                "to": outbox_object.ap_object["to"],
+                "cc": outbox_object.ap_object["cc"],
+            },
+        )
 
     resolved_content_warning = (
         outbox_object.summary if content_warning is _UNSET else content_warning

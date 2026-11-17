@@ -399,3 +399,132 @@ async def test_send_update__resolves_recipients_before_writing(
         )
     ).all()
     assert ra.inbox_url in recipients
+
+
+async def _stale_cached_actor(
+    db_session: AsyncSession, respx_mock: respx.MockRouter, host: str
+):
+    from datetime import timedelta
+
+    from activitypub.tests import factories
+
+    _, pubkey = factories.generate_key()
+    ra = factories.RemoteActorFactory(
+        base_url=f"https://{host}", username="bob", public_key=pubkey
+    )
+    respx_mock.get(ra.ap_id).mock(return_value=httpx.Response(200, json=ra.ap_actor))
+    respx_mock.get(f"https://{host}/.well-known/webfinger").mock(
+        return_value=httpx.Response(404)
+    )
+    actor = activitypub.models.Actor(
+        ap_id=ra.ap_id,
+        ap_type="Person",
+        ap_actor=ra.ap_actor,
+        handle=f"@bob@{host}",
+        updated_at=now() - timedelta(days=2),
+    )
+    db_session.add(actor)
+    await db_session.commit()
+    return ra
+
+
+@pytest.mark.asyncio
+async def test_send_undo_follow__refreshes_stale_actor_before_writing(
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    ra = await _stale_cached_actor(async_db_session, respx_mock, "stale.example")
+    follow = activitypub.models.OutboxObject(
+        public_id="follow-1",
+        ap_type="Follow",
+        ap_id=f"{boxes.ID}/o/follow-1",
+        ap_object={
+            "type": "Follow",
+            "id": f"{boxes.ID}/o/follow-1",
+            "actor": boxes.ID,
+            "object": ra.ap_id,
+        },
+        visibility=ap.VisibilityEnum.PUBLIC,
+        activity_object_ap_id=ra.ap_id,
+    )
+    async_db_session.add(follow)
+    await async_db_session.commit()
+
+    await boxes.send_undo(async_db_session, follow.ap_id)
+
+    recipients = (
+        await async_db_session.scalars(
+            select(activitypub.models.OutgoingActivity.recipient)
+        )
+    ).all()
+    assert ra.inbox_url in recipients
+
+
+@pytest.mark.asyncio
+async def test_send_delete__resolves_recipients_before_writing(
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    from activitypub.tests import factories
+
+    _, pubkey = factories.generate_key()
+    ra = factories.RemoteActorFactory(
+        base_url="https://remote.example", username="bob", public_key=pubkey
+    )
+    respx_mock.get(ra.ap_id).mock(return_value=httpx.Response(200, json=ra.ap_actor))
+    respx_mock.get("https://remote.example/.well-known/webfinger").mock(
+        return_value=httpx.Response(404)
+    )
+    _, note = await boxes.send_create(
+        async_db_session,
+        ObjectType.NOTE.value,
+        "to be deleted",
+        uploads=[],
+        in_reply_to=None,
+        visibility=ap.VisibilityEnum.PUBLIC,
+    )
+    note.ap_object = {**note.ap_object, "cc": [*note.ap_object["cc"], ra.ap_id]}
+    await async_db_session.commit()
+
+    await boxes.send_delete(async_db_session, note.ap_id)
+
+    recipients = (
+        await async_db_session.scalars(
+            select(activitypub.models.OutgoingActivity.recipient)
+        )
+    ).all()
+    assert ra.inbox_url in recipients
+
+
+@pytest.mark.asyncio
+async def test_send_update__callers_pending_changes_not_flushed_before_network(
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    # The admin edit sets `alias` before calling `send_update`.
+    from activitypub.tests import factories
+
+    _, pubkey = factories.generate_key()
+    ra = factories.RemoteActorFactory(
+        base_url="https://remote.example", username="bob", public_key=pubkey
+    )
+    respx_mock.get(ra.ap_id).mock(return_value=httpx.Response(200, json=ra.ap_actor))
+    respx_mock.get("https://remote.example/.well-known/webfinger").mock(
+        return_value=httpx.Response(404)
+    )
+    _, note = await boxes.send_create(
+        async_db_session,
+        ObjectType.NOTE.value,
+        "first",
+        uploads=[],
+        in_reply_to=None,
+        visibility=ap.VisibilityEnum.PUBLIC,
+    )
+    note.ap_object = {**note.ap_object, "cc": [*note.ap_object["cc"], ra.ap_id]}
+    await async_db_session.commit()
+
+    note.alias = "new-alias"
+    await boxes.send_update(async_db_session, note.ap_id, "edited")
+
+    assert note.alias == "new-alias"
+    assert note.url and note.url.endswith("new-alias")

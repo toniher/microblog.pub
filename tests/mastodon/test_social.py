@@ -1032,3 +1032,36 @@ async def test_remove_from_followers(
 @pytest.mark.asyncio
 async def test_remove_from_followers_requires_auth(client: TestClient) -> None:
     assert client.post("/api/v1/accounts/1/remove_from_followers").status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_follow_stale_actor_refreshes_before_writing_flags(
+    client: TestClient,
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    # The refresh of a stale (>24h) actor must not run with the flag updates
+    # already flushed (autouse `no_network_while_writing` guard).
+    from sqlalchemy import update
+
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    actor = factories.ActorFactory.from_remote_actor(ra)
+    await async_db_session.execute(
+        update(activitypub.models.Actor)
+        .where(activitypub.models.Actor.id == actor.id)
+        .values(updated_at=now() - timedelta(days=2), handle="@toto@example.com")
+    )
+    await async_db_session.commit()
+    account_id = ids.encode_account_id(actor)
+
+    token = await _make_access_token(async_db_session, "write:follows")
+    followed = client.post(
+        f"/api/v1/accounts/{account_id}/follow",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"reblogs": False},
+    ).json()
+
+    assert followed["showing_reblogs"] is False
+    async_db_session.expire_all()
+    row = await async_db_session.get(activitypub.models.Actor, actor.id)
+    assert row is not None and row.are_announces_hidden_from_stream is True
