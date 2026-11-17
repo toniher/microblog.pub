@@ -315,3 +315,21 @@ def test_actor_mute_and_announce_columns_are_indexed(db: Session) -> None:
     index_names = {row[1] for row in db.execute(text("PRAGMA index_list(actor)")).all()}
     assert "ix_actor_is_muted" in index_names
     assert "ix_actor_are_announces_hidden_from_stream" in index_names
+
+
+@pytest.mark.asyncio
+async def test_is_following(async_db_session: AsyncSession) -> None:
+    from tests.utils import setup_remote_actor_as_following
+
+    followed_ra = factories.RemoteActorFactory(
+        base_url="https://followed.example", username="f", public_key="pk"
+    )
+    following = setup_remote_actor_as_following(followed_ra)
+    other = factories.ActorFactory.from_remote_actor(
+        factories.RemoteActorFactory(
+            base_url="https://other.example", username="o", public_key="pk"
+        )
+    )
+
+    assert await boxes._is_following(async_db_session, following.actor_id) is True
+    assert await boxes._is_following(async_db_session, other.id) is False

@@ -430,8 +430,9 @@ def check_config(ctx):
 def import_mastodon_following_accounts(ctx, path):
     # type: (Context, str) -> None
     from loguru import logger
+    from sqlalchemy import select
 
-    from activitypub.boxes import _get_following
+    import activitypub.models
     from activitypub.boxes import _send_follow
     from app.database import async_session
     from app.utils.mastodon import get_actor_urls_from_following_accounts_csv_file
@@ -439,9 +440,11 @@ def import_mastodon_following_accounts(ctx, path):
     async def _import_following() -> int:
         count = 0
         async with async_session() as db_session:
-            followings = {
-                following.ap_actor_id for following in await _get_following(db_session)
-            }
+            followings = set(
+                await db_session.scalars(
+                    select(activitypub.models.Following.ap_actor_id)
+                )
+            )
             for (
                 handle,
                 actor_url,

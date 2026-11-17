@@ -16,6 +16,7 @@ import fastapi
 import httpx
 from loguru import logger
 from sqlalchemy import delete
+from sqlalchemy import exists
 from sqlalchemy import func
 from sqlalchemy import select
 from sqlalchemy import update
@@ -1380,19 +1381,12 @@ async def compute_all_known_recipients(db_session: AsyncSession) -> set[str]:
     }
 
 
-async def _get_following(
-    db_session: AsyncSession,
-) -> list[activitypub.models.Following]:
-    return list(
-        (
-            await db_session.scalars(
-                select(activitypub.models.Following).options(
-                    joinedload(activitypub.models.Following.actor)
-                )
-            )
+async def _is_following(db_session: AsyncSession, actor_id: int) -> bool:
+    # `Following.actor_id` is unique: one index lookup.
+    return bool(
+        await db_session.scalar(
+            select(exists().where(activitypub.models.Following.actor_id == actor_id))
         )
-        .unique()
-        .all()
     )
 
 
@@ -3535,9 +3529,7 @@ async def _process_note_object(
     if "published" in ro.ap_object:
         ap_published_at = parse_isoformat(ro.ap_object["published"])
 
-    following = await _get_following(db_session)
-
-    is_from_following = ro.actor.ap_id in {f.ap_actor_id for f in following}
+    is_from_following = await _is_following(db_session, from_actor.id)
     is_reply = bool(ro.in_reply_to)
     is_local_reply = ro.is_local_reply
     is_mention = False
@@ -3830,10 +3822,7 @@ async def _handle_announce_activity(
     else:
         # Only show the announce in the stream if it comes from an actor
         # in the following collection
-        followings = await _get_following(db_session)
-        is_from_following = announce_activity.actor.ap_id in {
-            f.ap_actor_id for f in followings
-        }
+        is_from_following = await _is_following(db_session, actor.id)
 
         # This is announce for a maybe unknown object
         if relates_to_inbox_object:
