@@ -28,10 +28,10 @@ def _sqlite_from_hint_text(self: SQLiteCompiler, table: object, hint_text: str) 
     """SQLAlchemy ships `get_from_hint_text` overrides for MySQL/Oracle/MSSQL
     but not SQLite, so `.with_hint(..., dialect_name="sqlite")` compiles away
     to nothing without this -- `fetch_inbox_timeline_page`'s
-    `force_index` relies on it actually reaching the compiled SQL as an
-    `INDEXED BY` clause. Scoped to fire only for a query that opts in via
-    `with_hint(dialect_name="sqlite")`; this is the only such call in the
-    codebase (`grep -r with_hint`), so no other query is affected.
+    `force_index` and `router.favourites_index` rely on it actually reaching
+    the compiled SQL as an `INDEXED BY` clause. Scoped to fire only for a
+    query that opts in via `with_hint(dialect_name="sqlite")`
+    (`grep -r with_hint`), so no other query is affected.
     """
     return hint_text
 

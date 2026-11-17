@@ -246,6 +246,29 @@ class InboxObject(Base, BaseObject):
         Index("ix_inbox_actor_id_ap_published_at", "actor_id", "ap_published_at"),
         Index("ix_inbox_in_reply_to", text(_IN_REPLY_TO_INDEX_EXPR)),
         Index("ix_inbox_quote_ap_id", "quote_ap_id"),
+        # Without `ANALYZE` stats, SQLite drives any query carrying
+        # `is_deleted IS 0` off `ix_inbox_stream` unless another index
+        # matches more equality columns. Hence the `, is_deleted` suffixes,
+        # and why none of these lead with `is_deleted` (that would capture
+        # unrelated queries).
+        # Reply tree (`get_replies_tree`), one query per column.
+        Index("ix_inbox_conversation_is_deleted", "conversation", "is_deleted"),
+        Index("ix_inbox_ap_context_is_deleted", "ap_context", "is_deleted"),
+        # DM threads (Mastodon `/conversations`, admin DMs).
+        Index("ix_inbox_visibility_ap_context", "visibility", "ap_context"),
+        # Mastodon bookmarks.
+        Index("ix_inbox_is_bookmarked_is_deleted", "is_bookmarked", "is_deleted"),
+        # Mastodon favourites; no index beats `ix_inbox_stream` for an
+        # `IS NOT NULL` range, so that query forces this one (`INDEXED BY`).
+        Index(
+            "ix_inbox_liked_via_outbox_object_ap_id", "liked_via_outbox_object_ap_id"
+        ),
+        # Likes/shares of one object (note page, `favourited_by`).
+        Index(
+            "ix_inbox_activity_object_ap_id_ap_type",
+            "activity_object_ap_id",
+            "ap_type",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
@@ -277,14 +300,12 @@ class InboxObject(Base, BaseObject):
     ap_object: Mapped[ap.RawObject] = mapped_column(JSON, nullable=False)
 
     # Only set for activities
-    activity_object_ap_id: Mapped[str | None] = mapped_column(
-        String, nullable=True, index=True
-    )
+    activity_object_ap_id: Mapped[str | None] = mapped_column(String, nullable=True)
 
     visibility: Mapped[ap.VisibilityEnum] = mapped_column(
         Enum(ap.VisibilityEnum), nullable=False
     )
-    conversation: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    conversation: Mapped[str | None] = mapped_column(String, nullable=True)
 
     has_local_mention: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"

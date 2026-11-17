@@ -539,12 +539,6 @@ async def _render_inbox_page(
         )
 
     page_size = 20
-    remaining_count = (
-        await db_session.scalar(
-            select(func.count(activitypub.models.InboxObject.id)).where(*where)
-        )
-        or 0
-    )
     q = select(activitypub.models.InboxObject).where(*where)
 
     inbox = (
@@ -566,17 +560,17 @@ async def _render_inbox_page(
                     joinedload(activitypub.models.InboxObject.actor),
                 )
                 .order_by(activitypub.models.InboxObject.ap_published_at.desc())
-                .limit(20)
+                .limit(page_size + 1)
             )
         )
         .unique()
         .all()
     )
+    has_more = len(inbox) > page_size
+    inbox = inbox[:page_size]
 
     next_cursor = (
-        pagination.encode_cursor(inbox[-1].ap_published_at)
-        if inbox and remaining_count > page_size
-        else None
+        pagination.encode_cursor(inbox[-1].ap_published_at) if has_more else None
     )
 
     actors_metadata = await get_actors_metadata(
@@ -879,12 +873,6 @@ async def admin_outbox(
         )
 
     page_size = 20
-    remaining_count = (
-        await db_session.scalar(
-            select(func.count(activitypub.models.OutboxObject.id)).where(*where)
-        )
-        or 0
-    )
     q = select(activitypub.models.OutboxObject).where(*where)
 
     outbox = (
@@ -907,17 +895,17 @@ async def admin_outbox(
                     ),
                 )
                 .order_by(activitypub.models.OutboxObject.ap_published_at.desc())
-                .limit(page_size)
+                .limit(page_size + 1)
             )
         )
         .unique()
         .all()
     )
+    has_more = len(outbox) > page_size
+    outbox = outbox[:page_size]
 
     next_cursor = (
-        pagination.encode_cursor(outbox[-1].ap_published_at)
-        if outbox and remaining_count > page_size
-        else None
+        pagination.encode_cursor(outbox[-1].ap_published_at) if has_more else None
     )
 
     actors_metadata = await get_actors_metadata(
@@ -956,12 +944,6 @@ async def get_notifications(
         where.append(models.Notification.created_at < decoded_cursor)
 
     page_size = 20
-    remaining_count = (
-        await db_session.scalar(
-            select(func.count(models.Notification.id)).where(*where)
-        )
-        or 0
-    )
 
     notifications = (
         (
@@ -983,19 +965,21 @@ async def get_notifications(
                     joinedload(models.Notification.webmention),
                 )
                 .order_by(models.Notification.created_at.desc())
-                .limit(page_size)
+                .limit(page_size + 1)
             )
         )
         .unique()
         .all()
     )
+    has_more = len(notifications) > page_size
+    notifications = notifications[:page_size]
     actors_metadata = await get_actors_metadata(
         db_session, [notif.actor for notif in notifications if notif.actor]
     )
     more_unread_count = 0
     next_cursor = None
 
-    if notifications and remaining_count > page_size:
+    if has_more:
         decoded_next_cursor = notifications[-1].created_at
         next_cursor = pagination.encode_cursor(decoded_next_cursor)
 
@@ -1098,12 +1082,6 @@ async def admin_profile(
         where.append(activitypub.models.InboxObject.ap_published_at < decoded_cursor)
 
     page_size = 20
-    remaining_count = (
-        await db_session.scalar(
-            select(func.count(activitypub.models.InboxObject.id)).where(*where)
-        )
-        or 0
-    )
 
     inbox_objects = (
         (
@@ -1126,17 +1104,17 @@ async def admin_profile(
                     joinedload(activitypub.models.InboxObject.actor),
                 )
                 .order_by(activitypub.models.InboxObject.ap_published_at.desc())
-                .limit(page_size)
+                .limit(page_size + 1)
             )
         )
         .unique()
         .all()
     )
+    has_more = len(inbox_objects) > page_size
+    inbox_objects = inbox_objects[:page_size]
 
     next_cursor = (
-        pagination.encode_cursor(inbox_objects[-1].created_at)
-        if inbox_objects and remaining_count > page_size
-        else None
+        pagination.encode_cursor(inbox_objects[-1].created_at) if has_more else None
     )
 
     return await templates.render_template(

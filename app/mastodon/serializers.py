@@ -1238,9 +1238,18 @@ async def serialize_conversation(
     last: AnyboxObject,
     actor_ids: set[int],
     unread: bool,
+    actors_by_id: dict[int, activitypub.models.Actor] | None = None,
 ) -> dict:
+    """`actors_by_id` lets a page of threads load its participants in one
+    query; ids missing from it are skipped, like the `IN` query below."""
     actors: list[activitypub.models.Actor] = []
-    if actor_ids:
+    if actor_ids and actors_by_id is not None:
+        actors = [
+            actors_by_id[actor_id]
+            for actor_id in sorted(actor_ids)
+            if actor_id in actors_by_id
+        ]
+    elif actor_ids:
         actors = list(
             (
                 await db_session.execute(

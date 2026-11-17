@@ -4323,19 +4323,19 @@ async def get_replies_tree(
             allowed_visibility = list(ap.VisibilityEnum)
         logger.info(f"Allowed visibility: {allowed_visibility}")
 
-        tree_nodes.extend(
-            (
+        # One query per column rather than `conversation = X OR ap_context = X`:
+        # SQLite never plans that OR off the two column indexes while
+        # `is_deleted IS 0` is present, and walks `ix_inbox_stream` instead.
+        seen_inbox_ids: set[int] = set()
+        for column in (
+            activitypub.models.InboxObject.conversation,
+            activitypub.models.InboxObject.ap_context,
+        ):
+            for inbox_object in (
                 await db_session.scalars(
                     select(activitypub.models.InboxObject)
                     .where(
-                        (
-                            activitypub.models.InboxObject.conversation
-                            == requested_object.conversation
-                        )
-                        | (
-                            activitypub.models.InboxObject.ap_context
-                            == requested_object.conversation
-                        ),
+                        column == requested_object.conversation,
                         activitypub.models.InboxObject.ap_type.in_(
                             ["Note", "Page", "Article", "Question"]
                         ),
@@ -4346,10 +4346,10 @@ async def get_replies_tree(
                     )
                     .options(joinedload(activitypub.models.InboxObject.actor))
                 )
-            )
-            .unique()
-            .all()
-        )
+            ).unique():
+                if inbox_object.id not in seen_inbox_ids:
+                    seen_inbox_ids.add(inbox_object.id)
+                    tree_nodes.append(inbox_object)
 
         tree_nodes.extend(
             (

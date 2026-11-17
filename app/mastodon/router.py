@@ -882,12 +882,14 @@ async def accounts_statuses(
     # any later attribute access would need an unawaited implicit reload and
     # crash with MissingGreenlet in this async session.
     actor_ap_id = actor.ap_id
+    actor_id = actor.id
 
     def _build_query() -> Any:
         query = (
             select(activitypub.models.InboxObject)
             .where(
-                activitypub.models.InboxObject.ap_actor_id == actor_ap_id,
+                # `actor_id`, not `ap_actor_id`: only the former is indexed.
+                activitypub.models.InboxObject.actor_id == actor_id,
                 activitypub.models.InboxObject.is_deleted.is_(False),
                 activitypub.models.InboxObject.ap_type.in_(
                     timelines.TIMELINE_OBJECT_TYPES
@@ -2553,8 +2555,23 @@ async def conversations_list(
         db_session, [last for last, _, _ in threads]
     )
 
+    page_actor_ids = set().union(*(actor_ids for _, actor_ids, _ in threads))
+    actors_by_id = {
+        actor.id: actor
+        for actor in (
+            await db_session.scalars(
+                select(activitypub.models.Actor).where(
+                    activitypub.models.Actor.id.in_(page_actor_ids)
+                )
+            )
+            if page_actor_ids
+            else []
+        )
+    }
     serialized = [
-        await serializers.serialize_conversation(db_session, last, actor_ids, unread)
+        await serializers.serialize_conversation(
+            db_session, last, actor_ids, unread, actors_by_id
+        )
         for last, actor_ids, unread in threads
     ]
     response = JSONResponse(content=serialized)
@@ -4141,6 +4158,12 @@ async def favourites_index(
         .where(
             activitypub.models.InboxObject.liked_via_outbox_object_ap_id.is_not(None),
             activitypub.models.InboxObject.is_deleted.is_(False),
+        )
+        # Otherwise SQLite walks `ix_inbox_stream` for the few liked rows.
+        .with_hint(
+            activitypub.models.InboxObject,
+            "INDEXED BY ix_inbox_liked_via_outbox_object_ap_id",
+            dialect_name="sqlite",
         )
         .options(joinedload(activitypub.models.InboxObject.actor))
         .order_by(activitypub.models.InboxObject.id.desc())
