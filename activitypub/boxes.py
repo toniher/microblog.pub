@@ -1183,6 +1183,12 @@ async def send_update(
 
     updated = now().replace(microsecond=0).isoformat().replace("+00:00", "Z")
     content, tags, mentioned_actors = await markdownify(db_session, source)
+    # Before the first write: resolving recipients may hit the network. An
+    # edit keeps the original audience.
+    recipients = await _compute_recipients(
+        db_session,
+        {"to": outbox_object.ap_object["to"], "cc": outbox_object.ap_object["cc"]},
+    )
 
     resolved_content_warning = (
         outbox_object.summary if content_warning is _UNSET else content_warning
@@ -1285,7 +1291,6 @@ async def send_update(
             )
             db_session.add(tagged_object)
 
-    recipients = await _compute_recipients(db_session, note)
     for rcp in recipients:
         await new_outgoing_activity(db_session, rcp, outbox_object.id)
 

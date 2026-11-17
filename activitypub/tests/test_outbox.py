@@ -355,3 +355,47 @@ async def test_compute_all_known_recipients(async_db_session: AsyncSession) -> N
         "https://null.example/u/inbox",
         "https://empty.example/u/inbox",
     }
+
+
+@pytest.mark.asyncio
+async def test_send_update__resolves_recipients_before_writing(
+    async_db_session: AsyncSession,
+    respx_mock: respx.MockRouter,
+) -> None:
+    # An audience member not in the actor cache gets fetched on edit: that
+    # must happen before `send_update` writes (autouse
+    # `no_network_while_writing` guard).
+    from activitypub.tests import factories
+
+    _, pubkey = factories.generate_key()
+    ra = factories.RemoteActorFactory(
+        base_url="https://remote.example", username="bob", public_key=pubkey
+    )
+    respx_mock.get(ra.ap_id).mock(return_value=httpx.Response(200, json=ra.ap_actor))
+    respx_mock.get("https://remote.example/.well-known/webfinger").mock(
+        return_value=httpx.Response(404)
+    )
+
+    _, outbox_object = await boxes.send_create(
+        async_db_session,
+        ObjectType.NOTE.value,
+        "first",
+        uploads=[],
+        in_reply_to=None,
+        visibility=ap.VisibilityEnum.PUBLIC,
+    )
+    outbox_object.ap_object = {
+        **outbox_object.ap_object,
+        "cc": [*outbox_object.ap_object["cc"], ra.ap_id],
+    }
+    await async_db_session.commit()
+
+    await boxes.send_update(async_db_session, outbox_object.ap_id, "edited", uploads=[])
+
+    # Not in the note's audience at creation: queued by the edit
+    recipients = (
+        await async_db_session.scalars(
+            select(activitypub.models.OutgoingActivity.recipient)
+        )
+    ).all()
+    assert ra.inbox_url in recipients
