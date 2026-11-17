@@ -4,6 +4,7 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
+from app import config
 from app import media
 
 
@@ -169,3 +170,31 @@ def test_inline_imgs_cache_follows_the_expiry_bucket(
     after = _update_inline_imgs(content)
     assert after != before
     assert str(media.current_expiry()) in after
+
+
+@pytest.mark.parametrize("accept", ["image/webp,*/*", "*/*"])
+def test_proxy_media_resized_varies_on_accept(
+    client: TestClient, respx_mock, accept: str
+) -> None:
+    # The resized body is webp or not depending on Accept, under a 1-year
+    # max-age: shared caches (nginx proxy_cache) must key on Accept. Checked
+    # on a fresh resize and on the in-process cache hit that follows.
+    import io
+
+    import httpx
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (100, 100)).save(buf, format="PNG")
+    url = f"https://example.com/vary-{accept.count('webp')}.png"
+    respx_mock.get(url).mock(
+        return_value=httpx.Response(
+            200, content=buf.getvalue(), headers={"content-type": "image/png"}
+        )
+    )
+    path = media.resized_media_url(url, 50).removeprefix(config.BASE_URL)
+
+    for _ in range(2):
+        response = client.get(path, headers={"Accept": accept})
+        assert response.status_code == 200
+        assert "Accept" in response.headers["vary"].split(", ")

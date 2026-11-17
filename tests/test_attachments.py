@@ -86,6 +86,9 @@ async def test_attachment_thumbnail_prefers_webp_when_accepted(
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/webp"
+    # The format depends on Accept: shared caches must key on it.
+    assert "Accept" in response.headers["vary"].split(", ")
+    assert "Accept" in client.get(thumbnail_path).headers["vary"].split(", ")
 
 
 @pytest.mark.asyncio

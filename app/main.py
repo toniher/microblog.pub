@@ -1862,6 +1862,10 @@ async def serve_proxy_media_resized(
         ),
         proxy_resp.status_code,
     )
+    # The body depends on `Accept` (webp or not) under a 1-year max-age; without
+    # Vary a shared cache (nginx proxy_cache) would serve whichever format the
+    # first client got to everyone.
+    proxy_resp_headers["Vary"] = "Accept"
 
     try:
         resized_content, resized_mimetype = await asyncio.to_thread(
@@ -1939,17 +1943,21 @@ async def serve_attachment_thumbnail(
     # original *is* the full media file — serving it here would hand a
     # remote fetcher (or a client with no webp support) the entire video as
     # a poster image, since `_resized` is always a webp.
+    headers = {"Cache-Control": "max-age=31536000"}
+    if upload.is_image:
+        # Only an image's response depends on `Accept` (see above).
+        headers["Vary"] = "Accept"
     if is_webp_supported or not upload.is_image:
         return FileResponse(
             UPLOAD_DIR / (content_hash + "_resized"),
             media_type="image/webp",
-            headers={"Cache-Control": "max-age=31536000"},
+            headers=headers,
         )
     else:
         return FileResponse(
             UPLOAD_DIR / content_hash,
             media_type=upload.content_type,
-            headers={"Cache-Control": "max-age=31536000"},
+            headers=headers,
         )
 
 
