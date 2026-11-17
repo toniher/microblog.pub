@@ -421,7 +421,9 @@ async def admin_blocks(
     ]
     if cursor:
         where.append(
-            activitypub.models.Actor.created_at < pagination.decode_cursor(cursor)
+            pagination.keyset_before(
+                activitypub.models.Actor.created_at, activitypub.models.Actor.id, cursor
+            )
         )
 
     page_size = 20
@@ -431,7 +433,10 @@ async def admin_blocks(
             await db_session.scalars(
                 select(activitypub.models.Actor)
                 .where(*where)
-                .order_by(activitypub.models.Actor.created_at.desc())
+                .order_by(
+                    activitypub.models.Actor.created_at.desc(),
+                    activitypub.models.Actor.id.desc(),
+                )
                 .limit(page_size + 1)
             )
         )
@@ -442,7 +447,11 @@ async def admin_blocks(
     blocked_actors = blocked_actors[:page_size]
 
     next_cursor = (
-        pagination.encode_cursor(blocked_actors[-1].created_at) if has_next else None
+        pagination.encode_keyset_cursor(
+            blocked_actors[-1].created_at, blocked_actors[-1].id
+        )
+        if has_next
+        else None
     )
 
     # display_actor() renders the unblock button off this metadata.
@@ -472,7 +481,9 @@ async def admin_mutes(
     ]
     if cursor:
         where.append(
-            activitypub.models.Actor.created_at < pagination.decode_cursor(cursor)
+            pagination.keyset_before(
+                activitypub.models.Actor.created_at, activitypub.models.Actor.id, cursor
+            )
         )
 
     page_size = 20
@@ -482,7 +493,10 @@ async def admin_mutes(
             await db_session.scalars(
                 select(activitypub.models.Actor)
                 .where(*where)
-                .order_by(activitypub.models.Actor.created_at.desc())
+                .order_by(
+                    activitypub.models.Actor.created_at.desc(),
+                    activitypub.models.Actor.id.desc(),
+                )
                 .limit(page_size + 1)
             )
         )
@@ -493,7 +507,11 @@ async def admin_mutes(
     muted_actors = muted_actors[:page_size]
 
     next_cursor = (
-        pagination.encode_cursor(muted_actors[-1].created_at) if has_next else None
+        pagination.encode_keyset_cursor(
+            muted_actors[-1].created_at, muted_actors[-1].id
+        )
+        if has_next
+        else None
     )
 
     # display_actor() renders the unmute button off this metadata.
@@ -522,8 +540,11 @@ async def _render_inbox_page(
     same template, they only differ by the `where` they start from."""
     if cursor:
         where.append(
-            activitypub.models.InboxObject.ap_published_at
-            < pagination.decode_cursor(cursor)
+            pagination.keyset_before(
+                activitypub.models.InboxObject.ap_published_at,
+                activitypub.models.InboxObject.id,
+                cursor,
+            )
         )
 
     page_size = 20
@@ -547,7 +568,10 @@ async def _render_inbox_page(
                     ),
                     joinedload(activitypub.models.InboxObject.actor),
                 )
-                .order_by(activitypub.models.InboxObject.ap_published_at.desc())
+                .order_by(
+                    activitypub.models.InboxObject.ap_published_at.desc(),
+                    activitypub.models.InboxObject.id.desc(),
+                )
                 .limit(page_size + 1)
             )
         )
@@ -558,7 +582,9 @@ async def _render_inbox_page(
     inbox = inbox[:page_size]
 
     next_cursor = (
-        pagination.encode_cursor(inbox[-1].ap_published_at) if has_more else None
+        pagination.encode_keyset_cursor(inbox[-1].ap_published_at, inbox[-1].id)
+        if has_more
+        else None
     )
 
     actors_metadata = await get_actors_metadata(
@@ -856,8 +882,11 @@ async def admin_outbox(
         where.append(activitypub.models.OutboxObject.ap_type == filter_by)
     if cursor:
         where.append(
-            activitypub.models.OutboxObject.ap_published_at
-            < pagination.decode_cursor(cursor)
+            pagination.keyset_before(
+                activitypub.models.OutboxObject.ap_published_at,
+                activitypub.models.OutboxObject.id,
+                cursor,
+            )
         )
 
     page_size = 20
@@ -882,7 +911,10 @@ async def admin_outbox(
                         joinedload(activitypub.models.OutboxObjectAttachment.upload)
                     ),
                 )
-                .order_by(activitypub.models.OutboxObject.ap_published_at.desc())
+                .order_by(
+                    activitypub.models.OutboxObject.ap_published_at.desc(),
+                    activitypub.models.OutboxObject.id.desc(),
+                )
                 .limit(page_size + 1)
             )
         )
@@ -893,7 +925,9 @@ async def admin_outbox(
     outbox = outbox[:page_size]
 
     next_cursor = (
-        pagination.encode_cursor(outbox[-1].ap_published_at) if has_more else None
+        pagination.encode_keyset_cursor(outbox[-1].ap_published_at, outbox[-1].id)
+        if has_more
+        else None
     )
 
     actors_metadata = await get_actors_metadata(
@@ -928,8 +962,11 @@ async def get_notifications(
         models.notification_not_in_muted_conversation(),
     ]
     if cursor:
-        decoded_cursor = pagination.decode_cursor(cursor)
-        where.append(models.Notification.created_at < decoded_cursor)
+        where.append(
+            pagination.keyset_before(
+                models.Notification.created_at, models.Notification.id, cursor
+            )
+        )
 
     page_size = 20
 
@@ -952,7 +989,10 @@ async def get_notifications(
                     ),
                     joinedload(models.Notification.webmention),
                 )
-                .order_by(models.Notification.created_at.desc())
+                .order_by(
+                    models.Notification.created_at.desc(),
+                    models.Notification.id.desc(),
+                )
                 .limit(page_size + 1)
             )
         )
@@ -968,8 +1008,9 @@ async def get_notifications(
     next_cursor = None
 
     if has_more:
-        decoded_next_cursor = notifications[-1].created_at
-        next_cursor = pagination.encode_cursor(decoded_next_cursor)
+        next_cursor = pagination.encode_keyset_cursor(
+            notifications[-1].created_at, notifications[-1].id
+        )
 
         # If on the "see more" page there's more unread notification, we want
         # to display it next to the link
@@ -977,7 +1018,11 @@ async def get_notifications(
             await db_session.scalar(
                 select(func.count(models.Notification.id)).where(
                     models.Notification.is_new.is_(True),
-                    models.Notification.created_at < decoded_next_cursor,
+                    pagination.keyset_before(
+                        models.Notification.created_at,
+                        models.Notification.id,
+                        next_cursor,
+                    ),
                     models.notification_not_muted(),
                     models.notification_not_in_muted_conversation(),
                 )
@@ -1066,8 +1111,13 @@ async def admin_profile(
         ),
     ]
     if cursor:
-        decoded_cursor = pagination.decode_cursor(cursor)
-        where.append(activitypub.models.InboxObject.ap_published_at < decoded_cursor)
+        where.append(
+            pagination.keyset_before(
+                activitypub.models.InboxObject.ap_published_at,
+                activitypub.models.InboxObject.id,
+                cursor,
+            )
+        )
 
     page_size = 20
 
@@ -1091,7 +1141,10 @@ async def admin_profile(
                     ),
                     joinedload(activitypub.models.InboxObject.actor),
                 )
-                .order_by(activitypub.models.InboxObject.ap_published_at.desc())
+                .order_by(
+                    activitypub.models.InboxObject.ap_published_at.desc(),
+                    activitypub.models.InboxObject.id.desc(),
+                )
                 .limit(page_size + 1)
             )
         )
@@ -1102,7 +1155,9 @@ async def admin_profile(
     inbox_objects = inbox_objects[:page_size]
 
     next_cursor = (
-        pagination.encode_cursor(inbox_objects[-1].ap_published_at)
+        pagination.encode_keyset_cursor(
+            inbox_objects[-1].ap_published_at, inbox_objects[-1].id
+        )
         if has_more
         else None
     )

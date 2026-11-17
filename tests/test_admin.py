@@ -1514,3 +1514,63 @@ def test_admin_profile__pagination_cursor(
     ).text
     assert "Paged note 20." in page2
     assert "Paged note 19." not in page2
+
+
+def _stream_with_tied_notes(db: Session, respx_mock: respx.MockRouter, count: int):
+    from sqlalchemy import update
+
+    from tests.utils import setup_inbox_note
+    from tests.utils import setup_remote_actor
+
+    actor = factories.ActorFactory.from_remote_actor(setup_remote_actor(respx_mock))
+    for i in range(count):
+        setup_inbox_note(actor, content=f"tie-{i:02d}-note")
+    tie = now().replace(microsecond=0) - timedelta(hours=1)
+    db.execute(update(activitypub.models.InboxObject).values(ap_published_at=tie))
+    db.commit()
+    return tie
+
+
+def test_admin_stream__paginates_through_timestamp_ties(
+    db: Session, client: TestClient, respx_mock: respx.MockRouter
+) -> None:
+    import re
+
+    # Remote `published` values have second precision: many rows share one.
+    _stream_with_tied_notes(db, respx_mock, 22)
+
+    first = client.get("/admin/stream", cookies=generate_admin_session_cookies())
+    page1 = set(re.findall(r"tie-\d\d-note", first.text))
+    cursor = re.search(r'href="[^"]*\?cursor=([^"&]+)">', first.text)
+    assert len(page1) == 20
+    assert cursor
+
+    second = client.get(
+        f"/admin/stream?cursor={cursor.group(1)}",
+        cookies=generate_admin_session_cookies(),
+    )
+    page2 = set(re.findall(r"tie-\d\d-note", second.text))
+    assert len(page2) == 2
+    assert page1.isdisjoint(page2)
+
+
+def test_admin_stream__legacy_cursor_still_works(
+    db: Session, client: TestClient, respx_mock: respx.MockRouter
+) -> None:
+    import re
+
+    from app.utils import pagination
+
+    tie = _stream_with_tied_notes(db, respx_mock, 3)
+
+    before = client.get(
+        f"/admin/stream?cursor={pagination.encode_cursor(tie + timedelta(seconds=1))}",
+        cookies=generate_admin_session_cookies(),
+    )
+    at_tie = client.get(
+        f"/admin/stream?cursor={pagination.encode_cursor(tie)}",
+        cookies=generate_admin_session_cookies(),
+    )
+    assert before.status_code == at_tie.status_code == 200
+    assert len(set(re.findall(r"tie-\d\d-note", before.text))) == 3
+    assert not re.findall(r"tie-\d\d-note", at_tie.text)  # strictly before
