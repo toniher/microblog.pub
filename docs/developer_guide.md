@@ -180,6 +180,8 @@ anyone reading this guide instead of grepping the directory.
 | `0dcf9e09fd18` | 2026-08-28 | Add `outbox.alias` plus the unique `ix_outbox_alias` behind [URL aliases](user_guide.md#url-aliases). Deliberately a plain `ADD COLUMN` + `CREATE UNIQUE INDEX` rather than `op.batch_alter_table`: batch mode rebuilds the table, which silently drops both `ix_outbox_in_reply_to` (an expression index SQLAlchemy cannot reflect) and the `outbox_search_*` FTS5 triggers, leaving reply lookups scanning and the search index frozen. Never batch-alter `outbox`/`inbox` for that reason. |
 | `17a4a33f1e12` | 2026-09-04 | Add the `mastodon_list` and `mastodon_list_member` tables backing Mastodon Lists (the `POST /api/v1/lists` family), purely local and curated, like `actor.is_muted`; nothing here is federated. |
 | `9c2d5e7a3f41` | 2026-09-05 | Add `ix_inbox_actor_id_ap_published_at`. The list timeline's membership filter narrows to a handful of `actor_id`s, but SQLite still prefers `ix_inbox_stream`'s publish-order scan without this (measured as an O(inbox size) scan for a quiet or empty list). `app.mastodon.timelines.fetch_inbox_timeline_page`'s `force_index` forces the plan onto this index via `INDEXED BY` (the quotes list does the same with `ix_inbox_quote_ap_id`). |
+| `7d4488b9dbae` | 2026-11-17 | Add inbox read-path indexes: `ix_inbox_conversation_is_deleted` and `ix_inbox_ap_context_is_deleted` (reply tree), `ix_inbox_visibility_ap_context` (DM threads), `ix_inbox_is_bookmarked_is_deleted` (bookmarks), `ix_inbox_liked_via_outbox_object_ap_id` (favourites, forced with `INDEXED BY`) and `ix_inbox_activity_object_ap_id_ap_type` (likes/shares of one object); drops `ix_inbox_conversation` and `ix_inbox_activity_object_ap_id`, prefixes of the new composites. Without `ANALYZE` stats SQLite drove these queries off `ix_inbox_stream` and walked most of the inbox (27-172 ms on a 197k-row inbox). |
+| `e3b7c1d9a2f6` | 2026-11-17 | Index `actor.is_blocked`. `/admin/blocks` and `/api/v1/blocks` scanned and sorted every actor (46 ms on an 81k-actor database); now a sub-millisecond index search. |
 
 Running `poetry run inv migrate-db` (or `inv update`, see [Updating](install.md#updating-1))
 applies any migration not yet present in your local database, regardless of
@@ -351,7 +353,7 @@ inv tests
 
 `inv tests` runs pytest with `MICROBLOGPUB_CONFIG_FILE=tests.toml`, which points
 at an in-memory SQLite database. It collects tests from `tests/`,
-`tests/mastodon/` and `activitypub/tests/`: about 770 tests, around 5 minutes
+`tests/mastodon/` and `activitypub/tests/`: about 830 tests, around 5 minutes
 for the full suite. `tests/test_ffmpeg.py` needs `ffmpeg`/`ffprobe` on the
 `PATH` and skips itself without them. To run a subset, pass a pytest `-k`
 expression:
@@ -359,5 +361,15 @@ expression:
 ```bash
 inv tests -k test_ffmpeg
 ```
+
+Two autouse fixtures from `tests/utils.py` apply to every test:
+
+- `no_network_while_writing` fails a test that starts an HTTP request while the
+  session has uncommitted writes. In production that holds SQLite's writer lock
+  across the network call and blocks the other processes. Fetch first, then write
+  and commit.
+- `offline_jsonld_contexts` serves the JSON-LD contexts that LD signatures need from
+  `tests/jsonld_contexts/`. Any other context URL raises an error. If you add a new
+  context, vendor it there.
 
 Please also consider adding new test cases if needed.

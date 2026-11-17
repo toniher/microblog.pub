@@ -133,9 +133,8 @@ make config       # configuration wizard
 ```
 
 Testing notes:
-- Test suite runs against an in-memory SQLite DB; ~775 tests, ~5-6 minutes.
-- `activitypub/tests/test_actor.py` does real-network retries (~20s).
-  pytest-timeout is not installed, so `--timeout` errors out; run the full
+- Test suite runs against an in-memory SQLite DB; ~830 tests, ~5-6 minutes.
+- pytest-timeout is not installed, so `--timeout` errors out; run the full
   suite in the background instead of waiting on it.
 
 ### Local development setup
