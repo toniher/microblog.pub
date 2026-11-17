@@ -104,16 +104,18 @@ async def process_next_incoming_activity(
     await db_session.commit()
 
     if next_activity.ap_object and next_activity.sent_by_ap_actor_id:
+        # No savepoint: `save_to_inbox` commits actor-cache rows as it goes
+        # (so SQLite's writer lock isn't held across the network), and every
+        # error path below rolls the rest back.
         try:
-            async with db_session.begin_nested():
-                await asyncio.wait_for(
-                    save_to_inbox(
-                        db_session,
-                        next_activity.ap_object,
-                        next_activity.sent_by_ap_actor_id,
-                    ),
-                    timeout=60,
-                )
+            await asyncio.wait_for(
+                save_to_inbox(
+                    db_session,
+                    next_activity.ap_object,
+                    next_activity.sent_by_ap_actor_id,
+                ),
+                timeout=60,
+            )
         except asyncio.exceptions.TimeoutError:
             logger.error("Activity took too long to process")
             await db_session.rollback()

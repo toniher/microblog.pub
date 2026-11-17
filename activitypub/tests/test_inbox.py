@@ -1631,3 +1631,55 @@ def test_inbox__permanent_errors_are_not_retried(
     assert activity.error
     assert activity.is_errored is is_permanent
     assert (activity.next_try is None) is is_permanent
+
+
+def test_inbox__create_reply_to_unknown_parent_without_context(
+    db: Session,
+    client: TestClient,
+    respx_mock: respx.MockRouter,
+) -> None:
+    # The conversation root walk and the link-card mention filter used to
+    # fetch (and save) actors after the activity was inserted, holding the
+    # SQLite writer lock across the network (guarded by the autouse
+    # `no_network_while_writing`).
+    ra = setup_remote_actor(respx_mock)
+    setup_remote_actor_as_follower(ra)
+    # Not mocked: fetching the parent's author would fail the test.
+    parent_author = factories.RemoteActorFactory(
+        base_url="https://parent.example", username="alice", public_key="pk"
+    )
+
+    parent = factories.build_note_object(from_remote_actor=parent_author)
+    for key in ("context", "conversation"):
+        parent.pop(key)
+    respx_mock.get(parent["id"]).mock(return_value=httpx.Response(200, json=parent))
+
+    reply = factories.build_note_object(
+        from_remote_actor=ra,
+        content=(
+            '<p><a class="u-url mention" href="https://unknown.example/@bob">'
+            "@bob</a> hello</p>"
+        ),
+        tags=[{"type": "Mention", "href": "https://unknown.example/users/bob"}],
+        in_reply_to=parent["id"],
+    )
+    for key in ("context", "conversation"):
+        reply.pop(key)
+    ro = RemoteObject(factories.build_create_activity(reply), ra)
+
+    with mock_httpsig_checker(ra):
+        response = client.post(
+            "/inbox", headers={"Content-Type": ap.AS_CTX}, json=ro.ap_object
+        )
+    assert response.status_code == 202
+
+    run_process_next_incoming_activity()
+
+    note = db.execute(
+        select(activitypub.models.InboxObject).where(
+            activitypub.models.InboxObject.ap_id == reply["id"]
+        )
+    ).scalar_one()
+    assert note.conversation == f"microblogpub:root:{parent['id']}"
+    # Neither the parent's author nor the mentioned actor got fetched/saved.
+    assert db.scalar(select(func.count(activitypub.models.Actor.id))) == 1

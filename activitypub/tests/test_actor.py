@@ -145,9 +145,11 @@ async def test_save_actor_recovers_from_concurrent_insert_race(
         public_key="pk",
     )
 
-    winner = await save_actor(async_db_session, ra.ap_actor)
+    # Precomputed handle: keeps the webfinger lookup out of a transaction
+    # that already holds the first insert (see `no_network_while_writing`).
+    winner = await save_actor(async_db_session, ra.ap_actor, handle="@toto@example.com")
 
-    loser = await save_actor(async_db_session, ra.ap_actor)
+    loser = await save_actor(async_db_session, ra.ap_actor, handle="@toto@example.com")
 
     assert loser.id == winner.id
     assert (

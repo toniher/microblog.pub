@@ -336,6 +336,10 @@ async def _process_subscription(
             sub.last_notification_id = notif.id
             continue
 
+        # Persist the cursor advances so far before the push request: a
+        # pending (autoflushed) write would hold SQLite's writer lock across
+        # the network. The cursor only moves forward, so this is idempotent.
+        await db_session.commit()
         if await _deliver_one(db_session, sub, notif, mastodon_type):
             sub.last_notification_id = notif.id
             delivered += 1

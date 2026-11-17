@@ -122,12 +122,17 @@ async def _prefetch_mentioned_actors(
     db_session: AsyncSession,
     content: str,
 ) -> dict[str, "Actor"]:
-    from activitypub.actor import fetch_actor
+    from activitypub.actor import ResolvedActor
+    from activitypub.actor import persist_actor
+    from activitypub.actor import resolve_actor
 
     actors: dict[str, "Actor"] = {}
+    # Two phases: every webfinger/actor fetch first, then the writes, so the
+    # writer lock taken by saving one actor isn't held across the next fetch.
+    to_persist: dict[str, ResolvedActor] = {}
 
     for mention in re.findall(_MENTION_REGEX, content):
-        if mention in actors:
+        if mention in actors or mention in to_persist:
             continue
 
         # XXX: the regex catches stuff like `@toto@example.com.`
@@ -144,16 +149,23 @@ async def _prefetch_mentioned_actors(
                     )
                 )
             ).scalar_one_or_none()
-            if not actor:
-                actor_url = await webfinger.get_actor_url(mention)
-                if not actor_url:
-                    # FIXME(ts): raise an error?
-                    continue
-                actor = await fetch_actor(db_session, actor_url)
+            if actor:
+                actors[mention] = actor
+                continue
 
-            actors[mention] = actor
+            actor_url = await webfinger.get_actor_url(mention)
+            if not actor_url:
+                # FIXME(ts): raise an error?
+                continue
+            to_persist[mention] = await resolve_actor(db_session, actor_url)
         except Exception:
             logger.exception(f"Failed to prefetch {mention}")
+
+    for mention, resolved in to_persist.items():
+        try:
+            actors[mention] = await persist_actor(db_session, resolved)
+        except Exception:
+            logger.exception(f"Failed to save {mention}")
 
     return actors
 

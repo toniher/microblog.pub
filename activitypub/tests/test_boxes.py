@@ -67,7 +67,8 @@ async def test_fetch_replies(async_db_session: AsyncSession, respx_mock) -> None
     ).scalar_one()
     assert saved.ap_id == reply_note["id"]
 
-    # And fetching again is a no-op (already saved)
+    # And fetching again (in a later request: callers commit) is a no-op
+    await async_db_session.commit()
     fetched_count_again = await boxes.fetch_replies(async_db_session, requested_object)
     assert fetched_count_again == 0
 

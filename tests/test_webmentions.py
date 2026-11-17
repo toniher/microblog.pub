@@ -112,3 +112,44 @@ async def test_og_meta_from_url(respx_mock) -> None:
 
     assert og_meta is not None
     assert (og_meta.title, og_meta.description) == ("T", "D")
+
+
+@pytest.mark.asyncio
+async def test_send_create_queues_webmentions_after_commit(
+    async_db_session, respx_mock
+) -> None:
+    # Endpoint discovery fetches every linked page; it must run after the
+    # note is committed, not with its writes pending (guarded by the autouse
+    # `no_network_while_writing`).
+    from sqlalchemy import select
+
+    import activitypub.models
+    from activitypub.ap_object import ObjectType
+    from activitypub.boxes import send_create
+
+    url = "https://news.example/story"
+    respx_mock.route(url=url).mock(
+        return_value=httpx.Response(
+            200,
+            text='<html><head><link rel="webmention" href="/wm"></head></html>',
+            headers={"content-type": "text/html"},
+        )
+    )
+
+    await send_create(
+        async_db_session,
+        ObjectType.NOTE.value,
+        f"Read [this]({url})",
+        uploads=[],
+        in_reply_to=None,
+        visibility=ap.VisibilityEnum.PUBLIC,
+    )
+
+    outgoing = (
+        await async_db_session.scalars(
+            select(activitypub.models.OutgoingActivity).where(
+                activitypub.models.OutgoingActivity.webmention_target == url
+            )
+        )
+    ).all()
+    assert [o.recipient for o in outgoing] == ["https://news.example/wm"]

@@ -24,6 +24,14 @@ def pytest_sessionfinish(session, exitstatus) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _no_network_while_writing() -> Generator:
+    from tests.utils import no_network_while_writing
+
+    with no_network_while_writing():
+        yield
+
+
+@pytest.fixture(autouse=True)
 def _reset_scoped_session() -> Generator:
     # `_Session` is a module-level scoped_session shared by every factory
     # across the whole test run. Several tests write through it without using

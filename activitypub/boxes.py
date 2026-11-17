@@ -27,10 +27,14 @@ from activitypub import activitypub as ap
 from activitypub.actor import LOCAL_ACTOR
 from activitypub.actor import Actor
 from activitypub.actor import RemoteActor
+from activitypub.actor import ResolvedActor
 from activitypub.actor import fetch_actor
+from activitypub.actor import persist_actor
+from activitypub.actor import resolve_actor
 from activitypub.actor import resolve_handle
 from activitypub.actor import save_actor
 from activitypub.actor import update_actor_if_needed
+from activitypub.ap_object import ActorlessObject
 from activitypub.ap_object import RemoteObject
 from activitypub.outgoing_activities import new_outgoing_activity
 
@@ -719,7 +723,7 @@ async def _send_undo(db_session: AsyncSession, ap_object_id: str) -> None:
 
 async def fetch_conversation_root(
     db_session: AsyncSession,
-    obj: AnyboxObject | RemoteObject,
+    obj: AnyboxObject | RemoteObject | ActorlessObject,
     is_root: bool = False,
     depth: int = 0,
 ) -> str:
@@ -737,16 +741,17 @@ async def fetch_conversation_root(
         # Use the root AP ID if there'no context
         return f"microblogpub:root:{obj.ap_id}"
     else:
-        in_reply_to_object: AnyboxObject | RemoteObject | None = (
+        in_reply_to_object: AnyboxObject | ActorlessObject | None = (
             await get_anybox_object_by_ap_id(db_session, obj.in_reply_to)
         )
         if not in_reply_to_object:
             try:
-                raw_reply = await ap.fetch(ap.get_id(obj.in_reply_to))
-                raw_reply_actor = await fetch_actor(
-                    db_session, ap.get_actor_id(raw_reply)
+                # No actor resolution: the walk only reads ids and context,
+                # and this must stay write-free (callers run it before
+                # taking SQLite's writer lock).
+                in_reply_to_object = ActorlessObject(
+                    await ap.fetch(ap.get_id(obj.in_reply_to))
                 )
-                in_reply_to_object = RemoteObject(raw_reply, actor=raw_reply_actor)
             except (
                 ap.FetchError,
                 ap.NotAnObjectError,
@@ -973,6 +978,8 @@ async def send_create(
         **quote_wire_fields,  # type: ignore
         **_quote_interaction_policy(visibility),  # type: ignore
     }
+    # Before the first write: resolving recipients may hit the network.
+    recipients = await _compute_recipients(db_session, obj)
     outbox_object = await save_outbox_object(
         db_session,
         note_id,
@@ -1020,26 +1027,11 @@ async def send_create(
     if quoted_object and isinstance(quoted_object, activitypub.models.InboxObject):
         await send_quote_request(db_session, outbox_object, quoted_object)
 
-    recipients = await _compute_recipients(db_session, obj)
     for rcp in recipients:
         await new_outgoing_activity(db_session, rcp, outbox_object.id)
 
-    # If the note is public, check if we need to send any webmentions
-    if visibility == ap.VisibilityEnum.PUBLIC:
-        possible_targets = await opengraph.external_urls(db_session, outbox_object)
-        logger.info(f"webmentions possible targert {possible_targets}")
-        for target in possible_targets:
-            webmention_endpoint = await webmentions.discover_webmention_endpoint(target)
-            logger.info(f"{target=} {webmention_endpoint=}")
-            if webmention_endpoint:
-                await new_outgoing_activity(
-                    db_session,
-                    webmention_endpoint,
-                    outbox_object_id=outbox_object.id,
-                    webmention_target=target,
-                )
-
     await db_session.commit()
+    await enqueue_webmentions(db_session, outbox_object)
 
     # Refresh the replies counter if needed
     if in_reply_to_object:
@@ -1283,25 +1275,49 @@ async def send_update(
     for rcp in recipients:
         await new_outgoing_activity(db_session, rcp, outbox_object.id)
 
-    # If the note is public, check if we need to send any webmentions
-    if outbox_object.visibility == ap.VisibilityEnum.PUBLIC:
+    if _commit:
+        await db_session.commit()
+        # Not for `_commit=False` (the quote-accept path inside the incoming
+        # worker): that update doesn't change the note's links.
+        await enqueue_webmentions(db_session, outbox_object)
+    return outbox_object.public_id  # type: ignore
 
+
+async def enqueue_webmentions(
+    db_session: AsyncSession,
+    outbox_object: activitypub.models.OutboxObject,
+) -> None:
+    """Queue webmentions for a public note's external links, then commit.
+
+    Called after the note itself is committed: endpoint discovery fetches
+    every linked page, and doing that with the note's writes pending would
+    hold SQLite's writer lock across the network. Best-effort: the note is
+    already saved, so a failure here is logged, not raised.
+    """
+    if outbox_object.visibility != ap.VisibilityEnum.PUBLIC:
+        return
+
+    try:
         possible_targets = await opengraph.external_urls(db_session, outbox_object)
         logger.info(f"webmentions possible targert {possible_targets}")
+        endpoints = []
         for target in possible_targets:
             webmention_endpoint = await webmentions.discover_webmention_endpoint(target)
             logger.info(f"{target=} {webmention_endpoint=}")
             if webmention_endpoint:
-                await new_outgoing_activity(
-                    db_session,
-                    webmention_endpoint,
-                    outbox_object_id=outbox_object.id,
-                    webmention_target=target,
-                )
+                endpoints.append((target, webmention_endpoint))
 
-    if _commit:
+        for target, webmention_endpoint in endpoints:
+            await new_outgoing_activity(
+                db_session,
+                webmention_endpoint,
+                outbox_object_id=outbox_object.id,
+                webmention_target=target,
+            )
         await db_session.commit()
-    return outbox_object.public_id  # type: ignore
+    except Exception:
+        logger.exception(f"Failed to enqueue webmentions for {outbox_object.ap_id}")
+        await db_session.rollback()
 
 
 async def _compute_recipients(
@@ -1711,14 +1727,18 @@ async def _handle_delete_activity(
     elif delete_activity.activity_object_ap_id:
         # If it's not a Delete for an inbox object, it may be related to
         # an actor
-        try:
-            ap_object_to_delete = await fetch_actor(
-                db_session,
-                delete_activity.activity_object_ap_id,
-                save_if_not_found=False,
+        # A DB lookup, not `fetch_actor`: refreshing an actor that is being
+        # deleted is pointless, and would hold the writer lock (the Delete is
+        # already inserted) across the network.
+        ap_object_to_delete = (
+            await db_session.scalars(
+                select(activitypub.models.Actor).where(
+                    activitypub.models.Actor.ap_id
+                    == delete_activity.activity_object_ap_id,
+                    activitypub.models.Actor.is_deleted.is_(False),
+                )
             )
-        except ap.ObjectNotFoundError:
-            pass
+        ).one_or_none()
 
     if ap_object_to_delete is None or not ap_object_to_delete.is_from_db:
         if await _handle_quote_authorization_delete(
@@ -2795,6 +2815,7 @@ async def _handle_quote_request_accept_or_reject(
     db_session: AsyncSession,
     accept_or_reject_activity: activitypub.models.InboxObject,
     quote_request_outbox_object: activitypub.models.OutboxObject,
+    prepared: PreparedActivity,
 ) -> None:
     """Our own `QuoteRequest` got an `Accept` (carrying the stamp as
     `result`) or a `Reject` back.
@@ -2855,13 +2876,8 @@ async def _handle_quote_request_accept_or_reject(
         return
 
     stamp_ap_id = ap.get_id(result)
-    is_verified = await _verify_quote_authorization(
-        db_session,
-        quote_authorization_ap_id=stamp_ap_id,
-        quoting_object_ap_id=quote_outbox_object.ap_id,
-        quoted_object_ap_id=quoted_ap_id,
-        quoted_actor_ap_id=quoted_actor_ap_id,
-    )
+    # Verified (network) by `_prepare_activity`, before the insert.
+    is_verified = prepared.quote_stamp_verified
     if not is_verified:
         logger.warning(f"Invalid QuoteAuthorization {stamp_ap_id}")
         quote_outbox_object.quote_state = "rejected"
@@ -3016,10 +3032,268 @@ async def _handle_undo_activity(
     # commit will be perfomed in save_to_inbox
 
 
+@dataclass
+class PreparedObject:
+    """Everything `persist_prepared_object` needs to save a remote object,
+    gathered by `prepare_object_for_inbox` without writing."""
+
+    resolved_actor: ResolvedActor
+    remote_object: RemoteObject
+    conversation: str
+    og_meta: list[dict[str, Any]]
+
+
+async def prepare_object_for_inbox(
+    db_session: AsyncSession,
+    raw_object: ap.RawObject,
+    resolved_actors: dict[str, ResolvedActor] | None = None,
+) -> PreparedObject:
+    """Network half of `save_object_to_inbox`: network calls and reads only,
+    so callers can prepare everything before taking SQLite's writer lock.
+
+    `resolved_actors` shares actor resolutions across a batch of objects.
+    """
+    actor_id = ap.get_actor_id(raw_object)
+    if resolved_actors is None:
+        resolved_actors = {}
+    if actor_id not in resolved_actors:
+        resolved_actors[actor_id] = await resolve_actor(db_session, actor_id)
+    resolved_actor = resolved_actors[actor_id]
+
+    actor: Actor | None = resolved_actor.fetched or resolved_actor.existing
+    if actor is None:
+        raise ValueError("Should never happen")
+    ro = RemoteObject(raw_object, actor=actor)
+    return PreparedObject(
+        resolved_actor=resolved_actor,
+        remote_object=ro,
+        conversation=await fetch_conversation_root(db_session, ro),
+        og_meta=await opengraph.og_meta_from_note(db_session, ro),
+    )
+
+
+async def persist_prepared_object(
+    db_session: AsyncSession,
+    prepared: PreparedObject,
+) -> activitypub.models.InboxObject:
+    """Write half of `save_object_to_inbox`: no network calls."""
+    obj_actor = await persist_actor(db_session, prepared.resolved_actor)
+    ro = RemoteObject(prepared.remote_object.ap_object, actor=obj_actor)
+
+    ap_published_at = now()
+    if "published" in ro.ap_object:
+        ap_published_at = parse_isoformat(ro.ap_object["published"])
+
+    inbox_object = activitypub.models.InboxObject(
+        server=urlparse(ro.ap_id).hostname,
+        actor_id=obj_actor.id,
+        ap_actor_id=obj_actor.ap_id,
+        ap_type=ro.ap_type,
+        ap_id=ro.ap_id,
+        ap_context=ro.ap_context,
+        conversation=prepared.conversation,
+        ap_published_at=ap_published_at,
+        ap_object=ro.ap_object,
+        visibility=ro.visibility,
+        relates_to_inbox_object_id=None,
+        relates_to_outbox_object_id=None,
+        activity_object_ap_id=ro.activity_object_ap_id,
+        og_meta=prepared.og_meta,
+        is_hidden_from_stream=True,
+    )
+
+    db_session.add(inbox_object)
+    await db_session.flush()
+    await db_session.refresh(inbox_object)
+    return inbox_object
+
+
+@dataclass
+class PreparedQuote:
+    # The quoted object, when unknown and fetchable, to save alongside.
+    quoted_object: PreparedObject | None
+    is_verified: bool
+
+
+@dataclass
+class PreparedNote:
+    """Network results `_process_note_object` needs, gathered before the
+    inbound activity is inserted."""
+
+    conversation: str
+    og_meta: list[dict[str, Any]]
+    quote: PreparedQuote | None
+
+
+@dataclass
+class PreparedActivity:
+    """Every network result an inbound activity's handler needs, gathered
+    by `_prepare_activity` before `save_to_inbox` inserts anything, so the
+    SQLite writer lock is never held across the network."""
+
+    # Create
+    create_object_type: str | None = None
+    note: PreparedNote | None = None
+    # Read (Honk): the read object's actor, raw object and note data
+    read_actor: ResolvedActor | None = None
+    read_object: ap.RawObject | None = None
+    # Announce of an object we don't know yet; `None` object means blocked
+    announced_actor: ResolvedActor | None = None
+    announced_object: PreparedObject | None = None
+    # Update: the wrapped object and, for an actor, its resolved handle
+    update_object: ap.RawObject | None = None
+    update_actor_handle: str | None = None
+    # Move: the target account
+    move_target: ResolvedActor | None = None
+    # Accept of our QuoteRequest: whether its stamp verifies
+    quote_stamp_verified: bool = False
+
+
+async def _prepare_inbound_quote(
+    db_session: AsyncSession,
+    ro: RemoteObject,
+) -> PreparedQuote | None:
+    """Network half of `_process_inbound_quote` (see there for semantics)."""
+    quoted_ap_id = ro.quote_ap_id
+    if not quoted_ap_id:
+        return None
+
+    quote_authorization_ap_id = ro.quote_authorization_ap_id
+    quoted_object = await get_anybox_object_by_ap_id(db_session, quoted_ap_id)
+    quoted_actor_ap_id = quoted_object.ap_actor_id if quoted_object else None
+    prepared_quoted_object = None
+    if not quoted_object and quote_authorization_ap_id:
+        # Only fetched when there's a stamp to check it against: without one
+        # the quote stays unverified and is never rendered. Bounded, and a
+        # broken quote target costs the enrichment, not the inbound activity.
+        try:
+            raw_quoted_object = await asyncio.wait_for(
+                ap.fetch(quoted_ap_id), timeout=_QUOTE_FETCH_TIMEOUT_SECONDS
+            )
+            prepared = await prepare_object_for_inbox(db_session, raw_quoted_object)
+            if prepared.remote_object.ap_id == quoted_ap_id:
+                prepared_quoted_object = prepared
+                quoted_actor_ap_id = prepared.remote_object.ap_actor_id
+        except Exception:
+            logger.exception(f"Failed to fetch quoted object {quoted_ap_id}")
+
+    is_verified = False
+    if quote_authorization_ap_id and quoted_actor_ap_id:
+        is_verified = await _verify_quote_authorization(
+            db_session,
+            quote_authorization_ap_id=quote_authorization_ap_id,
+            quoting_object_ap_id=ro.ap_id,
+            quoted_object_ap_id=quoted_ap_id,
+            quoted_actor_ap_id=quoted_actor_ap_id,
+        )
+    return PreparedQuote(prepared_quoted_object, is_verified)
+
+
+async def _prepare_note(db_session: AsyncSession, ro: RemoteObject) -> PreparedNote:
+    return PreparedNote(
+        conversation=await fetch_conversation_root(db_session, ro),
+        og_meta=await opengraph.og_meta_from_note(db_session, ro),
+        quote=await _prepare_inbound_quote(db_session, ro),
+    )
+
+
+async def _prepare_activity(  # noqa: C901
+    db_session: AsyncSession,
+    actor: activitypub.models.Actor,
+    activity_ro: RemoteObject,
+    relates_to_inbox_object: activitypub.models.InboxObject | None,
+    relates_to_outbox_object: activitypub.models.OutboxObject | None,
+) -> PreparedActivity:
+    """Network calls and reads only. Mirrors the dispatch in `save_to_inbox`;
+    a check that makes a handler bail out early also skips its network work
+    here, and anything left ambiguous is left for the handler to reject."""
+    prepared = PreparedActivity()
+    raw_activity = activity_ro.ap_object
+    ap_type = activity_ro.ap_type
+
+    if ap_type == "Create" and not relates_to_inbox_object:
+        prepared.create_object_type = ap.as_list(
+            (await ap.get_object(raw_activity))["type"]
+        )[0]
+        if prepared.create_object_type in ["CacheFile"]:
+            return prepared
+        try:
+            ro = RemoteObject(ap.unwrap_activity(raw_activity), actor=actor)
+        except ValueError:
+            return prepared  # `_handle_create_activity` raises on this
+        prepared.note = await _prepare_note(db_session, ro)
+
+    elif ap_type == "Read":
+        read_object = await ap.fetch(ap.get_id(raw_activity["object"]))
+        read_actor = await resolve_actor(db_session, ap.get_actor_id(read_object))
+        prepared.read_actor, prepared.read_object = read_actor, read_object
+        existing = read_actor.existing
+        if not (existing and existing.is_blocked):
+            ro = RemoteObject(read_object, actor=read_actor.fetched or existing)  # type: ignore[arg-type]  # noqa: E501
+            if not await get_inbox_object_by_ap_id(db_session, ro.ap_id):
+                prepared.note = await _prepare_note(db_session, ro)
+
+    elif (
+        ap_type == "Announce"
+        and not relates_to_outbox_object
+        and not relates_to_inbox_object
+        and activity_ro.activity_object_ap_id
+    ):
+        announced_raw_object = await ap.fetch(activity_ro.activity_object_ap_id)
+        # Some software return objects wrapped in a Create activity (like
+        # python-federation)
+        if ap.as_list(announced_raw_object["type"])[0] == "Create":
+            announced_raw_object = await ap.get_object(announced_raw_object)
+        announced_actor_id = ap.get_actor_id(announced_raw_object)
+        prepared.announced_actor = await resolve_actor(db_session, announced_actor_id)
+        existing = prepared.announced_actor.existing
+        if not (existing and existing.is_blocked):
+            prepared.announced_object = await prepare_object_for_inbox(
+                db_session,
+                announced_raw_object,
+                {announced_actor_id: prepared.announced_actor},
+            )
+
+    elif ap_type == "Update":
+        prepared.update_object = await ap.get_object(raw_activity)
+        if prepared.update_object["type"] in ap.ACTOR_TYPES:
+            prepared.update_actor_handle = await resolve_handle(prepared.update_object)
+
+    elif (
+        ap_type == "Accept"
+        and relates_to_outbox_object
+        and relates_to_outbox_object.ap_type == "QuoteRequest"
+        and (quote_outbox_object := relates_to_outbox_object.relates_to_outbox_object)
+        and quote_outbox_object.quote_ap_id
+        and (result := raw_activity.get("result"))
+    ):
+        # Same author check as `_handle_quote_request_accept_or_reject`,
+        # which only reads the result when it holds.
+        quoted_object = await get_anybox_object_by_ap_id(
+            db_session, quote_outbox_object.quote_ap_id
+        )
+        if quoted_object and quoted_object.ap_actor_id == actor.ap_id:
+            prepared.quote_stamp_verified = await _verify_quote_authorization(
+                db_session,
+                quote_authorization_ap_id=ap.get_id(result),
+                quoting_object_ap_id=quote_outbox_object.ap_id,
+                quoted_object_ap_id=quote_outbox_object.quote_ap_id,
+                quoted_actor_ap_id=actor.ap_id,
+            )
+
+    elif ap_type == "Move":
+        target = raw_activity.get("target")
+        if target and ap.get_object_id(raw_activity) == actor.ap_id:
+            prepared.move_target = await resolve_actor(db_session, ap.get_id(target))
+
+    return prepared
+
+
 async def _handle_move_activity(
     db_session: AsyncSession,
     from_actor: activitypub.models.Actor,
     move_activity: activitypub.models.InboxObject,
+    prepared: PreparedActivity,
 ) -> None:
     logger.info("Processing Move activity")
 
@@ -3038,7 +3312,9 @@ async def _handle_move_activity(
         return None
 
     new_actor_id = ap.get_id(target)
-    new_actor = await fetch_actor(db_session, new_actor_id)
+    if prepared.move_target is None:
+        raise ValueError("Should never happen")
+    new_actor = await persist_actor(db_session, prepared.move_target)
 
     logger.info(f"Moving {old_actor_id} to {new_actor_id}")
 
@@ -3088,15 +3364,16 @@ async def _handle_update_activity(
     db_session: AsyncSession,
     from_actor: activitypub.models.Actor,
     update_activity: activitypub.models.InboxObject,
+    prepared: PreparedActivity,
 ) -> None:
     logger.info("Processing Update activity")
-    wrapped_object = await ap.get_object(update_activity.ap_object)
+    wrapped_object = prepared.update_object
+    if wrapped_object is None:
+        raise ValueError("Should never happen")
     if wrapped_object["type"] in ap.ACTOR_TYPES:
         logger.info("Updating actor")
 
-        updated_actor = RemoteActor(
-            wrapped_object, handle=await resolve_handle(wrapped_object)
-        )
+        updated_actor = RemoteActor(wrapped_object, handle=prepared.update_actor_handle)
         if (
             from_actor.ap_id != updated_actor.ap_id
             or ap.as_list(from_actor.ap_type)[0] not in ap.ACTOR_TYPES
@@ -3157,17 +3434,14 @@ async def _handle_create_activity(
     db_session: AsyncSession,
     from_actor: activitypub.models.Actor,
     create_activity: activitypub.models.InboxObject,
+    prepared: PreparedActivity,
     forwarded_by_actor: activitypub.models.Actor | None = None,
     relates_to_inbox_object: activitypub.models.InboxObject | None = None,
 ) -> None:
     logger.info("Processing Create activity")
 
     # Some PeerTube activities make no sense to process
-    if (
-        ap_object_type := ap.as_list(
-            (await ap.get_object(create_activity.ap_object))["type"]
-        )[0]
-    ) in ["CacheFile"]:
+    if (ap_object_type := prepared.create_object_type) in ["CacheFile"]:
         logger.info(f"Dropping Create activity for {ap_object_type} object")
         await db_session.delete(create_activity)
         return None
@@ -3200,11 +3474,14 @@ async def _handle_create_activity(
             await db_session.flush()
             return None
 
+    if prepared.note is None:
+        raise ValueError("Should never happen")
     await _process_note_object(
         db_session,
         create_activity,
         from_actor,
         ro,
+        prepared.note,
         forwarded_by_actor=forwarded_by_actor,
     )
 
@@ -3213,16 +3490,17 @@ async def _handle_read_activity(
     db_session: AsyncSession,
     from_actor: activitypub.models.Actor,
     read_activity: activitypub.models.InboxObject,
+    prepared: PreparedActivity,
 ) -> None:
     logger.info("Processing Read activity")
 
-    # Honk uses Read activity to propagate replies, fetch the read object
-    # from the remote server
-    wrapped_object = await ap.fetch(ap.get_id(read_activity.ap_object["object"]))
+    # Honk uses Read activity to propagate replies; `_prepare_activity`
+    # fetched the read object from the remote server
+    wrapped_object = prepared.read_object
+    if wrapped_object is None or prepared.read_actor is None:
+        raise ValueError("Should never happen")
 
-    wrapped_object_actor = await fetch_actor(
-        db_session, ap.get_actor_id(wrapped_object)
-    )
+    wrapped_object_actor = await persist_actor(db_session, prepared.read_actor)
     if not wrapped_object_actor.is_blocked:
         ro = RemoteObject(wrapped_object, actor=wrapped_object_actor)
 
@@ -3234,8 +3512,12 @@ async def _handle_read_activity(
             logger.info(f"{ro.ap_id} is already in the inbox, skipping processing")
             return None
 
+        if prepared.note is None:
+            raise ValueError("Should never happen")
         # Then process it likes it's coming from a forwarded activity
-        await _process_note_object(db_session, read_activity, wrapped_object_actor, ro)
+        await _process_note_object(
+            db_session, read_activity, wrapped_object_actor, ro, prepared.note
+        )
 
 
 async def _process_note_object(
@@ -3243,6 +3525,7 @@ async def _process_note_object(
     parent_activity: activitypub.models.InboxObject,
     from_actor: activitypub.models.Actor,
     ro: RemoteObject,
+    prepared_note: PreparedNote,
     forwarded_by_actor: activitypub.models.Actor | None = None,
 ) -> None:
     if parent_activity.ap_type not in ["Create", "Read"]:
@@ -3284,14 +3567,14 @@ async def _process_note_object(
         ap_type=ro.ap_type,
         ap_id=ro.ap_id,
         ap_context=ro.ap_context,
-        conversation=await fetch_conversation_root(db_session, ro),
+        conversation=prepared_note.conversation,
         ap_published_at=ap_published_at,
         ap_object=ro.ap_object,
         visibility=ro.visibility,
         relates_to_inbox_object_id=parent_activity.id,
         relates_to_outbox_object_id=None,
         activity_object_ap_id=ro.activity_object_ap_id,
-        og_meta=await opengraph.og_meta_from_note(db_session, ro),
+        og_meta=prepared_note.og_meta,
         # Hide replies from the stream
         is_hidden_from_stream=not stream_visibility_callback(object_info),
         # We may already have some replies in DB
@@ -3305,8 +3588,8 @@ async def _process_note_object(
 
     parent_activity.relates_to_inbox_object_id = inbox_object.id
 
-    if inbox_object.quote_ap_id:
-        await _process_inbound_quote(db_session, inbox_object, ro)
+    if inbox_object.quote_ap_id and prepared_note.quote:
+        await _process_inbound_quote(db_session, inbox_object, ro, prepared_note.quote)
 
     if inbox_object.in_reply_to:
         replied_object = await get_anybox_object_by_ap_id(
@@ -3400,12 +3683,12 @@ async def _process_inbound_quote(
     db_session: AsyncSession,
     inbox_object: activitypub.models.InboxObject,
     ro: RemoteObject,
+    prepared_quote: PreparedQuote,
 ) -> None:
     """A remote quote arrived (FEP-044f or a legacy alias, per
-    `ap_object.Object.quote_ap_id`). Verify any presented stamp, persist the
-    result, and -- when there is a stamp to verify -- best-effort fetch the
-    quoted object so it can be rendered. A legacy-alias quote with no stamp is
-    stored, but stays unverified (and so is never rendered).
+    `ap_object.Object.quote_ap_id`). Persist the stamp verification and the
+    quoted object that `_prepare_inbound_quote` gathered. A legacy-alias quote
+    with no stamp is stored, but stays unverified (and so is never rendered).
     """
     quoted_ap_id = inbox_object.quote_ap_id
     if not quoted_ap_id:
@@ -3414,40 +3697,17 @@ async def _process_inbound_quote(
     quote_authorization_ap_id = ro.quote_authorization_ap_id
 
     quoted_object = await get_anybox_object_by_ap_id(db_session, quoted_ap_id)
-    if not quoted_object and quote_authorization_ap_id:
-        # Only fetched when there's a stamp to check it against. Without one
-        # the quote stays unverified, and an unverified quote is never shown
-        # (`get_quoted_object_for_display`, the Mastodon `serialize_quote`),
-        # so fetching its target would be work nothing reads.
-        #
-        # Bounded and savepointed on purpose. `save_to_inbox` inserts the
-        # activity before dispatching here, so SQLite's writer lock is already
-        # held: every second spent in here is a second the web app cannot
-        # write (`busy_timeout` is 15s). And `save_object_to_inbox` fans out
-        # network calls of its own -- the actor, the conversation root, and an
-        # OpenGraph scrape per link in the quoted post -- off a URL a remote
-        # actor chose for us. `begin_nested` means a failure rolls back to the
-        # savepoint and leaves the session usable, so a broken quote target
-        # costs the enrichment and not the whole inbound activity.
+    if not quoted_object and prepared_quote.quoted_object:
+        # Savepointed: a failure costs the enrichment, not the inbound
+        # activity, and leaves the session usable.
         try:
             async with db_session.begin_nested():
-                raw_quoted_object = await asyncio.wait_for(
-                    ap.fetch(quoted_ap_id), timeout=_QUOTE_FETCH_TIMEOUT_SECONDS
-                )
-                await save_object_to_inbox(db_session, raw_quoted_object)
+                await persist_prepared_object(db_session, prepared_quote.quoted_object)
             quoted_object = await get_anybox_object_by_ap_id(db_session, quoted_ap_id)
         except Exception:
-            logger.exception(f"Failed to fetch quoted object {quoted_ap_id}")
+            logger.exception(f"Failed to save quoted object {quoted_ap_id}")
 
-    is_verified = False
-    if quote_authorization_ap_id and quoted_object and quoted_object.ap_actor_id:
-        is_verified = await _verify_quote_authorization(
-            db_session,
-            quote_authorization_ap_id=quote_authorization_ap_id,
-            quoting_object_ap_id=inbox_object.ap_id,
-            quoted_object_ap_id=quoted_ap_id,
-            quoted_actor_ap_id=quoted_object.ap_actor_id,
-        )
+    is_verified = prepared_quote.is_verified and quoted_object is not None
 
     inbox_object.quote_authorization_ap_id = quote_authorization_ap_id
     inbox_object.quote_is_verified = is_verified
@@ -3551,6 +3811,7 @@ async def _handle_announce_activity(
     announce_activity: activitypub.models.InboxObject,
     relates_to_outbox_object: activitypub.models.OutboxObject | None,
     relates_to_inbox_object: activitypub.models.InboxObject | None,
+    prepared: PreparedActivity,
 ):
     if relates_to_outbox_object:
         # This is an announce for a local object
@@ -3610,23 +3871,14 @@ async def _handle_announce_activity(
                 announce_activity.is_hidden_from_stream = not is_from_following
 
         else:
-            # Save it as an inbox object
-            if not announce_activity.activity_object_ap_id:
+            # Save it as an inbox object (fetched by `_prepare_activity`)
+            if prepared.announced_actor is None:
                 raise ValueError("Should never happen")
-            announced_raw_object = await ap.fetch(
-                announce_activity.activity_object_ap_id
-            )
-
-            # Some software return objects wrapped in a Create activity (like
-            # python-federation)
-            if ap.as_list(announced_raw_object["type"])[0] == "Create":
-                announced_raw_object = await ap.get_object(announced_raw_object)
-
-            announced_actor = await fetch_actor(
-                db_session, ap.get_actor_id(announced_raw_object)
-            )
-            if not announced_actor.is_blocked:
-                announced_object = RemoteObject(announced_raw_object, announced_actor)
+            announced_actor = await persist_actor(db_session, prepared.announced_actor)
+            if not announced_actor.is_blocked and prepared.announced_object:
+                announced_object = RemoteObject(
+                    prepared.announced_object.remote_object.ap_object, announced_actor
+                )
                 announced_inbox_object = activitypub.models.InboxObject(
                     server=urlparse(announced_object.ap_id).hostname,
                     actor_id=announced_actor.id,
@@ -3634,15 +3886,11 @@ async def _handle_announce_activity(
                     ap_type=announced_object.ap_type,
                     ap_id=announced_object.ap_id,
                     ap_context=announced_object.ap_context,
-                    conversation=await fetch_conversation_root(
-                        db_session, announced_object
-                    ),
+                    conversation=prepared.announced_object.conversation,
                     ap_published_at=announced_object.ap_published_at,
                     ap_object=announced_object.ap_object,
                     visibility=announced_object.visibility,
-                    og_meta=await opengraph.og_meta_from_note(
-                        db_session, announced_object
-                    ),
+                    og_meta=prepared.announced_object.og_meta,
                     is_hidden_from_stream=True,
                 )
                 db_session.add(announced_inbox_object)
@@ -3822,6 +4070,11 @@ async def save_to_inbox(
     except ap.FetchError:
         logger.exception("Failed to fetch actor")
         return
+    # Up to the activity insert below, only actor-cache rows can be pending
+    # (the worker commits `tries` before calling in). Committing them after
+    # each actor step releases SQLite's writer lock before the next network
+    # call; they are idempotent, so a later failure doesn't need them undone.
+    await db_session.commit()
 
     if is_hostname_blocked(actor.server):
         logger.warning(f"Server {actor.server} is blocked")
@@ -3852,12 +4105,14 @@ async def save_to_inbox(
             f"Processing a forwarded activity {sent_by_ap_actor_id=}/{actor.ap_id}"
         )
         forwarded_by_actor = await fetch_actor(db_session, sent_by_ap_actor_id)
+        await db_session.commit()
 
         is_sig_verified = False
         try:
             is_sig_verified = await ldsig.verify_signature(db_session, raw_object)
         except Exception:
             logger.exception("Failed to verify LD sig")
+        await db_session.commit()
 
         if not is_sig_verified:
             logger.warning(
@@ -3909,6 +4164,16 @@ async def save_to_inbox(
                 activity_ro.activity_object_ap_id,
             )
 
+    # Every network call the handlers need happens here, before the insert
+    # below takes SQLite's writer lock.
+    prepared = await _prepare_activity(
+        db_session,
+        actor,
+        activity_ro,
+        relates_to_inbox_object,
+        relates_to_outbox_object,
+    )
+
     inbox_object = activitypub.models.InboxObject(
         server=urlparse(activity_ro.ap_id).hostname,
         actor_id=actor.id,
@@ -3933,20 +4198,22 @@ async def save_to_inbox(
     await db_session.flush()
     await db_session.refresh(inbox_object)
 
+    backfill_actor: activitypub.models.Actor | None = None
     if activity_ro.ap_type == "Create":
         await _handle_create_activity(
             db_session,
             actor,
             inbox_object,
+            prepared,
             forwarded_by_actor=forwarded_by_actor,
             relates_to_inbox_object=relates_to_inbox_object,
         )
     elif activity_ro.ap_type == "Read":
-        await _handle_read_activity(db_session, actor, inbox_object)
+        await _handle_read_activity(db_session, actor, inbox_object, prepared)
     elif activity_ro.ap_type == "Update":
-        await _handle_update_activity(db_session, actor, inbox_object)
+        await _handle_update_activity(db_session, actor, inbox_object, prepared)
     elif activity_ro.ap_type == "Move":
-        await _handle_move_activity(db_session, actor, inbox_object)
+        await _handle_move_activity(db_session, actor, inbox_object, prepared)
     elif activity_ro.ap_type == "Delete":
         await _handle_delete_activity(
             db_session,
@@ -3993,11 +4260,8 @@ async def save_to_inbox(
                     )
                     db_session.add(following)
 
-                    # Pre-fetch the latest activities
-                    try:
-                        await prefetch_actor_outbox(db_session, actor)
-                    except Exception:
-                        logger.exception(f"Failed to prefetch outbox for {actor.ap_id}")
+                    # Pre-fetch the latest activities, after the commit
+                    backfill_actor = actor
                 elif activity_ro.ap_type == "Reject":
                     maybe_following = (
                         await db_session.scalars(
@@ -4012,7 +4276,7 @@ async def save_to_inbox(
 
             elif relates_to_outbox_object.ap_type == "QuoteRequest":
                 await _handle_quote_request_accept_or_reject(
-                    db_session, inbox_object, relates_to_outbox_object
+                    db_session, inbox_object, relates_to_outbox_object, prepared
                 )
             else:
                 logger.info(
@@ -4044,6 +4308,7 @@ async def save_to_inbox(
             inbox_object,
             relates_to_outbox_object,
             relates_to_inbox_object,
+            prepared,
         )
     elif activity_ro.ap_type == "View":
         # View is used by Peertube, there's nothing useful we can do with it
@@ -4071,6 +4336,16 @@ async def save_to_inbox(
 
     await db_session.commit()
 
+    # Best-effort, and network-heavy: run on its own transaction so the
+    # activity above is not held up (or rolled back) by it.
+    if backfill_actor:
+        try:
+            await prefetch_actor_outbox(db_session, backfill_actor)
+            await db_session.commit()
+        except Exception:
+            logger.exception(f"Failed to prefetch outbox for {backfill_actor.ap_id}")
+            await db_session.rollback()
+
 
 _PREFETCH_TIME_BUDGET_SECONDS = 8.0
 
@@ -4088,6 +4363,10 @@ async def prefetch_actor_outbox(
     """
     started_at = time.monotonic()
     outbox = await ap.parse_collection(actor.outbox_url, limit=20)
+    # Two phases: every network call first, then the writes, so the writer
+    # lock taken by the first insert is never held across the network.
+    resolved_actors: dict[str, ResolvedActor] = {}
+    to_save: list[PreparedObject | activitypub.models.InboxObject] = []
     for activity in outbox[:20]:
         if time.monotonic() - started_at > _PREFETCH_TIME_BUDGET_SECONDS:
             break
@@ -4099,11 +4378,18 @@ async def prefetch_actor_outbox(
             saved_inbox_object = await get_inbox_object_by_ap_id(
                 db_session, ap.get_id(obj)
             )
-            if not saved_inbox_object:
-                saved_inbox_object = await save_object_to_inbox(db_session, obj)
+            to_save.append(
+                saved_inbox_object
+                or await prepare_object_for_inbox(db_session, obj, resolved_actors)
+            )
 
-            if not saved_inbox_object.in_reply_to:
-                saved_inbox_object.is_hidden_from_stream = False
+    for item in to_save:
+        if isinstance(item, PreparedObject):
+            item = await get_inbox_object_by_ap_id(
+                db_session, item.remote_object.ap_id
+            ) or await persist_prepared_object(db_session, item)
+        if not item.in_reply_to:
+            item.is_hidden_from_stream = False
 
     actor.outbox_backfilled_at = now()
 
@@ -4116,37 +4402,14 @@ async def save_object_to_inbox(
 ) -> activitypub.models.InboxObject:
     """Used to save unknown object before intetacting with them, i.e. to like
     an object that was looked up, or prefill the inbox when an actor accepted
-    a follow request."""
-    obj_actor = await fetch_actor(db_session, ap.get_actor_id(raw_object))
+    a follow request.
 
-    ro = RemoteObject(raw_object, actor=obj_actor)
-
-    ap_published_at = now()
-    if "published" in ro.ap_object:
-        ap_published_at = parse_isoformat(ro.ap_object["published"])
-
-    inbox_object = activitypub.models.InboxObject(
-        server=urlparse(ro.ap_id).hostname,
-        actor_id=obj_actor.id,
-        ap_actor_id=obj_actor.ap_id,
-        ap_type=ro.ap_type,
-        ap_id=ro.ap_id,
-        ap_context=ro.ap_context,
-        conversation=await fetch_conversation_root(db_session, ro),
-        ap_published_at=ap_published_at,
-        ap_object=ro.ap_object,
-        visibility=ro.visibility,
-        relates_to_inbox_object_id=None,
-        relates_to_outbox_object_id=None,
-        activity_object_ap_id=ro.activity_object_ap_id,
-        og_meta=await opengraph.og_meta_from_note(db_session, ro),
-        is_hidden_from_stream=True,
+    Every network call happens before the first write, so the caller's
+    SQLite writer lock is never held across the network by this function.
+    """
+    return await persist_prepared_object(
+        db_session, await prepare_object_for_inbox(db_session, raw_object)
     )
-
-    db_session.add(inbox_object)
-    await db_session.flush()
-    await db_session.refresh(inbox_object)
-    return inbox_object
 
 
 _FETCH_REPLIES_TIME_BUDGET_SECONDS = 8.0
@@ -4175,6 +4438,9 @@ async def fetch_replies(
     # `conversation` backfilled (see _handle_announce_activity), which makes
     # the replies tree treat them as standalone and skip the lookup below
     # entirely. Fix that up while we're already here.
+    # Network calls first, writes at the end: the writer lock taken by the
+    # first write must not be held across the network.
+    conversation: str | None = None
     if (
         isinstance(
             requested_object,
@@ -4182,9 +4448,7 @@ async def fetch_replies(
         )
         and requested_object.conversation is None
     ):
-        requested_object.conversation = await fetch_conversation_root(
-            db_session, requested_object
-        )
+        conversation = await fetch_conversation_root(db_session, requested_object)
 
     replies_ref = requested_object.ap_object.get("replies")
 
@@ -4201,6 +4465,7 @@ async def fetch_replies(
             replies_ref = fresh_object.get("replies") or replies_ref
 
     if not replies_ref:
+        _set_conversation(requested_object, conversation)
         return 0
 
     try:
@@ -4212,6 +4477,7 @@ async def fetch_replies(
         logger.exception(
             f"Failed to fetch replies collection for {requested_object.ap_id}"
         )
+        _set_conversation(requested_object, conversation)
         return 0
 
     logger.info(
@@ -4219,10 +4485,11 @@ async def fetch_replies(
         f"{[item.get('id') if isinstance(item, dict) else item for item in raw_items]}"
     )
 
-    fetched_count = 0
+    prepared_replies: list[PreparedObject] = []
+    resolved_actors: dict[str, ResolvedActor] = {}
     started_at = time.monotonic()
     for item in raw_items[:20]:
-        if fetched_count >= _MAX_NEW_REPLIES_PER_CALL:
+        if len(prepared_replies) >= _MAX_NEW_REPLIES_PER_CALL:
             break
         if time.monotonic() - started_at > _FETCH_REPLIES_TIME_BUDGET_SECONDS:
             break
@@ -4244,15 +4511,38 @@ async def fetch_replies(
                 )
                 continue
 
-            await save_object_to_inbox(db_session, raw_reply)
-            fetched_count += 1
+            prepared_replies.append(
+                await prepare_object_for_inbox(db_session, raw_reply, resolved_actors)
+            )
         except Exception:
             logger.exception(
                 f"Failed to fetch reply {item!r} for {requested_object.ap_id}"
             )
             continue
 
+    _set_conversation(requested_object, conversation)
+    fetched_count = 0
+    for prepared in prepared_replies:
+        try:
+            await persist_prepared_object(db_session, prepared)
+            fetched_count += 1
+        except Exception:
+            logger.exception(
+                f"Failed to save reply {prepared.remote_object.ap_id} for "
+                f"{requested_object.ap_id}"
+            )
+
     return fetched_count
+
+
+def _set_conversation(
+    obj: AnyboxObject | RemoteObject,
+    conversation: str | None,
+) -> None:
+    if conversation is not None and isinstance(
+        obj, (activitypub.models.InboxObject, activitypub.models.OutboxObject)
+    ):
+        obj.conversation = conversation
 
 
 async def public_outbox_objects_count(db_session: AsyncSession) -> int:

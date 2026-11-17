@@ -7,11 +7,12 @@ from urllib.parse import urlparse
 import httpx
 from bs4 import BeautifulSoup  # type: ignore
 from loguru import logger
+from sqlalchemy import select
 
 from activitypub import activitypub as ap
 from activitypub import ap_object
 from activitypub.actor import LOCAL_ACTOR
-from activitypub.actor import fetch_actor
+from activitypub.models import Actor
 from activitypub.models import InboxObject
 from activitypub.models import OutboxObject
 from app import config
@@ -36,28 +37,35 @@ async def external_urls(
 ) -> set[str]:
     note_host = urlparse(ro.ap_id).hostname
 
-    tags_hrefs = set()
+    # Mentioned actors' profile links must not become link cards. Only
+    # cached actors are consulted (no fetch): this runs before the caller
+    # writes, and fetching (and saving) each mentioned actor would make it
+    # either write or hold SQLite's writer lock across the network. Profile
+    # links of unknown actors are caught by the `mention` class below.
+    tags_hrefs = {LOCAL_ACTOR.ap_id, LOCAL_ACTOR.url}
+    mention_hrefs = set()
     for tag in ro.tags:
         if tag_href := tag.get("href"):
             tags_hrefs.add(tag_href)
-        if tag.get("type") == "Mention":
-            if tag["href"] != LOCAL_ACTOR.ap_id:
-                try:
-                    mentioned_actor = await fetch_actor(db_session, tag["href"])
-                except (ap.FetchError, ap.NotAnObjectError):
-                    tags_hrefs.add(tag["href"])
-                    continue
-
+            if tag.get("type") == "Mention":
+                mention_hrefs.add(tag_href)
+    if mention_hrefs:
+        for mentioned_actor in await db_session.scalars(
+            select(Actor).where(Actor.ap_id.in_(mention_hrefs))
+        ):
+            if mentioned_actor.url:
                 tags_hrefs.add(mentioned_actor.url)
-                tags_hrefs.add(mentioned_actor.ap_id)
-            else:
-                tags_hrefs.add(LOCAL_ACTOR.ap_id)
-                tags_hrefs.add(LOCAL_ACTOR.url)
 
     candidates = []
     if ro.content:
         soup = BeautifulSoup(ro.content, "html5lib")
-        candidates = [link.get("href") for link in soup.find_all("a")]
+        candidates = [
+            link.get("href")
+            for link in soup.find_all("a")
+            # Mastodon, Pleroma/Akkoma and Misskey mark mention (and hashtag)
+            # links with a `mention` class.
+            if "mention" not in (link.get("class") or [])
+        ]
     # FEP-8967: a `Link` attachment names the URL to build the card from.
     candidates += [
         obj.get("href")

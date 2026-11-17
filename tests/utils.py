@@ -1,11 +1,15 @@
 import asyncio
 from contextlib import contextmanager
 from typing import Any
+from typing import Callable
+from typing import Iterator
+from unittest import mock
 from uuid import uuid4
 
 import fastapi
 import httpx
 import respx
+from sqlalchemy import event
 
 import activitypub.models
 from activitypub import activitypub as ap
@@ -19,6 +23,7 @@ from app import httpsig
 from app import models
 from app.config import session_serializer
 from app.database import AsyncSession
+from app.database import async_engine
 from app.database import async_session
 from app.main import app
 
@@ -296,3 +301,52 @@ async def setup_auth_access_token(db: AsyncSession):
     )
     db.add(access_token)
     await db.commit()
+
+
+@contextmanager
+def no_network_while_writing() -> Iterator[list[str]]:
+    """Fail if an HTTP request starts while the async engine's connection has
+    uncommitted writes.
+
+    In production that means SQLite's writer lock is held across the
+    network, blocking every other process's writes for as long as the remote
+    server takes (and failing them after the 15s busy timeout). Autouse in
+    both conftests, so the whole suite guards this.
+    """
+    writing: list[str] = []
+    violations: list[str] = []
+    sync_engine = async_engine.sync_engine
+
+    def _on_execute(conn, cursor, statement, *args) -> None:
+        verb = statement.lstrip().split(None, 1)[0].upper()
+        if not writing and verb in ("INSERT", "UPDATE", "DELETE"):
+            writing.append(" ".join(statement.split()[:3]))
+
+    def _on_end(conn) -> None:
+        writing.clear()
+
+    original_send = httpx.AsyncClient.send
+
+    async def _send(self, request, *args, **kwargs):
+        if writing:
+            violations.append(f"{request.method} {request.url} after {writing[0]}")
+        return await original_send(self, request, *args, **kwargs)
+
+    listeners: list[tuple[str, Callable[..., Any]]] = [
+        ("before_cursor_execute", _on_execute),
+        ("commit", _on_end),
+        ("rollback", _on_end),
+    ]
+    for name, fn in listeners:
+        event.listen(sync_engine, name, fn)
+    try:
+        with mock.patch.object(httpx.AsyncClient, "send", _send):
+            yield violations
+    finally:
+        for name, fn in listeners:
+            event.remove(sync_engine, name, fn)
+    # Collected, not raised from `_send`: code under test often swallows
+    # exceptions from network calls.
+    assert not violations, "network while holding the SQLite writer lock: " + (
+        "; ".join(violations)
+    )

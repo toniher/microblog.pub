@@ -284,8 +284,13 @@ class RemoteActor(Actor):
 LOCAL_ACTOR = RemoteActor(ap_actor=ap.ME, handle=f"@{USERNAME}@{WEBFINGER_DOMAIN}")
 
 
-async def save_actor(db_session: AsyncSession, ap_actor: ap.RawObject) -> "ActorModel":
-
+async def save_actor(
+    db_session: AsyncSession,
+    ap_actor: ap.RawObject,
+    handle: str | None = None,
+) -> "ActorModel":
+    """`handle`, when given, must come from `resolve_handle(ap_actor)`; passing
+    it keeps this write-only (no webfinger round-trip)."""
     if ap_type := ap_actor.get("type") not in ap.ACTOR_TYPES:
         raise ValueError(f"Invalid type {ap_type} for actor {ap_actor}")
 
@@ -294,7 +299,7 @@ async def save_actor(db_session: AsyncSession, ap_actor: ap.RawObject) -> "Actor
         ap_id=ap_id,
         ap_actor=ap_actor,
         ap_type=ap.as_list(ap_actor["type"])[0],
-        handle=await resolve_handle(ap_actor),
+        handle=handle if handle is not None else await resolve_handle(ap_actor),
     )
     try:
         # Isolated in a SAVEPOINT: a concurrent request may be inserting the
@@ -318,11 +323,27 @@ async def save_actor(db_session: AsyncSession, ap_actor: ap.RawObject) -> "Actor
     return actor
 
 
-async def fetch_actor(
+@dataclass
+class ResolvedActor:
+    """Network half of `fetch_actor`: what `persist_actor` needs to write,
+    gathered without writing anything.
+
+    `existing` is the cached row (if any); `fetched` is a freshly fetched
+    document (with its handle resolved) to save or refresh it from.
+    """
+
+    actor_id: str
+    existing: "ActorModel | None"
+    fetched: RemoteActor | None
+
+
+async def resolve_actor(
     db_session: AsyncSession,
     actor_id: str,
     save_if_not_found: bool = True,
-) -> "ActorModel":
+) -> ResolvedActor:
+    """Network calls and reads only, so callers can resolve every actor they
+    need before taking SQLite's writer lock. Same branches as `fetch_actor`."""
     if actor_id == LOCAL_ACTOR.ap_id:
         raise ValueError("local actor should not be fetched")
 
@@ -343,42 +364,65 @@ async def fetch_actor(
             )
             try:
                 ap_actor = await ap.fetch(actor_id)
-                await update_actor_if_needed(
-                    db_session,
+                return ResolvedActor(
+                    actor_id,
                     existing_actor,
                     RemoteActor(ap_actor, handle=await resolve_handle(ap_actor)),
                 )
-                return existing_actor
             except Exception:
                 logger.exception(f"Failed to refresh {actor_id}")
                 # If we fail to refresh the actor, return the cached one
-                return existing_actor
-        else:
-            return existing_actor
 
-    if save_if_not_found:
-        ap_actor = await ap.fetch(actor_id)
-        # Some softwares uses URL when we expect ID or uses a different casing
-        # (like Birdsite LIVE) , which mean we may already have it in DB
-        existing_actor_by_url = (
-            await db_session.scalars(
-                select(activitypub.models.Actor).where(
-                    activitypub.models.Actor.ap_id == ap.get_id(ap_actor),
-                )
-            )
-        ).one_or_none()
-        if existing_actor_by_url:
-            # Update the actor as we had to fetch it anyway
-            await update_actor_if_needed(
-                db_session,
-                existing_actor_by_url,
-                RemoteActor(ap_actor, handle=await resolve_handle(ap_actor)),
-            )
-            return existing_actor_by_url
+        return ResolvedActor(actor_id, existing_actor, None)
 
-        return await save_actor(db_session, ap_actor)
-    else:
+    if not save_if_not_found:
         raise ap.ObjectNotFoundError(actor_id)
+
+    ap_actor = await ap.fetch(actor_id)
+    fetched = RemoteActor(ap_actor, handle=await resolve_handle(ap_actor))
+    # Some softwares uses URL when we expect ID or uses a different casing
+    # (like Birdsite LIVE) , which mean we may already have it in DB
+    existing_actor_by_url = (
+        await db_session.scalars(
+            select(activitypub.models.Actor).where(
+                activitypub.models.Actor.ap_id == ap.get_id(ap_actor),
+            )
+        )
+    ).one_or_none()
+    return ResolvedActor(actor_id, existing_actor_by_url, fetched)
+
+
+async def persist_actor(
+    db_session: AsyncSession,
+    resolved: ResolvedActor,
+) -> "ActorModel":
+    """Write half of `fetch_actor`: no network calls. Idempotent: `resolved`
+    is updated in place, so persisting a shared one again is a no-op."""
+    if resolved.existing is not None:
+        if resolved.fetched is not None:
+            await update_actor_if_needed(
+                db_session, resolved.existing, resolved.fetched
+            )
+    elif resolved.fetched is not None:
+        resolved.existing = await save_actor(
+            db_session, resolved.fetched.ap_actor, handle=resolved.fetched.handle
+        )
+    else:
+        raise ValueError("Should never happen")
+
+    resolved.fetched = None
+    return resolved.existing
+
+
+async def fetch_actor(
+    db_session: AsyncSession,
+    actor_id: str,
+    save_if_not_found: bool = True,
+) -> "ActorModel":
+    return await persist_actor(
+        db_session,
+        await resolve_actor(db_session, actor_id, save_if_not_found),
+    )
 
 
 async def refresh_actor_counts(actor: "ActorModel") -> None:

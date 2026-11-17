@@ -369,6 +369,19 @@ def _to_camel(string: str) -> str:
     return cased[0:1].lower() + cased[1:]
 
 
+class ActorlessObject(Object):
+    """A fetched remote object whose actor was not resolved: enough to walk a
+    reply chain (`ap_id`, `in_reply_to`, `ap_context`) without fetching and
+    saving an actor per hop. Anything needing `actor` raises."""
+
+    def __init__(self, raw_object: ap.RawObject) -> None:
+        self._raw_object = raw_object
+
+    @property
+    def ap_object(self) -> ap.RawObject:
+        return self._raw_object
+
+
 class BaseModel(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(alias_generator=_to_camel)
 
