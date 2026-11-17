@@ -3,6 +3,7 @@ import hashlib
 import json
 import typing
 from dataclasses import dataclass
+from dataclasses import field
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
@@ -95,9 +96,21 @@ async def _get_public_key(
     key_id: str,
     should_skip_cache: bool = False,
 ) -> Key:
+    k, _ = await _get_public_key_and_actor(db_session, key_id, should_skip_cache)
+    return k
+
+
+async def _get_public_key_and_actor(
+    db_session: AsyncSession,
+    key_id: str,
+    should_skip_cache: bool = False,
+) -> "tuple[Key, ap.RawObject | None]":
+    """Also returns the actor document when it was fetched here for an actor
+    not in the DB yet, so the caller can cache it instead of the incoming
+    worker fetching it a second time."""
     if not should_skip_cache and (cached_key := _KEY_CACHE.get(key_id)):
         logger.info(f"Key {key_id} found in cache")
-        return cached_key
+        return cached_key, None
 
     # Check if the key belongs to an actor already in DB
 
@@ -114,10 +127,9 @@ async def _get_public_key(
             k.load_pub(existing_actor.public_key_as_pem)
             logger.info(f"Found {key_id} on an existing actor")
             _KEY_CACHE[key_id] = k
-            return k
+            return k, None
 
     # Fetch it
-    from activitypub import activitypub as ap
     from activitypub.actor import RemoteActor
     from activitypub.actor import resolve_handle
     from activitypub.actor import update_actor_if_needed
@@ -155,7 +167,17 @@ async def _get_public_key(
         await db_session.commit()
 
     _KEY_CACHE[key_id] = k
-    return k
+    # Skip stripped-down documents (some servers serve those to unsigned
+    # fetches): better fetched again, signed, by the worker than cached.
+    new_actor = (
+        actor
+        if not existing_actor
+        and ap.as_list(actor["type"])[0] in ap.ACTOR_TYPES
+        and "inbox" in actor
+        and "preferredUsername" in actor
+        else None
+    )
+    return k, new_actor
 
 
 @dataclass(frozen=True)
@@ -169,6 +191,12 @@ class HTTPSigInfo:
     is_from_blocked_server: bool = False
 
     server: str | None = None
+
+    # The signer's actor document, when verifying fetched it for an actor
+    # not in the DB yet (see `_get_public_key_and_actor`).
+    fetched_actor: "ap.RawObject | None" = field(
+        default=None, compare=False, repr=False
+    )
 
 
 async def httpsig_checker(
@@ -251,7 +279,7 @@ async def httpsig_checker(
         )
 
     try:
-        k = await _get_public_key(db_session, hsig["keyId"])
+        k, fetched_actor = await _get_public_key_and_actor(db_session, hsig["keyId"])
     except (ap.ObjectIsGoneError, ap.ObjectNotFoundError):
         logger.info("Actor is gone or not found")
         return HTTPSigInfo(has_valid_signature=False, is_ap_actor_gone=True)
@@ -267,7 +295,9 @@ async def httpsig_checker(
     if not has_valid_signature:
         logger.info("Invalid signature, trying to refresh actor")
         try:
-            k = await _get_public_key(db_session, hsig["keyId"], should_skip_cache=True)
+            k, fetched_actor = await _get_public_key_and_actor(
+                db_session, hsig["keyId"], should_skip_cache=True
+            )
             has_valid_signature = _verify_h(
                 signed_string, base64.b64decode(hsig["signature"]), k.pubkey
             )
@@ -278,6 +308,7 @@ async def httpsig_checker(
         has_valid_signature=has_valid_signature,
         signed_by_ap_actor_id=k.owner,
         server=server,
+        fetched_actor=fetched_actor if has_valid_signature else None,
     )
     logger.info(f"Valid HTTP signature for {httpsig_info.signed_by_ap_actor_id}")
     return httpsig_info

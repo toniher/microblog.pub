@@ -7,12 +7,14 @@ import respx
 from fastapi.testclient import TestClient
 
 from activitypub import activitypub as ap
+from activitypub.actor import fetch_actor
 from activitypub.tests import factories
 from app import httpsig
 from app.database import AsyncSession
 from app.httpsig import _KEY_CACHE
 from app.httpsig import HTTPSigInfo
 from app.key import Key
+from app.main import _cache_signer_actor
 
 _test_app = fastapi.FastAPI()
 
@@ -21,6 +23,7 @@ def _httpsig_info_to_dict(httpsig_info: HTTPSigInfo) -> dict[str, Any]:
     return {
         "has_valid_signature": httpsig_info.has_valid_signature,
         "signed_by_ap_actor_id": httpsig_info.signed_by_ap_actor_id,
+        "has_fetched_actor": httpsig_info.fetched_actor is not None,
     }
 
 
@@ -183,3 +186,80 @@ async def test_httpsig_checker__with_invvalid_signature(
 
     assert json_response["has_valid_signature"] is False
     assert json_response["signed_by_ap_actor_id"] == ra.ap_id
+
+
+async def _post_signed(auth: httpsig.HTTPXSigAuth) -> dict[str, Any]:
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=_test_app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/enforce_httpsig",
+            headers={"Content-Type": ap.AS_CTX},
+            json={"enforce_httpsig": True},
+            auth=auth,  # type: ignore
+        )
+    assert response.status_code == 200
+    return response.json()
+
+
+@pytest.mark.asyncio
+async def test_httpsig_checker__exposes_fetched_actor_on_first_contact(
+    respx_mock: respx.MockRouter,
+    async_db_session: AsyncSession,
+) -> None:
+    privkey, pubkey = factories.generate_key()
+    ra = factories.RemoteActorFactory(
+        base_url="https://example.com", username="toto", public_key=pubkey
+    )
+    k = Key(ra.ap_id, f"{ra.ap_id}#main-key")
+    k.load(privkey)
+    auth = httpsig.HTTPXSigAuth(k)
+    respx_mock.get(ra.ap_id).mock(return_value=httpx.Response(200, json=ra.ap_actor))
+    _KEY_CACHE.clear()
+
+    assert (await _post_signed(auth))["has_fetched_actor"] is True
+    # Key now cached: nothing fetched, nothing to hand over
+    assert (await _post_signed(auth))["has_fetched_actor"] is False
+
+
+@pytest.mark.asyncio
+async def test_httpsig_checker__skips_stripped_actor_document(
+    respx_mock: respx.MockRouter,
+    async_db_session: AsyncSession,
+) -> None:
+    privkey, pubkey = factories.generate_key()
+    ra = factories.RemoteActorFactory(
+        base_url="https://example.com", username="toto", public_key=pubkey
+    )
+    k = Key(ra.ap_id, f"{ra.ap_id}#main-key")
+    k.load(privkey)
+    stripped = {k: v for k, v in ra.ap_actor.items() if k != "preferredUsername"}
+    respx_mock.get(ra.ap_id).mock(return_value=httpx.Response(200, json=stripped))
+    _KEY_CACHE.clear()
+
+    json_response = await _post_signed(httpsig.HTTPXSigAuth(k))
+    assert json_response["has_valid_signature"] is True
+    assert json_response["has_fetched_actor"] is False
+
+
+@pytest.mark.asyncio
+async def test_cache_signer_actor__worker_skips_refetch(
+    respx_mock: respx.MockRouter,
+    async_db_session: AsyncSession,
+) -> None:
+    _, pubkey = factories.generate_key()
+    ra = factories.RemoteActorFactory(
+        base_url="https://example.com", username="toto", public_key=pubkey
+    )
+    respx_mock.get("https://example.com/.well-known/webfinger").mock(
+        return_value=httpx.Response(200, json={"subject": "acct:toto@example.com"})
+    )
+    actor_route = respx_mock.get(ra.ap_id).mock(
+        return_value=httpx.Response(200, json=ra.ap_actor)
+    )
+
+    await _cache_signer_actor(ra.ap_actor)
+
+    actor = await fetch_actor(async_db_session, ra.ap_id)
+    assert actor.handle == "@toto@example.com"
+    assert actor_route.call_count == 0

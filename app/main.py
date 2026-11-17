@@ -21,6 +21,7 @@ from asgiref.typing import ASGIReceiveCallable
 from asgiref.typing import ASGISendCallable
 from asgiref.typing import Scope
 from cachetools import LFUCache
+from fastapi import BackgroundTasks
 from fastapi import Depends
 from fastapi import FastAPI
 from fastapi import Form
@@ -55,6 +56,8 @@ from activitypub import boxes
 from activitypub.activitypub import ActivityPubResponse
 from activitypub.actor import LOCAL_ACTOR
 from activitypub.actor import get_actors_metadata
+from activitypub.actor import resolve_handle
+from activitypub.actor import save_actor
 from activitypub.boxes import public_outbox_objects_count
 from activitypub.incoming_activities import new_ap_incoming_activity
 from app import admin
@@ -1466,9 +1469,23 @@ async def get_inbox(
     return ActivityPubResponse(collection_page)
 
 
+async def _cache_signer_actor(raw_actor: ap.RawObject) -> None:
+    """Save the actor document the HTTP sig check just fetched, so the
+    incoming worker finds it cached instead of fetching it again. Best effort:
+    on failure the worker fetches it as usual."""
+    try:
+        handle = await resolve_handle(raw_actor)
+        async with async_session() as db_session:
+            await save_actor(db_session, raw_actor, handle=handle)
+            await db_session.commit()
+    except Exception:
+        logger.exception(f"Failed to cache actor {raw_actor.get('id')}")
+
+
 @app.post("/inbox")
 async def inbox(
     request: Request,
+    background_tasks: BackgroundTasks,
     db_session: AsyncSession = Depends(get_db_session),
     httpsig_info: httpsig.HTTPSigInfo = Depends(httpsig.enforce_httpsig),
 ) -> Response:
@@ -1476,6 +1493,11 @@ async def inbox(
     payload = await request.json()
     logger.info(f"{payload=}")
     await new_ap_incoming_activity(db_session, httpsig_info, payload)
+    if (
+        raw_actor := httpsig_info.fetched_actor
+    ) and httpsig_info.signed_by_ap_actor_id == ap.get_id(raw_actor):
+        # Off the request path: webfinger shouldn't delay the sender's POST.
+        background_tasks.add_task(_cache_signer_actor, raw_actor)
     return Response(status_code=202)
 
 
