@@ -1114,7 +1114,9 @@ async def admin_profile(
     inbox_objects = inbox_objects[:page_size]
 
     next_cursor = (
-        pagination.encode_cursor(inbox_objects[-1].created_at) if has_more else None
+        pagination.encode_cursor(inbox_objects[-1].ap_published_at)
+        if has_more
+        else None
     )
 
     return await templates.render_template(

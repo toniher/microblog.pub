@@ -1443,3 +1443,42 @@ def test_admin_notifications__renders_an_inbound_report(
     assert response.status_code == 200
     assert "sent a report" in response.text
     assert "this is spam" in response.text
+
+
+def test_admin_profile__pagination_cursor(
+    db: Session, client: TestClient, respx_mock: respx.MockRouter
+) -> None:
+    ra = setup_remote_actor(respx_mock, base_url="https://example.com")
+    follower = setup_remote_actor_as_follower(ra)
+    assert follower.actor is not None
+    # Published well before they were received (`created_at`), so a cursor
+    # built from the wrong column would make page 2 repeat page 1.
+    for i in range(21):
+        inbox_object = factories.InboxObjectFactory.from_remote_object(
+            RemoteObject(
+                factories.build_note_object(
+                    from_remote_actor=ra, content=f"Paged note {i:02d}."
+                ),
+                ra,
+            ),
+            follower.actor,
+        )
+        inbox_object.ap_published_at = now() - timedelta(days=30, minutes=i)
+    db.commit()
+
+    cookies = generate_admin_session_cookies()
+    page1 = client.get(
+        "/admin/profile", params={"actor_id": ra.ap_id}, cookies=cookies
+    ).text
+    assert "Paged note 00." in page1
+    assert "Paged note 19." in page1
+    assert "Paged note 20." not in page1
+    cursor = page1.split("&cursor=", 1)[1].split('"', 1)[0]
+
+    page2 = client.get(
+        "/admin/profile",
+        params={"actor_id": ra.ap_id, "cursor": cursor},
+        cookies=cookies,
+    ).text
+    assert "Paged note 20." in page2
+    assert "Paged note 19." not in page2
