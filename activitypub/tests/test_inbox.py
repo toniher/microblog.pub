@@ -1683,3 +1683,43 @@ def test_inbox__create_reply_to_unknown_parent_without_context(
     assert note.conversation == f"microblogpub:root:{parent['id']}"
     # Neither the parent's author nor the mentioned actor got fetched/saved.
     assert db.scalar(select(func.count(activitypub.models.Actor.id))) == 1
+
+
+def test_inbox__duplicate_forwarded_activity_skips_ldsig(
+    db: Session,
+    respx_mock: respx.MockRouter,
+) -> None:
+    ra = setup_remote_actor(respx_mock)
+    setup_remote_actor_as_follower(ra)
+    forwarder = setup_remote_actor(respx_mock, base_url="https://forwarder.example")
+    create = factories.build_create_activity(
+        factories.build_note_object(from_remote_actor=ra, to=[LOCAL_ACTOR.ap_id])
+    )
+
+    with mock.patch(
+        "app.ldsig.verify_signature", new=mock.AsyncMock(return_value=True)
+    ) as verify:
+        for _ in range(2):
+            db.add(
+                activitypub.models.IncomingActivity(
+                    sent_by_ap_actor_id=forwarder.ap_id,
+                    ap_id=create["id"],
+                    ap_object=create,
+                )
+            )
+            db.commit()
+            run_process_next_incoming_activity()
+
+    # The redelivery was dropped before the LD-sig check.
+    assert verify.await_count == 1
+    assert (
+        db.scalar(
+            select(func.count(activitypub.models.InboxObject.id)).where(
+                activitypub.models.InboxObject.ap_id == create["id"]
+            )
+        )
+        == 1
+    )
+    assert all(
+        a.is_processed for a in db.scalars(select(activitypub.models.IncomingActivity))
+    )

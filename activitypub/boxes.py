@@ -4062,6 +4062,20 @@ async def save_to_inbox(
             )
             return
 
+    # Dedup first: a redelivery (4% of traffic, often forwarded) must not pay
+    # for the actor refresh, LD-sig check and refetch below. The row only
+    # exists once every check passed, so skipping them here changes nothing.
+    if raw_object.get("id") and await db_session.scalar(
+        select(activitypub.models.InboxObject.id)
+        .where(activitypub.models.InboxObject.ap_id == ap.get_id(raw_object))
+        .limit(1)
+    ):
+        logger.info(
+            f'Received duplicate {raw_object["type"]} activity: '
+            f"{ap.get_id(raw_object)}"
+        )
+        return
+
     try:
         actor = await fetch_actor(db_session, ap.get_id(raw_object["actor"]))
     except ap.ObjectNotFoundError:
@@ -4130,19 +4144,6 @@ async def save_to_inbox(
             if raw_object["id"] != raw_object_id:
                 logger.info(f"Unable to fetch {raw_object_id}")
                 return None
-
-    if (
-        await db_session.scalar(
-            select(func.count(activitypub.models.InboxObject.id)).where(
-                activitypub.models.InboxObject.ap_id == raw_object_id
-            )
-        )
-        or 0
-    ) > 0:
-        logger.info(
-            f'Received duplicate {raw_object["type"]} activity: {raw_object_id}'
-        )
-        return
 
     ap_published_at = now()
     if "published" in raw_object:
