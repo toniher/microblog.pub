@@ -2811,227 +2811,6 @@ async def send_quote_revoke(db_session: AsyncSession, ap_object_id: str) -> None
     await db_session.commit()
 
 
-async def _handle_quote_request_accept_or_reject(
-    db_session: AsyncSession,
-    accept_or_reject_activity: activitypub.models.InboxObject,
-    quote_request_outbox_object: activitypub.models.OutboxObject,
-    prepared: PreparedActivity,
-) -> None:
-    """Our own `QuoteRequest` got an `Accept` (carrying the stamp as
-    `result`) or a `Reject` back.
-    """
-    quote_outbox_object = quote_request_outbox_object.relates_to_outbox_object
-    if not quote_outbox_object:
-        logger.warning(
-            f"QuoteRequest {quote_request_outbox_object.ap_id} has no related "
-            "quote post"
-        )
-        return
-
-    if quote_outbox_object.quote_state != "pending":
-        logger.info(
-            f"Quote {quote_outbox_object.ap_id} is already "
-            f"{quote_outbox_object.quote_state}, ignoring"
-        )
-        return
-
-    quoted_ap_id = quote_outbox_object.quote_ap_id
-    if not quoted_ap_id:
-        raise ValueError("Should never happen")
-
-    # The Accept/Reject must come from the quoted post's own author -- not
-    # just from whoever sent an activity naming our QuoteRequest. Otherwise
-    # any third party could self-issue a stamp (attributedTo themselves) and
-    # have it verify, since _verify_quote_authorization only checks that the
-    # stamp's attributedTo/host match whatever `quoted_actor_ap_id` it's
-    # given. Resolving that independently from the quoted post itself (which
-    # is already in our inbox/outbox from when the QuoteRequest was sent) is
-    # what makes that check meaningful.
-    quoted_object = await get_anybox_object_by_ap_id(db_session, quoted_ap_id)
-    quoted_actor_ap_id = quoted_object.ap_actor_id if quoted_object else None
-    if (
-        not quoted_actor_ap_id
-        or accept_or_reject_activity.actor.ap_id != quoted_actor_ap_id
-    ):
-        logger.warning(
-            f"Ignoring {accept_or_reject_activity.ap_type} for QuoteRequest "
-            f"{quote_request_outbox_object.ap_id} from "
-            f"{accept_or_reject_activity.actor.ap_id}, which is not the "
-            f"quoted post's author ({quoted_actor_ap_id})"
-        )
-        return
-
-    if accept_or_reject_activity.ap_type == "Reject":
-        quote_outbox_object.quote_state = "rejected"
-        return
-
-    result = accept_or_reject_activity.ap_object.get("result")
-    if not result:
-        logger.warning(
-            "Accept for QuoteRequest "
-            f"{quote_request_outbox_object.ap_id} has no result, treating as "
-            "a Reject"
-        )
-        quote_outbox_object.quote_state = "rejected"
-        return
-
-    stamp_ap_id = ap.get_id(result)
-    # Verified (network) by `_prepare_activity`, before the insert.
-    is_verified = prepared.quote_stamp_verified
-    if not is_verified:
-        logger.warning(f"Invalid QuoteAuthorization {stamp_ap_id}")
-        quote_outbox_object.quote_state = "rejected"
-        return
-
-    quote_outbox_object.quote_authorization_ap_id = stamp_ap_id
-    quote_outbox_object.quote_state = "accepted"
-
-    # Let followers know the quote is now authorized. `_commit=False`: this
-    # runs from inside `save_to_inbox`'s dispatch, which commits once at the
-    # end -- internal helpers here don't commit on their own.
-    if not quote_outbox_object.source:
-        # `send_update` re-renders the note from its source, so an empty one
-        # would blank the post we just got authorized. Fail loudly instead:
-        # the worker rolls back and retries, leaving the quote pending.
-        raise ValueError(f"{quote_outbox_object.ap_id} has no source")
-
-    await send_update(
-        db_session,
-        quote_outbox_object.ap_id,
-        quote_outbox_object.source,
-        _commit=False,
-    )
-
-
-async def remove_follower(
-    db_session: AsyncSession,
-    actor: activitypub.models.Actor,
-) -> bool:
-    """Drop one of our followers (Mastodon's `remove_from_followers`).
-
-    Rejecting the original Follow is how the remote server is told the
-    relationship is over — the same activity as rejecting a pending follow
-    request, just sent after it had been accepted. Returns False when the actor
-    isn't a follower, which the API treats as a no-op rather than an error.
-    """
-    follower = (
-        (
-            await db_session.execute(
-                select(activitypub.models.Follower)
-                .where(activitypub.models.Follower.actor_id == actor.id)
-                .options(joinedload(activitypub.models.Follower.inbox_object))
-            )
-        )
-        .unique()
-        .scalar_one_or_none()
-    )
-    if follower is None:
-        return False
-
-    await _send_reject(db_session, actor, follower.inbox_object)
-    await db_session.delete(follower)
-    await db_session.commit()
-    return True
-
-
-async def _handle_undo_activity(
-    db_session: AsyncSession,
-    from_actor: activitypub.models.Actor,
-    undo_activity: activitypub.models.InboxObject,
-    ap_activity_to_undo: activitypub.models.InboxObject,
-) -> None:
-    if from_actor.ap_id != ap_activity_to_undo.actor.ap_id:
-        logger.warning(
-            "Actor mismatch between the activity and the object: "
-            f"{from_actor.ap_id}/{ap_activity_to_undo.actor.ap_id}"
-        )
-        return
-
-    ap_activity_to_undo.undone_by_inbox_object_id = undo_activity.id
-    ap_activity_to_undo.is_deleted = True
-
-    if ap_activity_to_undo.ap_type == "Follow":
-        logger.info(f"Undo follow from {from_actor.ap_id}")
-        await db_session.execute(
-            delete(activitypub.models.Follower).where(
-                activitypub.models.Follower.inbox_object_id == ap_activity_to_undo.id
-            )
-        )
-        if is_notification_enabled(models.NotificationType.UNFOLLOW):
-            notif = models.Notification(
-                notification_type=models.NotificationType.UNFOLLOW,
-                actor_id=from_actor.id,
-            )
-            db_session.add(notif)
-
-    elif ap_activity_to_undo.ap_type == "Like":
-        if not ap_activity_to_undo.activity_object_ap_id:
-            raise ValueError("Like without object")
-        liked_obj = await get_outbox_object_by_ap_id(
-            db_session,
-            ap_activity_to_undo.activity_object_ap_id,
-        )
-        if not liked_obj:
-            logger.warning(
-                "Cannot find liked object: "
-                f"{ap_activity_to_undo.activity_object_ap_id}"
-            )
-            return
-
-        liked_obj.likes_count = (
-            await _get_outbox_likes_count(
-                db_session,
-                liked_obj,
-            )
-            - 1
-        )
-        if is_notification_enabled(models.NotificationType.UNDO_LIKE):
-            notif = models.Notification(
-                notification_type=models.NotificationType.UNDO_LIKE,
-                actor_id=from_actor.id,
-                outbox_object_id=liked_obj.id,
-                inbox_object_id=ap_activity_to_undo.id,
-            )
-            db_session.add(notif)
-
-    elif ap_activity_to_undo.ap_type == "Announce":
-        if not ap_activity_to_undo.activity_object_ap_id:
-            raise ValueError("Announce witout object")
-        announced_obj_ap_id = ap_activity_to_undo.activity_object_ap_id
-        logger.info(
-            f"Undo for announce {ap_activity_to_undo.ap_id}/{announced_obj_ap_id}"
-        )
-        if announced_obj_ap_id.startswith(BASE_URL):
-            announced_obj_from_outbox = await get_outbox_object_by_ap_id(
-                db_session, announced_obj_ap_id
-            )
-            if announced_obj_from_outbox:
-                logger.info("Found in the oubox")
-                announced_obj_from_outbox.announces_count = (
-                    activitypub.models.OutboxObject.announces_count - 1
-                )
-                if is_notification_enabled(models.NotificationType.UNDO_ANNOUNCE):
-                    notif = models.Notification(
-                        notification_type=models.NotificationType.UNDO_ANNOUNCE,
-                        actor_id=from_actor.id,
-                        outbox_object_id=announced_obj_from_outbox.id,
-                        inbox_object_id=ap_activity_to_undo.id,
-                    )
-                    db_session.add(notif)
-    elif ap_activity_to_undo.ap_type == "Block":
-        if is_notification_enabled(models.NotificationType.UNBLOCKED):
-            notif = models.Notification(
-                notification_type=models.NotificationType.UNBLOCKED,
-                actor_id=from_actor.id,
-                inbox_object_id=ap_activity_to_undo.id,
-            )
-            db_session.add(notif)
-    else:
-        logger.warning(f"Don't know how to undo {ap_activity_to_undo.ap_type} activity")
-
-    # commit will be perfomed in save_to_inbox
-
-
 @dataclass
 class PreparedObject:
     """Everything `persist_prepared_object` needs to save a remote object,
@@ -3287,6 +3066,227 @@ async def _prepare_activity(  # noqa: C901
             prepared.move_target = await resolve_actor(db_session, ap.get_id(target))
 
     return prepared
+
+
+async def _handle_quote_request_accept_or_reject(
+    db_session: AsyncSession,
+    accept_or_reject_activity: activitypub.models.InboxObject,
+    quote_request_outbox_object: activitypub.models.OutboxObject,
+    prepared: PreparedActivity,
+) -> None:
+    """Our own `QuoteRequest` got an `Accept` (carrying the stamp as
+    `result`) or a `Reject` back.
+    """
+    quote_outbox_object = quote_request_outbox_object.relates_to_outbox_object
+    if not quote_outbox_object:
+        logger.warning(
+            f"QuoteRequest {quote_request_outbox_object.ap_id} has no related "
+            "quote post"
+        )
+        return
+
+    if quote_outbox_object.quote_state != "pending":
+        logger.info(
+            f"Quote {quote_outbox_object.ap_id} is already "
+            f"{quote_outbox_object.quote_state}, ignoring"
+        )
+        return
+
+    quoted_ap_id = quote_outbox_object.quote_ap_id
+    if not quoted_ap_id:
+        raise ValueError("Should never happen")
+
+    # The Accept/Reject must come from the quoted post's own author -- not
+    # just from whoever sent an activity naming our QuoteRequest. Otherwise
+    # any third party could self-issue a stamp (attributedTo themselves) and
+    # have it verify, since _verify_quote_authorization only checks that the
+    # stamp's attributedTo/host match whatever `quoted_actor_ap_id` it's
+    # given. Resolving that independently from the quoted post itself (which
+    # is already in our inbox/outbox from when the QuoteRequest was sent) is
+    # what makes that check meaningful.
+    quoted_object = await get_anybox_object_by_ap_id(db_session, quoted_ap_id)
+    quoted_actor_ap_id = quoted_object.ap_actor_id if quoted_object else None
+    if (
+        not quoted_actor_ap_id
+        or accept_or_reject_activity.actor.ap_id != quoted_actor_ap_id
+    ):
+        logger.warning(
+            f"Ignoring {accept_or_reject_activity.ap_type} for QuoteRequest "
+            f"{quote_request_outbox_object.ap_id} from "
+            f"{accept_or_reject_activity.actor.ap_id}, which is not the "
+            f"quoted post's author ({quoted_actor_ap_id})"
+        )
+        return
+
+    if accept_or_reject_activity.ap_type == "Reject":
+        quote_outbox_object.quote_state = "rejected"
+        return
+
+    result = accept_or_reject_activity.ap_object.get("result")
+    if not result:
+        logger.warning(
+            "Accept for QuoteRequest "
+            f"{quote_request_outbox_object.ap_id} has no result, treating as "
+            "a Reject"
+        )
+        quote_outbox_object.quote_state = "rejected"
+        return
+
+    stamp_ap_id = ap.get_id(result)
+    # Verified (network) by `_prepare_activity`, before the insert.
+    is_verified = prepared.quote_stamp_verified
+    if not is_verified:
+        logger.warning(f"Invalid QuoteAuthorization {stamp_ap_id}")
+        quote_outbox_object.quote_state = "rejected"
+        return
+
+    quote_outbox_object.quote_authorization_ap_id = stamp_ap_id
+    quote_outbox_object.quote_state = "accepted"
+
+    # Let followers know the quote is now authorized. `_commit=False`: this
+    # runs from inside `save_to_inbox`'s dispatch, which commits once at the
+    # end -- internal helpers here don't commit on their own.
+    if not quote_outbox_object.source:
+        # `send_update` re-renders the note from its source, so an empty one
+        # would blank the post we just got authorized. Fail loudly instead:
+        # the worker rolls back and retries, leaving the quote pending.
+        raise ValueError(f"{quote_outbox_object.ap_id} has no source")
+
+    await send_update(
+        db_session,
+        quote_outbox_object.ap_id,
+        quote_outbox_object.source,
+        _commit=False,
+    )
+
+
+async def remove_follower(
+    db_session: AsyncSession,
+    actor: activitypub.models.Actor,
+) -> bool:
+    """Drop one of our followers (Mastodon's `remove_from_followers`).
+
+    Rejecting the original Follow is how the remote server is told the
+    relationship is over — the same activity as rejecting a pending follow
+    request, just sent after it had been accepted. Returns False when the actor
+    isn't a follower, which the API treats as a no-op rather than an error.
+    """
+    follower = (
+        (
+            await db_session.execute(
+                select(activitypub.models.Follower)
+                .where(activitypub.models.Follower.actor_id == actor.id)
+                .options(joinedload(activitypub.models.Follower.inbox_object))
+            )
+        )
+        .unique()
+        .scalar_one_or_none()
+    )
+    if follower is None:
+        return False
+
+    await _send_reject(db_session, actor, follower.inbox_object)
+    await db_session.delete(follower)
+    await db_session.commit()
+    return True
+
+
+async def _handle_undo_activity(
+    db_session: AsyncSession,
+    from_actor: activitypub.models.Actor,
+    undo_activity: activitypub.models.InboxObject,
+    ap_activity_to_undo: activitypub.models.InboxObject,
+) -> None:
+    if from_actor.ap_id != ap_activity_to_undo.actor.ap_id:
+        logger.warning(
+            "Actor mismatch between the activity and the object: "
+            f"{from_actor.ap_id}/{ap_activity_to_undo.actor.ap_id}"
+        )
+        return
+
+    ap_activity_to_undo.undone_by_inbox_object_id = undo_activity.id
+    ap_activity_to_undo.is_deleted = True
+
+    if ap_activity_to_undo.ap_type == "Follow":
+        logger.info(f"Undo follow from {from_actor.ap_id}")
+        await db_session.execute(
+            delete(activitypub.models.Follower).where(
+                activitypub.models.Follower.inbox_object_id == ap_activity_to_undo.id
+            )
+        )
+        if is_notification_enabled(models.NotificationType.UNFOLLOW):
+            notif = models.Notification(
+                notification_type=models.NotificationType.UNFOLLOW,
+                actor_id=from_actor.id,
+            )
+            db_session.add(notif)
+
+    elif ap_activity_to_undo.ap_type == "Like":
+        if not ap_activity_to_undo.activity_object_ap_id:
+            raise ValueError("Like without object")
+        liked_obj = await get_outbox_object_by_ap_id(
+            db_session,
+            ap_activity_to_undo.activity_object_ap_id,
+        )
+        if not liked_obj:
+            logger.warning(
+                "Cannot find liked object: "
+                f"{ap_activity_to_undo.activity_object_ap_id}"
+            )
+            return
+
+        liked_obj.likes_count = (
+            await _get_outbox_likes_count(
+                db_session,
+                liked_obj,
+            )
+            - 1
+        )
+        if is_notification_enabled(models.NotificationType.UNDO_LIKE):
+            notif = models.Notification(
+                notification_type=models.NotificationType.UNDO_LIKE,
+                actor_id=from_actor.id,
+                outbox_object_id=liked_obj.id,
+                inbox_object_id=ap_activity_to_undo.id,
+            )
+            db_session.add(notif)
+
+    elif ap_activity_to_undo.ap_type == "Announce":
+        if not ap_activity_to_undo.activity_object_ap_id:
+            raise ValueError("Announce witout object")
+        announced_obj_ap_id = ap_activity_to_undo.activity_object_ap_id
+        logger.info(
+            f"Undo for announce {ap_activity_to_undo.ap_id}/{announced_obj_ap_id}"
+        )
+        if announced_obj_ap_id.startswith(BASE_URL):
+            announced_obj_from_outbox = await get_outbox_object_by_ap_id(
+                db_session, announced_obj_ap_id
+            )
+            if announced_obj_from_outbox:
+                logger.info("Found in the oubox")
+                announced_obj_from_outbox.announces_count = (
+                    activitypub.models.OutboxObject.announces_count - 1
+                )
+                if is_notification_enabled(models.NotificationType.UNDO_ANNOUNCE):
+                    notif = models.Notification(
+                        notification_type=models.NotificationType.UNDO_ANNOUNCE,
+                        actor_id=from_actor.id,
+                        outbox_object_id=announced_obj_from_outbox.id,
+                        inbox_object_id=ap_activity_to_undo.id,
+                    )
+                    db_session.add(notif)
+    elif ap_activity_to_undo.ap_type == "Block":
+        if is_notification_enabled(models.NotificationType.UNBLOCKED):
+            notif = models.Notification(
+                notification_type=models.NotificationType.UNBLOCKED,
+                actor_id=from_actor.id,
+                inbox_object_id=ap_activity_to_undo.id,
+            )
+            db_session.add(notif)
+    else:
+        logger.warning(f"Don't know how to undo {ap_activity_to_undo.ap_type} activity")
+
+    # commit will be perfomed in save_to_inbox
 
 
 async def _handle_move_activity(
