@@ -1,10 +1,12 @@
 import asyncio
 import base64
 import contextlib
+import hashlib
 import mimetypes
 import os
 import sys
 import time
+from datetime import datetime
 from datetime import timezone
 from io import BytesIO
 from typing import Any
@@ -20,7 +22,7 @@ from asgiref.typing import ASGI3Application
 from asgiref.typing import ASGIReceiveCallable
 from asgiref.typing import ASGISendCallable
 from asgiref.typing import Scope
-from cachetools import LFUCache
+from cachetools import LRUCache
 from fastapi import BackgroundTasks
 from fastapi import Depends
 from fastapi import FastAPI
@@ -105,11 +107,12 @@ from app.utils.url import InvalidURLError
 from app.utils.url import check_url_async
 from app.webfinger import get_remote_follow_template
 
-# Only images <1MB will be cached, so 128MB of data will be cached. Keyed on
+# Sized in bytes (32 MiB per process; only images <1MB are cached), LRU so a
+# newly popular image isn't evicted ahead of old hot ones. Keyed on
 # (url, size, is_webp) rather than (url, size) so a non-webp client's entry
 # can be served, and can no longer poison the slot a webp client would hit.
 _RESIZED_CACHE: MutableMapping[tuple[str, int, bool], tuple[bytes, str, Any]] = (
-    LFUCache(128)
+    LRUCache(maxsize=32 * 1024 * 1024, getsizeof=lambda v: len(v[0]))
 )
 
 
@@ -2023,10 +2026,22 @@ async def _get_outbox_for_feed(
     )
 
 
+def _with_etag(request: Request, response: Response) -> Response:
+    """Feed readers poll: answer an unchanged feed with a bodiless 304. The
+    ETag hashes the body, so any edit, delete or profile change shows."""
+    etag = '"' + hashlib.blake2b(response.body, digest_size=16).hexdigest() + '"'
+    if_none_match = request.headers.get("if-none-match", "")
+    if etag in {t.strip().removeprefix("W/") for t in if_none_match.split(",")}:
+        return Response(status_code=304, headers={"ETag": etag})
+    response.headers["ETag"] = etag
+    return response
+
+
 @app.get("/feed.json")
 async def json_feed(
+    request: Request,
     db_session: AsyncSession = Depends(get_db_session),
-) -> dict[str, Any]:
+) -> Response:
     outbox_objects = await _get_outbox_for_feed(db_session)
     data = []
     for outbox_object in outbox_objects:
@@ -2060,7 +2075,7 @@ async def json_feed(
     }
     if LOCAL_ACTOR.icon_url:
         result["authors"][0]["avatar"] = LOCAL_ACTOR.icon_url  # type: ignore
-    return result
+    return _with_etag(request, JSONResponse(result))
 
 
 async def _gen_rss_feed(
@@ -2106,24 +2121,42 @@ async def _gen_rss_feed(
         fe.content(content)
         fe.published(outbox_object.ap_published_at.replace(tzinfo=timezone.utc))
 
+    # feedgen defaults both to "now": pinned to the newest entry, an unchanged
+    # feed has an unchanged body (and ETag, see `_with_etag`).
+    last_updated = (
+        outbox_objects[0].ap_published_at.replace(tzinfo=timezone.utc)  # type: ignore
+        if outbox_objects
+        else datetime.fromtimestamp(0, timezone.utc)
+    )
+    fg.updated(last_updated)
+    fg.lastBuildDate(last_updated)
+
     return fg
 
 
 @app.get("/feed.rss")
 async def rss_feed(
+    request: Request,
     db_session: AsyncSession = Depends(get_db_session),
-) -> PlainTextResponse:
-    return PlainTextResponse(
-        (await _gen_rss_feed(db_session, is_rss=True)).rss_str(),
-        headers={"Content-Type": "application/rss+xml"},
+) -> Response:
+    return _with_etag(
+        request,
+        PlainTextResponse(
+            (await _gen_rss_feed(db_session, is_rss=True)).rss_str(),
+            headers={"Content-Type": "application/rss+xml"},
+        ),
     )
 
 
 @app.get("/feed.atom")
 async def atom_feed(
+    request: Request,
     db_session: AsyncSession = Depends(get_db_session),
-) -> PlainTextResponse:
-    return PlainTextResponse(
-        (await _gen_rss_feed(db_session, is_rss=False)).atom_str(),
-        headers={"Content-Type": "application/atom+xml"},
+) -> Response:
+    return _with_etag(
+        request,
+        PlainTextResponse(
+            (await _gen_rss_feed(db_session, is_rss=False)).atom_str(),
+            headers={"Content-Type": "application/atom+xml"},
+        ),
     )

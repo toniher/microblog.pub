@@ -761,3 +761,27 @@ def test_feed_json__uses_alias_url(db: Session, client: TestClient) -> None:
     assert response.status_code == 200
     urls = {item["url"] for item in response.json()["items"]}
     assert f"http://localhost:8000/{config.ALIAS_URL_PREFIX}/{note.alias}" in urls
+
+
+@pytest.mark.parametrize("path", ["/feed.json", "/feed.rss", "/feed.atom"])
+def test_feeds__etag_and_304(db: Session, client: TestClient, path: str) -> None:
+    first = client.get(path)
+    assert first.status_code == 200
+    etag = first.headers["etag"]
+
+    unchanged = client.get(path, headers={"If-None-Match": f'W/"x", {etag}'})
+    assert unchanged.status_code == 304
+    assert unchanged.content == b""
+    assert unchanged.headers["etag"] == etag
+
+    _create_aliased_note()
+    changed = client.get(path, headers={"If-None-Match": etag})
+    assert changed.status_code == 200
+    assert changed.headers["etag"] != etag
+
+
+def test_resized_cache_is_sized_in_bytes() -> None:
+    from app.main import _RESIZED_CACHE
+
+    assert _RESIZED_CACHE.maxsize == 32 * 1024 * 1024  # type: ignore[attr-defined]
+    assert _RESIZED_CACHE.getsizeof((b"x" * 1000, "image/webp", {})) == 1000  # type: ignore[attr-defined]  # noqa: E501
