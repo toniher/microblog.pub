@@ -41,6 +41,7 @@ from app.config import VERSION
 from app.config import generate_csrf_token
 from app.config import session_serializer
 from app.database import AsyncSession
+from app.media import current_expiry
 from app.media import proxied_media_url
 from app.utils import privacy_replace
 from app.utils.datetime import now
@@ -352,21 +353,30 @@ def _allow_all_attributes(tag: Any, name: Any, value: Any) -> bool:
     return True
 
 
+def _update_inline_imgs(content: str) -> str:
+    # The output embeds signed proxy links, so the expiry bucket is part of
+    # the cache key: a cached entry must never outlive its signatures.
+    return _update_inline_imgs_cached(content, current_expiry())
+
+
 @lru_cache(maxsize=256)
-def _update_inline_imgs(content):
+def _update_inline_imgs_cached(content: str, expiry: int) -> str:
     soup = BeautifulSoup(content, "html5lib")
     imgs = soup.find_all("img")
     if not imgs:
         return content
 
     for img in imgs:
-        if not img.attrs.get("src"):
+        src = img.attrs.get("src")
+        if not src or not isinstance(src, str):  # `src` is single-valued
             continue
 
-        img.attrs["src"] = _media_proxy_url(img.attrs["src"]) + "/740"
+        img.attrs["src"] = _media_proxy_url(src) + "/740"
         img["class"] = "inline-img"
 
-    return soup.find("body").decode_contents()
+    body = soup.find("body")
+    assert body is not None  # html5lib always builds a <body>
+    return body.decode_contents()
 
 
 def _clean_html(html: str, note: Object) -> str:

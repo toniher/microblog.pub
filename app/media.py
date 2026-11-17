@@ -5,6 +5,12 @@ from app.config import BASE_URL
 from app.config import hmac_sha256
 
 SUPPORTED_RESIZE = [50, 740]
+# Proxy links are signed with an expiry counted in days (EXPIRY_PERIOD).
+# The expiry is bucketed by EXPIRY_LENGTH days so a link stays byte-identical
+# for a whole bucket: browsers (1-year Cache-Control), the nginx proxy cache
+# and the resize cache are all keyed on the URL, and a URL that changed daily
+# defeated all three. A link minted in a bucket stays valid until the end of
+# the *next* bucket: between EXPIRY_LENGTH and 2 * EXPIRY_LENGTH days.
 EXPIRY_PERIOD = 86400
 EXPIRY_LENGTH = 7
 
@@ -28,10 +34,17 @@ def verify_proxied_media_sig(expires: int, url: str, sig: str) -> None:
         raise InvalidProxySignatureError("invalid or expired media")
 
 
+def current_expiry() -> int:
+    """The `expires` value (in EXPIRY_PERIOD units) for links minted now;
+    constant across each EXPIRY_LENGTH-day bucket."""
+    day = int(time.time() / EXPIRY_PERIOD)
+    return (day // EXPIRY_LENGTH + 2) * EXPIRY_LENGTH
+
+
 def proxied_media_url(url: str) -> str:
     if url.startswith(BASE_URL):
         return url
-    expires = int(time.time() / EXPIRY_PERIOD) + EXPIRY_LENGTH
+    expires = current_expiry()
     sig = proxied_media_sig(expires, url)
 
     return (
